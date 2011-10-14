@@ -2,6 +2,7 @@
 #include "float2.hpp"
 
 #include <cmath>
+#include <cstddef>
 #include <iostream>
 #include <memory>
 #include <QBitmap>
@@ -13,6 +14,8 @@
 
 #include <QApplication>
 #include <QDesktopWidget>
+
+#define LOG_ENTER_FUNC() qDebug() << __FUNCTION__
 
 // internal helper...
 void smoothIteration( const std::vector<float2> in,
@@ -49,7 +52,7 @@ void smoothIteration( const std::vector<float2> in,
 template<typename Collection>
 std::vector<float2> smooth( const Collection& points,
                             float smoothing_factor,
-                            size_t iterations )
+                            unsigned int iterations )
 
 {
   // now it's time to use a specific container...
@@ -63,7 +66,7 @@ std::vector<float2> smooth( const Collection& points,
 
   smoothIteration( in, out, smoothing_factor );
 
-  for(size_t step = 1; step < iterations; ++step)
+  for(unsigned int step = 1; step < iterations; ++step)
   {
     in.swap(out);
     out.clear();
@@ -163,7 +166,8 @@ line_borders_t calcLineBorders(const Collection& points, float width)
 
 //------------------------------------------------------------------------------
 GLWidget::GLWidget(QWidget *parent):
-  QGLWidget(parent)
+  QGLWidget( parent ),
+  _render_mask( false )
 {
 
 }
@@ -173,25 +177,36 @@ GLWidget::~GLWidget()
 {
 
 }
+
+//----------------------------------------------------------------------------
+void GLWidget::setRenderMask()
+{
+  _render_mask = true;
+}
+
+//----------------------------------------------------------------------------
+void GLWidget::clearRenderMask()
+{
+  _render_mask = false;
+}
+
+
 ShaderPtr shader;
 //------------------------------------------------------------------------------
 void GLWidget::initializeGL()
 {
-  // some init functions..
+  LOG_ENTER_FUNC();
+
   glClearColor(0, 0, 0, 0);
-  glEnable(GL_LINE_SMOOTH);
   glEnable(GL_BLEND);
   glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
-  glHint(GL_LINE_SMOOTH_HINT, GL_NICEST);
-
-  glViewport(0,0,1680,1050);
-  glOrtho(0, 1.6, 0, 1, -1.0, 1.0);
 }
 
 //------------------------------------------------------------------------------
 void GLWidget::paintGL()
 {
-  makeCurrent();
+  LOG_ENTER_FUNC() << "render_mask=" << _render_mask;
+
   static bool took = false;
   static QPixmap bla;
 
@@ -202,7 +217,7 @@ void GLWidget::paintGL()
     took = true;
   }
 
-  if( !shader )
+  if( !shader && !_render_mask )
     shader = loadShader("render_below.vert", "simple.frag");
 
   static int count = 0;
@@ -215,7 +230,7 @@ void GLWidget::paintGL()
   glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR );
   GLuint tex;
 
-  if( count > 1 )
+  if( !_render_mask )
     bindTexture(bla.toImage());
 
   if( shader )
@@ -373,22 +388,15 @@ void GLWidget::paintGL()
   glEnd();
 #endif
 
-  glFlush();
-
 //  bla = QPixmap::grabWindow(QApplication::desktop()->winId());
 //  bla.save("screen-after.png");
 }
 
 //------------------------------------------------------------------------------
-void GLWidget::resizeGL()
+void GLWidget::resizeGL(int w, int h)
 {
-  paintGL();
+  LOG_ENTER_FUNC() << "(" << w << "|" << h << ")" << static_cast<float>(w)/h << ":" << 1;
+
+  glViewport(0,0,w,h);
+  glOrtho(0, static_cast<float>(w)/h, 0, 1, -1.0, 1.0);
 }
-
-//------------------------------------------------------------------------------
-//void GLWidget::moveEvent(QMoveEvent *event)
-//{
-//  if( QPoint(0,0) != event->pos() )
-//    move(0, 0);
-//}
-

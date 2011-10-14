@@ -1,5 +1,24 @@
+# files
+set( HEADER_FILES
+  include/qglwidget.h
+)
+
+set( HEADER_FILES_MOC
+  include/application.hpp
+)
+
+set( SOURCE_FILES
+  src/application.cpp
+  src/main.cpp
+#  src/qglwidget.cpp
+)
+
+# dependencies & build
 find_package(OpenGL REQUIRED)
 find_package(Qt4 REQUIRED)
+
+include(${QT_USE_FILE})
+add_definitions(${QT_DEFINITIONS})
 
 set(SYSTEMROOT ${CMAKE_CURRENT_SOURCE_DIR})
 include_directories(
@@ -8,15 +27,13 @@ include_directories(
   ${SYSTEMROOT}
   ${QT_INCLUDES}
   ${OPENGL_INCLUDE_DIR}
+  include
 )
 
-set( HEADER_FILES
-  qglwidget.h
-)
-
-set( SOURCE_FILES
-  main.cpp
-  qglwidget.cpp
+QT4_WRAP_CPP(HEADER_FILES_MOC_GENERATED ${HEADER_FILES_MOC})
+set( HEADER_FILES 
+  ${HEADER_FILES}
+  ${HEADER_FILES_MOC_GENERATED}
 )
 
 add_executable(qtfullscreensystem ${HEADER_FILES} ${SOURCE_FILES})

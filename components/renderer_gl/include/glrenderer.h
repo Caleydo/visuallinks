@@ -8,36 +8,39 @@
 
 namespace LinksRouting
 {
-  class GlRenderer : public Renderer, public ComponentArguments
+  class GlRenderer: public Renderer, public ComponentArguments
   {
-  protected:
-    std::string myname;
-    //DUMMYTESt
-    double TestDouble;
-    std::string TestString;
-  public:
-    GlRenderer();
+    protected:
+      std::string myname;
+      //DUMMYTESt
+      double TestDouble;
+      std::string TestString;
+    public:
 
-    bool startup(Core* core, unsigned int type);
-    void init();
-    void shutdown();
-    bool supports(Type type) const
-    {
-      return type == Component::Renderer;
-    }
-    const std::string& name() const
-    {
-      return myname;
-    }
+      GlRenderer();
+      virtual ~GlRenderer();
 
-    void process(Type type);
+      bool startup(Core* core, unsigned int type);
+      void init();
+      void shutdown();
+      bool supports(Type type) const
+      {
+        return type == Component::Renderer;
+      }
+      const std::string& name() const
+      {
+        return myname;
+      }
 
-    bool setTransparencyInput(const Component::MapData& inputmap);
-    bool addLinkHierarchy(LinkDescription::Node* node);
-    bool addLinkHierarchy(LinkDescription::HyperEdge* hyperedge);
-    bool removeLinkHierarchy(LinkDescription::Node* node);
-    bool removeLinkHierarchy(LinkDescription::HyperEdge* hyperedge);
+      void process(Type type);
+
+      bool setTransparencyInput(const Component::MapData& inputmap);
+      bool addLinkHierarchy(LinkDescription::Node* node);
+      bool addLinkHierarchy(LinkDescription::HyperEdge* hyperedge);
+      bool removeLinkHierarchy(LinkDescription::Node* node);
+      bool removeLinkHierarchy(LinkDescription::HyperEdge* hyperedge);
 
   };
-};
+}
+;
 #endif //LR_GLRENDERER

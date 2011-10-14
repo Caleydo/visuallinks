@@ -8,12 +8,15 @@
 
 namespace LinksRouting
 {
-  class GlCostAnalysis : public CostAnalysis, public ComponentArguments
+  class GlCostAnalysis:
+    public CostAnalysis,
+    public ComponentArguments
   {
   protected:
     std::string myname;
   public:
     GlCostAnalysis();
+    virtual ~GlCostAnalysis();
 
     bool startup(Core* core, unsigned int type);
     void init();

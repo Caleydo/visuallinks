@@ -2,11 +2,21 @@
 
 namespace LinksRouting
 {
-  GlCostAnalysis::GlCostAnalysis() : myname("GlCostAnalysis")
+
+  //----------------------------------------------------------------------------
+  GlCostAnalysis::GlCostAnalysis():
+    myname("GlCostAnalysis")
   {
 
   }
 
+  //----------------------------------------------------------------------------
+  GlCostAnalysis::~GlCostAnalysis()
+  {
+
+  }
+
+  //----------------------------------------------------------------------------
   bool GlCostAnalysis::startup(Core* core, unsigned int type)
   {
     return true;
