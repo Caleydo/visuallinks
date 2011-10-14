@@ -1,0 +1,18 @@
+
+
+set(COMPONENTROOT ${CMAKE_CURRENT_SOURCE_DIR})
+set(COMPONENTSRC_DIR ${COMPONENTROOT}/src)
+set(COMPONENTINC_DIR ${COMPONENTROOT}/include)
+include_directories(${LINKS_INCLUDE_DIR} ${COMPONENTINC_DIR} ${COMPONENTROOT})
+
+add_subdirectory(tinyxml)
+ADD_DEFINITIONS( -DTIXML_USE_STL )
+
+
+set(HEADER_FILES ${COMPONENTINC_DIR}/xmlconfig.h
+    )
+
+set(SOURCE_FILES ${COMPONENTSRC_DIR}/xmlconfig.cpp
+    )
+
+add_library(xmlconfig ${HEADER_FILES} ${SOURCE_FILES})

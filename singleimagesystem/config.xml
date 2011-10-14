@@ -1,0 +1,10 @@
+<?xml version="1.0" ?>
+<config>
+  <ComponentRenderer>
+    <TestDouble type="Float" val="0.25"/>
+  </ComponentRenderer>
+  <GlRenderer>
+    <TestString type="String" val="HalloDa"/>
+  </GlRenderer>
+  
+</config>
