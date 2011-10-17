@@ -9,7 +9,11 @@
 #ifndef _APPLICATION_HPP_
 #define _APPLICATION_HPP_
 
+#include "qglwidget.hpp"
+
 #include <QApplication>
+#include <QBitmap>
+#include <QImage>
 #include <QTimer>
 
 namespace qtfullscreensystem
@@ -21,12 +25,19 @@ namespace qtfullscreensystem
 
     public:
 
-      Application(int argc, char *argv[]);
+      Application(int& argc, char *argv[]);
       virtual ~Application();
 
     private:
 
-      QTimer  _timer;
+      QTimer    _timer;
+      GLWidget  _gl_widget;
+
+      /** The last screenshot of the whole desktop */
+      QImage _last_screenshot;
+
+      /** The mask for the parts of the overlay to be visible */
+      QBitmap _mask;
 
     private slots:
 

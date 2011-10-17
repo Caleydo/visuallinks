@@ -1,4 +1,4 @@
-#include "qglwidget.h"
+#include "qglwidget.hpp"
 #include "float2.hpp"
 
 #include <cmath>
@@ -16,6 +16,9 @@
 #include <QDesktopWidget>
 
 #define LOG_ENTER_FUNC() qDebug() << __FUNCTION__
+
+namespace qtfullscreensystem
+{
 
 // internal helper...
 void smoothIteration( const std::vector<float2> in,
@@ -166,10 +169,18 @@ line_borders_t calcLineBorders(const Collection& points, float width)
 
 //------------------------------------------------------------------------------
 GLWidget::GLWidget(QWidget *parent):
-  QGLWidget( parent ),
+  QGLWidget( QGLFormat(QGL::HasOverlay | QGL::AlphaChannel), parent ),
   _render_mask( false )
 {
+  if( !isValid() )
+    qFatal("Unable to create OpenGL context (not valid)");
 
+  qDebug
+  (
+    "Created GLWidget with OpenGL %d.%d",
+    format().majorVersion(),
+    format().minorVersion()
+  );
 }
 
 //------------------------------------------------------------------------------
@@ -210,19 +221,19 @@ void GLWidget::paintGL()
   static bool took = false;
   static QPixmap bla;
 
-  if( !took )
-  {
-    bla = QPixmap::grabWindow(QApplication::desktop()->winId());
-    bla.save("screen.png");
-    took = true;
-  }
+//  if( !took )
+//  {
+//    bla = QPixmap::grabWindow(QApplication::desktop()->winId());
+//    bla.save("screen.png");
+//    took = true;
+//  }
 
   if( !shader && !_render_mask )
     shader = loadShader("render_below.vert", "simple.frag");
 
   static int count = 0;
-  if( count++ > 1 )
-    return;
+//  if( count++ > 1 )
+//    return;
 
   glActiveTexture(GL_TEXTURE0);
   glEnable(GL_TEXTURE_2D);
@@ -233,7 +244,7 @@ void GLWidget::paintGL()
   if( !_render_mask )
     bindTexture(bla.toImage());
 
-  if( shader )
+  if( shader && false )
   {
     shader->setUniformValue("desktop", tex);
     shader->bind();
@@ -344,7 +355,7 @@ void GLWidget::paintGL()
   glEnd();
 #endif
 
-  glColor4f(0.5, 0.5, 0.9, 1);
+  glColor4f(0.5, 0.5, 0.9, 0.8);
   glBegin(GL_TRIANGLE_STRIP);
     for( const float2& p: render_points )
     {
@@ -352,6 +363,8 @@ void GLWidget::paintGL()
       glVertex2f(p.x, p.y);
     }
   glEnd();
+
+  glFinish();
 
 
 #if 0
@@ -400,3 +413,5 @@ void GLWidget::resizeGL(int w, int h)
   glViewport(0,0,w,h);
   glOrtho(0, static_cast<float>(w)/h, 0, 1, -1.0, 1.0);
 }
+
+} // namespace qtfullscreensystem

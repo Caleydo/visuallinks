@@ -1,6 +1,6 @@
 # files
 set( HEADER_FILES
-  include/qglwidget.h
+  include/qglwidget.hpp
 )
 
 set( HEADER_FILES_MOC
@@ -10,7 +10,7 @@ set( HEADER_FILES_MOC
 set( SOURCE_FILES
   src/application.cpp
   src/main.cpp
-#  src/qglwidget.cpp
+  src/qglwidget.cpp
 )
 
 # dependencies & build
