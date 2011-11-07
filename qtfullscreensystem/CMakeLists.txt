@@ -13,9 +13,21 @@ set( SOURCE_FILES
   src/qglwidget.cpp
 )
 
+set (ADDITIONAL_INCLUDE_DIRS
+)
+set (ADDITIONAL_LIBS
+)
+
 # dependencies & build
 find_package(OpenGL REQUIRED)
 find_package(Qt4 REQUIRED)
+
+# windows stuff
+if(WIN32)
+find_package(GLEW REQUIRED)
+set(ADDITIONAL_INCLUDE_DIRS ${ADDITIONAL_INCLUDE_DIRS} ${GLEW_INCLUDE_DIR})
+set(ADDITIONAL_LIBS ${ADDITIONAL_LIBS} ${GLEW_LIBRARIES})
+endif(WIN32)
 
 include(${QT_USE_FILE})
 add_definitions(${QT_DEFINITIONS})
@@ -27,6 +39,7 @@ include_directories(
   ${SYSTEMROOT}
   ${QT_INCLUDES}
   ${OPENGL_INCLUDE_DIR}
+  ${ADDITIONAL_INCLUDE_DIRS}
   include
 )
 
@@ -43,4 +56,5 @@ target_link_libraries( qtfullscreensystem
   ${QT_QTCORE_LIBRARY}
   ${QT_QTGUI_LIBRARY}
   ${QT_QTOPENGL_LIBRARY}
+  ${ADDITIONAL_LIBS}
 )

@@ -1,3 +1,10 @@
+#ifdef WIN32
+#define WIN32_LEAN_AND_MEAN
+#include <Windows.h>
+#include <gl/glew.h>
+#include <gl/gl.h>
+#endif
+
 #include "qglwidget.hpp"
 #include "float2.hpp"
 
@@ -11,6 +18,7 @@
 #include <QPixmap>
 #include <qevent.h>
 #include <GL/gl.h>
+
 
 #include <QApplication>
 #include <QDesktopWidget>
@@ -97,21 +105,21 @@ ShaderPtr loadShader( QString vert, QString frag )
   {
     qWarning() << "Failed to load vertex shader (" << vert << ")\n"
                << program->log();
-    return {};
+    return ShaderPtr();
   }
 
   if( !program->addShaderFromSourceFile(QGLShader::Fragment, frag) )
   {
     qWarning() << "Failed to load fragment shader (" << frag << ")\n"
                << program->log();
-    return {};
+    return ShaderPtr();
   }
 
   if( !program->link() )
   {
     qWarning() << "Failed to link shader (" << vert << "|" << frag << ")\n"
                << program->log();
-    return {};
+    return ShaderPtr();
   }
 
   return program;
@@ -135,19 +143,19 @@ line_borders_t calcLineBorders(const Collection& points, float width)
                   p1 = p0 + 1;
 
   if( p0 == end || p1 == end )
-    return {};
+    return line_borders_t();
 
   line_borders_t ret;
   float half_width = width / 2.f;
 
   float2 prev_dir = (*p1 - *p0).normalize(),
-         prev_normal = { prev_dir.y, -prev_dir.x };
+         prev_normal = float2( prev_dir.y, -prev_dir.x );
 
   for( ; p1 != end; ++p0, ++p1 )
   {
     float2 dir = (*p1 - *p0).normalize(),
            mean_dir = 0.5f * (prev_dir + dir),
-           normal = { mean_dir.y, -mean_dir.x };
+           normal = float2( mean_dir.y, -mean_dir.x );
 
     // project on normal
     float2 offset = normal / normal.dot(prev_normal / half_width);
@@ -156,7 +164,7 @@ line_borders_t calcLineBorders(const Collection& points, float width)
     ret.second.push_back( *p0 - offset );
 
     prev_dir = dir;
-    prev_normal = { dir.y, -dir.x };
+    prev_normal = float2( dir.y, -dir.x );
   }
 
   // last point
@@ -174,6 +182,7 @@ GLWidget::GLWidget(QWidget *parent):
 {
   if( !isValid() )
     qFatal("Unable to create OpenGL context (not valid)");
+
 
   qDebug
   (
@@ -207,6 +216,11 @@ ShaderPtr shader;
 void GLWidget::initializeGL()
 {
   LOG_ENTER_FUNC();
+
+#if WIN32
+  if(glewInit() != GLEW_OK)
+    qFatal("Unable to init Glew");
+#endif
 
   glClearColor(0, 0, 0, 0);
   glEnable(GL_BLEND);
@@ -297,22 +311,22 @@ void GLWidget::paintGL()
   glEnd();
 #endif
   float2 points[] = {
-    {  0.1,     0.25    },
-    {  0.25,    0.1     },
-    {  0.4,     0.05    },
-    {  0.41,    0.055   },
-    {  0.42,    0.06    },
-    {  0.45,    0.5     },
-    {  0.55,    0.6     },
-    {  0.65,    0.4     },
-    {  0.75,    0.5     },
-    {  1.05,    0.6     },
-    {  1.25,    0.55    },
-    {  1.25,    0.75    },
-    {  1.3,     0.75    },
-    {  1.4,     0.9     },
-    {  0.85,    0.8     },
-    {  0.8,     0.9     },
+    float2(  0.1,     0.25    ),
+    float2(  0.25,    0.1     ),
+    float2(  0.4,     0.05    ),
+    float2(  0.41,    0.055   ),
+    float2(  0.42,    0.06    ),
+    float2(  0.45,    0.5     ),
+    float2(  0.55,    0.6     ),
+    float2(  0.65,    0.4     ),
+    float2(  0.75,    0.5     ),
+    float2(  1.05,    0.6     ),
+    float2(  1.25,    0.55    ),
+    float2(  1.25,    0.75    ),
+    float2(  1.3,     0.75    ),
+    float2(  1.4,     0.9     ),
+    float2(  0.85,    0.8     ),
+    float2(  0.8,     0.9     )
   };
 
   std::vector<float2> smoothed_points = smooth(points, 0.1, 2);
@@ -332,10 +346,12 @@ void GLWidget::paintGL()
   }
 
   glColor3f(1, 0.8, 0.8);
-    glBegin(GL_LINE_STRIP);
+  glBegin(GL_LINE_STRIP);
 
-    for( const float2& p: points )
-      glVertex2f(p.x, p.y);
+  //for( const float2& p: points )
+  //  glVertex2f(p.x, p.y);
+  for(auto p = std::begin(points); p != std::end(points); ++p)
+    glVertex2f(p->x, p->y);
 
   glEnd();
 
@@ -357,10 +373,15 @@ void GLWidget::paintGL()
 
   glColor4f(0.5, 0.5, 0.9, 0.8);
   glBegin(GL_TRIANGLE_STRIP);
-    for( const float2& p: render_points )
+    //for( const float2& p: render_points )
+    //{
+    //  //glTexCoord2f(p.x/1.6, p.y);
+    //  glVertex2f(p.x, p.y);
+    //}
+    for(auto p = std::begin(render_points); p != std::end(render_points); ++p)
     {
-      //glTexCoord2f(p.x/1.6, p.y);
-      glVertex2f(p.x, p.y);
+      //glTexCoord2f(p->x/1.6, p->y);
+      glVertex2f(p->x, p->y);
     }
   glEnd();
 

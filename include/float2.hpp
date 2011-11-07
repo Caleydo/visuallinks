@@ -23,6 +23,11 @@ struct float2
   /**
    *
    */
+  float2(float _x, float _y) : x(_x), y(_y) { }
+
+  /**
+   *
+   */
   float length() const
   {
     return std::sqrt(x*x + y*y);
@@ -54,7 +59,7 @@ struct float2
  */
 inline float2 operator +(const float2& a, const float2& b)
 {
-  return {a.x + b.x, a.y + b.y};
+  return float2(a.x + b.x, a.y + b.y);
 }
 
 /**
@@ -62,7 +67,7 @@ inline float2 operator +(const float2& a, const float2& b)
  */
 inline float2 operator -(const float2& a, const float2& b)
 {
-  return {a.x - b.x, a.y - b.y};
+  return float2(a.x - b.x, a.y - b.y);
 }
 
 /**
@@ -70,7 +75,7 @@ inline float2 operator -(const float2& a, const float2& b)
  */
 inline float2 operator -(const float2& a)
 {
-  return {-a.x, -a.y};
+  return float2(-a.x, -a.y);
 }
 
 /**
@@ -78,7 +83,7 @@ inline float2 operator -(const float2& a)
  */
 inline const float2 operator *(float a, const float2& v)
 {
-  return {a * v.x, a * v.y};
+  return float2(a * v.x, a * v.y);
 }
 
 /**
@@ -94,7 +99,7 @@ inline const float2 operator *(const float2& v, float a)
  */
 inline const float2 operator /(const float2& v, float a)
 {
-  return {v.x / a, v.y / a};
+  return float2(v.x / a, v.y / a);
 }
 
 /**
