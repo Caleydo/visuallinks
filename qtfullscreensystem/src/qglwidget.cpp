@@ -170,7 +170,7 @@ line_borders_t calcLineBorders(const Collection& points, float width)
 //------------------------------------------------------------------------------
 GLWidget::GLWidget(QWidget *parent):
   QGLWidget( QGLFormat(QGL::HasOverlay | QGL::AlphaChannel), parent ),
-  _render_mask( false )
+  _render_mode( RENDER_NORMAL )
 {
   if( !isValid() )
     qFatal("Unable to create OpenGL context (not valid)");
@@ -192,15 +192,22 @@ GLWidget::~GLWidget()
 //----------------------------------------------------------------------------
 void GLWidget::setRenderMask()
 {
-  _render_mask = true;
+  _render_mode = RENDER_MASK;
 }
 
 //----------------------------------------------------------------------------
 void GLWidget::clearRenderMask()
 {
-  _render_mask = false;
+  _render_mode = RENDER_NORMAL;
 }
 
+//----------------------------------------------------------------------------
+void GLWidget::clearScreen()
+{
+  _render_mode = RENDER_EMPTY;
+  repaint();
+  _render_mode = RENDER_NORMAL;
+}
 
 ShaderPtr shader;
 //------------------------------------------------------------------------------
@@ -216,7 +223,11 @@ void GLWidget::initializeGL()
 //------------------------------------------------------------------------------
 void GLWidget::paintGL()
 {
-  LOG_ENTER_FUNC() << "render_mask=" << _render_mask;
+  LOG_ENTER_FUNC() << "render_mask=" << _render_mode;
+  glClear(GL_COLOR_BUFFER_BIT);
+
+  if( _render_mode == RENDER_EMPTY )
+    return glFinish();
 
   static bool took = false;
   static QPixmap bla;
@@ -228,7 +239,7 @@ void GLWidget::paintGL()
 //    took = true;
 //  }
 
-  if( !shader && !_render_mask )
+  if( !shader && _render_mode != RENDER_MASK )
     shader = loadShader("render_below.vert", "simple.frag");
 
   static int count = 0;
@@ -241,7 +252,7 @@ void GLWidget::paintGL()
   glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR );
   GLuint tex;
 
-  if( !_render_mask )
+  if( !_render_mode == RENDER_NORMAL )
     bindTexture(bla.toImage());
 
   if( shader && false )
@@ -267,7 +278,6 @@ void GLWidget::paintGL()
 //    shader->setUniformValue("belowalpha", 0.3f);
   }
 
-  glClear(GL_COLOR_BUFFER_BIT);
   glColor3f(1.0, 1.0, 1.0);
 
   glLineWidth(2);

@@ -27,6 +27,11 @@ namespace qtfullscreensystem
        */
       void clearRenderMask();
 
+      /**
+       * Clear the screen with a transparent color
+       */
+      void clearScreen();
+
     protected:
 
       // QT OpenGL callbacks
@@ -36,7 +41,12 @@ namespace qtfullscreensystem
 
     private:
 
-      bool _render_mask;
+      enum RenderMode
+      {
+        RENDER_MASK,
+        RENDER_EMPTY,
+        RENDER_NORMAL
+      } _render_mode;
 
   };
 } // namespace qtfullscreensystem

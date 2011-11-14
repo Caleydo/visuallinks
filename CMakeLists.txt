@@ -76,6 +76,7 @@ set(COMPONENTS_INC_DIR ${COMPONENTS_INC_DIR} ${COMPONENTS_DIR}/transparencyanaly
 
 #add default applications
 add_subdirectory(${PROJROOT}/qtfullscreensystem ${BIN_DIR}/qtfullscreensystem)
+add_subdirectory(${PROJROOT}/qt-ocr ${BIN_DIR}/qt-ocr)
 add_subdirectory(${PROJROOT}/singleimagesystem ${BIN_DIR}/singleimagesystem)
 
 

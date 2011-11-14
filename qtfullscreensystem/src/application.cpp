@@ -9,6 +9,7 @@
 #include "application.hpp"
 
 #include <QDesktopWidget>
+#include <QElapsedTimer>
 #include <iostream>
 
 namespace qtfullscreensystem
@@ -38,7 +39,7 @@ namespace qtfullscreensystem
     _gl_widget.show();
 
     connect(&_timer, SIGNAL(timeout()), this, SLOT(timeOut()));
-    _timer.start(500);
+    _timer.start(1000);
   }
 
   //----------------------------------------------------------------------------
@@ -50,22 +51,29 @@ namespace qtfullscreensystem
   //----------------------------------------------------------------------------
   void Application::timeOut()
   {
-    // update render mask
-    _gl_widget.setRenderMask();
-    _mask = _gl_widget.renderPixmap().createMaskFromColor( QColor(0,0,0,0) );
-//
-//    static int count = 0;
-//    _mask.save( QString("mask%1.png").arg(count++) );
-    _gl_widget.setMask(_mask);
-    _gl_widget.clearRenderMask();
-    return;
+    _gl_widget.clearScreen();
+    _gl_widget.clearScreen();
+    QElapsedTimer t;
+    t.start();
+    do
+    {
+    QCoreApplication::processEvents(QEventLoop::AllEvents, 5);
+    } while( t.elapsed() < 25 );
+    QPixmap screen = QPixmap::grabWindow(QApplication::desktop()->winId());
+    _gl_widget.update();
+    QImage screenshot = screen.toImage();
 
-//    QPixmap screen = QPixmap::grabWindow(QApplication::desktop()->winId());
-//    QImage screenshot = screen.toImage();
-//
-//    static int count = 0;
-//    screen.save(QString("desktop%1.png").arg(count++));
-//    std::cout << count << std::endl;
+    static int count = 0;
+    screen.save(QString("desktop%1.png").arg(count));
+    std::cout << count++ << std::endl;
+
+    // update render mask
+//    _gl_widget.setRenderMask();
+//    _mask = _gl_widget.renderPixmap().createMaskFromColor( QColor(0,0,0,0) );
+//    //_mask.save( QString("mask%1.png").arg(count) );
+//    _gl_widget.setMask(_mask);
+//    _gl_widget.clearRenderMask();
+
 //
 //    if( screenshot != _last_screenshot )
 //    {
