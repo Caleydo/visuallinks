@@ -77,6 +77,7 @@ FOREACH(mod ${QXT_MODULES})
         "C:\\"
         "C:\\Program Files\\"
         "C:\\Program Files(x86)\\"
+        "C:\\Qt\\libqxt-libqxt-v0.6.1\\"
       NO_DEFAULT_PATH
     )
     FIND_LIBRARY(QXT_${U_MOD}_LIB_RELEASE NAME ${mod}
@@ -95,6 +96,7 @@ FOREACH(mod ${QXT_MODULES})
         "C:\\"
         "C:\\Program Files"
         "C:\\Program Files(x86)"
+        "C:\\Qt\\libqxt-libqxt-v0.6.1"
       NO_DEFAULT_PATH
     )
     FIND_LIBRARY(QXT_${U_MOD}_LIB_DEBUG NAME ${mod}d
@@ -113,6 +115,7 @@ FOREACH(mod ${QXT_MODULES})
         "C:\\"
         "C:\\Program Files"
         "C:\\Program Files(x86)"
+        "C:\\Qt\\libqxt-libqxt-v0.6.1"
       NO_DEFAULT_PATH
     )
     IF (QXT_${U_MOD}_LIB_RELEASE)

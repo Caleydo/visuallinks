@@ -13,8 +13,6 @@ set( SOURCE_FILES
 )
 
 # dependencies & build
-set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} ../cmake)
-
 find_package(Qt4 REQUIRED)
 include(${QT_USE_FILE})
 add_definitions(${QT_DEFINITIONS})
