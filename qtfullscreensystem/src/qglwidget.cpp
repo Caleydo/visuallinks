@@ -12,16 +12,17 @@
 #include <cstddef>
 #include <iostream>
 #include <memory>
-#include <QBitmap>
-#include <QEvent>
-#include <QGLShaderProgram>
-#include <QPixmap>
-#include <qevent.h>
+
+//#include <QEvent>
+//#include <qevent.h>
 #include <GL/gl.h>
 
 
 #include <QApplication>
+#include <QBitmap>
 #include <QDesktopWidget>
+//#include <QPixmap>
+#include <QGLShaderProgram>
 
 #define LOG_ENTER_FUNC() qDebug() << __FUNCTION__
 
@@ -177,12 +178,10 @@ line_borders_t calcLineBorders(const Collection& points, float width)
 
 //------------------------------------------------------------------------------
 GLWidget::GLWidget(QWidget *parent):
-  QGLWidget( QGLFormat(QGL::HasOverlay | QGL::AlphaChannel), parent ),
-  _render_mode( RENDER_NORMAL )
+  QGLWidget( parent )
 {
   if( !isValid() )
     qFatal("Unable to create OpenGL context (not valid)");
-
 
   qDebug
   (
@@ -198,18 +197,6 @@ GLWidget::~GLWidget()
 
 }
 
-//----------------------------------------------------------------------------
-void GLWidget::setRenderMask()
-{
-  _render_mode = RENDER_MASK;
-}
-
-//----------------------------------------------------------------------------
-void GLWidget::clearRenderMask()
-{
-  _render_mode = RENDER_NORMAL;
-}
-
 ShaderPtr shader;
 //------------------------------------------------------------------------------
 void GLWidget::initializeGL()
@@ -221,6 +208,23 @@ void GLWidget::initializeGL()
     qFatal("Unable to init Glew");
 #endif
 
+  if( _fbo_links || _fbo_desktop )
+    qDebug("At least one fbo already initialized!");
+
+  _fbo_links = std::make_shared<QGLFramebufferObject>
+    (
+      size(),
+      QGLFramebufferObject::Depth
+    );
+  _fbo_desktop = std::make_shared<QGLFramebufferObject>
+     (
+       size(),
+       QGLFramebufferObject::Depth
+     );
+
+  if( !_fbo_links->isValid() || !_fbo_desktop->isValid() )
+    qFatal("Failed to create framebufferobjects!");
+
   glClearColor(0, 0, 0, 0);
   glEnable(GL_BLEND);
   glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
@@ -229,43 +233,32 @@ void GLWidget::initializeGL()
 //------------------------------------------------------------------------------
 void GLWidget::paintGL()
 {
-  LOG_ENTER_FUNC() << "render_mask=" << _render_mode;
+  LOG_ENTER_FUNC();
+
+  // render links to framebuffer
+  _fbo_links->bind();
   glClear(GL_COLOR_BUFFER_BIT);
 
-  static bool took = false;
-  static QPixmap bla;
+//  if( !shader && _render_mode != RENDER_MASK )
+//    shader = loadShader("render_below.vert", "simple.frag");
 
-//  if( !took )
+//  glActiveTexture(GL_TEXTURE0);
+//  GLuint tex = -1;
+//
+//  if( _render_mode == RENDER_MASK )
 //  {
-//    bla = QPixmap::grabWindow(QApplication::desktop()->winId());
-//    bla.save("screen.png");
-//    took = true;
+//    glDisable(GL_TEXTURE_2D);
 //  }
-
-  if( !shader && _render_mode != RENDER_MASK )
-    shader = loadShader("render_below.vert", "simple.frag");
-
-  static int count = 0;
-//  if( count++ > 1 )
-//    return;
-
-  glActiveTexture(GL_TEXTURE0);
-  GLuint tex = -1;
-
-  if( _render_mode == RENDER_MASK )
-  {
-    glDisable(GL_TEXTURE_2D);
-  }
-  else
-  {
-    glEnable(GL_TEXTURE_2D);
-
-    glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR );
-    glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR );
-
-    tex = bindTexture(bla.toImage());
-  }
-
+//  else
+//  {
+//    glEnable(GL_TEXTURE_2D);
+//
+//    glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR );
+//    glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR );
+//
+//    tex = bindTexture(bla.toImage());
+//  }
+#if 0
   if( shader && false )
   {
     shader->setUniformValue("desktop", tex);
@@ -288,7 +281,7 @@ void GLWidget::paintGL()
 //    shader->setUniformValue("maxalpha",0.5f);
 //    shader->setUniformValue("belowalpha", 0.3f);
   }
-
+#endif
   glColor3f(1.0, 1.0, 1.0);
 
   glLineWidth(2);
@@ -318,22 +311,22 @@ void GLWidget::paintGL()
   glEnd();
 #endif
   float2 points[] = {
-    float2(  0.1,     0.25    ),
-    float2(  0.25,    0.1     ),
-    float2(  0.4,     0.05    ),
-    float2(  0.41,    0.055   ),
-    float2(  0.42,    0.06    ),
-    float2(  0.45,    0.5     ),
-    float2(  0.55,    0.6     ),
-    float2(  0.65,    0.4     ),
-    float2(  0.75,    0.5     ),
-    float2(  1.05,    0.6     ),
-    float2(  1.25,    0.55    ),
-    float2(  1.25,    0.75    ),
-    float2(  1.3,     0.75    ),
-    float2(  1.4,     0.9     ),
-    float2(  0.85,    0.8     ),
-    float2(  0.8,     0.9     )
+    float2( -0.7,    -0.5     ),
+    float2( -0.55,   -0.8     ),
+    float2( -0.4,    -0.9     ),
+    float2( -0.39,   -0.91    ),
+    float2( -0.38,   -0.92    ),
+    float2( -0.35,    0.0     ),
+    float2( -0.25,    0.2     ),
+    float2( -0.15,   -0.2     ),
+    float2( -0.05,    0.0     ),
+    float2(  0.25,    0.2     ),
+    float2(  0.65,    0.1     ),
+    float2(  0.65,    0.5     ),
+    float2(  0.5,     0.5     ),
+    float2(  0.6,     0.8     ),
+    float2(  0.05,    0.6     ),
+    float2(  0.0,     0.8     )
   };
 
   std::vector<float2> smoothed_points = smooth(points, 0.1, 2);
@@ -378,7 +371,7 @@ void GLWidget::paintGL()
   glEnd();
 #endif
 
-  glColor4f(0.5, 0.5, 0.9, 0.8);
+  glColor3f(0.5, 0.5, 0.9);
   glBegin(GL_TRIANGLE_STRIP);
     //for( const float2& p: render_points )
     //{
@@ -429,8 +422,54 @@ void GLWidget::paintGL()
   glEnd();
 #endif
 
-//  bla = QPixmap::grabWindow(QApplication::desktop()->winId());
-//  bla.save("screen-after.png");
+  _fbo_links->release();
+
+  QImage links = _fbo_links->toImage();
+  links.save("fbo.png");
+
+  QBitmap mask =
+    QBitmap::fromImage( links.createMaskFromColor( qRgba(0,0,0,0) ) );
+  mask.save("mask.png");
+  setMask(mask);
+
+  // get screenshot (grab screen and remove links)
+  _fbo_desktop->bind();
+
+  glActiveTexture(GL_TEXTURE0);
+  glEnable(GL_TEXTURE_2D);
+  bindTexture( QPixmap::grabWindow(QApplication::desktop()->winId()) );
+
+  glActiveTexture(GL_TEXTURE1);
+//  glEnable(GL_TEXTURE_2D);
+//  glBindTexture(GL_TEXTURE_2D, _fbo_links->texture());
+
+  glBegin( GL_QUADS );
+
+    glColor3f(1,1,1);
+
+    glTexCoord2f(0,0);
+    glVertex2f(-1,-1);
+
+    glTexCoord2f(1,0);
+    glVertex2f(1,-1);
+
+    glTexCoord2f(1,1);
+    glVertex2f(1,1);
+
+    glTexCoord2f(0,1);
+    glVertex2f(-1,1);
+
+  glEnd();
+
+  glDisable(GL_TEXTURE_2D);
+  glActiveTexture(GL_TEXTURE0);
+  glDisable(GL_TEXTURE_2D);
+
+  _fbo_desktop->release();
+
+  static int counter = 0;
+  counter++;
+  _fbo_desktop->toImage().save( QString("desktop%1.png").arg(counter) );
 }
 
 //------------------------------------------------------------------------------
@@ -439,7 +478,7 @@ void GLWidget::resizeGL(int w, int h)
   LOG_ENTER_FUNC() << "(" << w << "|" << h << ")" << static_cast<float>(w)/h << ":" << 1;
 
   glViewport(0,0,w,h);
-  glOrtho(0, static_cast<float>(w)/h, 0, 1, -1.0, 1.0);
+  //glOrtho(0, static_cast<float>(w)/h, 0, 1, -1.0, 1.0);
 }
 
 } // namespace qtfullscreensystem

@@ -2,6 +2,8 @@
 #define _GLWIDGET_HPP_
 
 #include <QGLWidget>
+#include <QGLFramebufferObject>
+#include <memory>
 
 namespace qtfullscreensystem
 {
@@ -12,21 +14,6 @@ namespace qtfullscreensystem
       GLWidget(QWidget *parent = 0);
       virtual ~GLWidget();
 
-      /**
-       * Set a flag to show that the following renderings will be used for
-       * creating a mask for the window.
-       *
-       * When set the rendering doesn't need to use any shaders/textures/etc. but
-       * only render the shapes of all rendered objects.
-       *
-       */
-      void setRenderMask();
-
-      /**
-       * Clear the flag indicating rendering for a mask. See #setRenderMask
-       */
-      void clearRenderMask();
-
     protected:
 
       // QT OpenGL callbacks
@@ -36,11 +23,8 @@ namespace qtfullscreensystem
 
     private:
 
-      enum RenderMode
-      {
-        RENDER_MASK,
-        RENDER_NORMAL
-      } _render_mode;
+      std::shared_ptr<QGLFramebufferObject> _fbo_links;
+      std::shared_ptr<QGLFramebufferObject> _fbo_desktop;
 
   };
 } // namespace qtfullscreensystem
