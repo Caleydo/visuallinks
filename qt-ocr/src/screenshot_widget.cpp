@@ -121,7 +121,7 @@ void ScreenshotWidget::mouseReleaseEvent(QMouseEvent* event)
       QSize size( std::abs(_selection.right() - _selection.left()),
                   std::abs(_selection.top() - _selection.bottom()) );
 
-      detect( _screenshot.copy(_selection).scaled(2 * size, Qt::KeepAspectRatio, Qt::SmoothTransformation) );
+      detect( _screenshot.copy(_selection) /*.scaled(2 * size, Qt::KeepAspectRatio, Qt::SmoothTransformation)*/ );
     }
   }
 }
@@ -172,7 +172,7 @@ void ScreenshotWidget::detect(QPixmap selection)
   );
 
   tess_api.Recognize(nullptr);
-  tess_api.DumpPGM("test.pgm");
+  //tess_api.DumpPGM("test.pgm");
 
   QMessageBox msgBox;
   msgBox.setText(tess_api.GetUTF8Text());
