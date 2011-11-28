@@ -37,7 +37,8 @@ namespace qtfullscreensystem
                              );
     //_gl_widget.setAttribute( Qt::WA_TranslucentBackground );
     _gl_widget.setWindowOpacity(0.7);
-
+	_gl_widget.show();
+	
     // update render mask
     _gl_widget.setRenderMask();
     _mask = _gl_widget.renderPixmap().createMaskFromColor( QColor(0,0,0) );
@@ -45,8 +46,7 @@ namespace qtfullscreensystem
     _gl_widget.setMask(_mask);
     _gl_widget.clearRenderMask();
 
-    _gl_widget.show();
-
+    
 //    connect(&_timer, SIGNAL(timeout()), this, SLOT(timeOut()));
 //    _timer.start(1000);
   }
