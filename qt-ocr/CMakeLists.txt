@@ -19,7 +19,6 @@ add_definitions(${QT_DEFINITIONS})
 
 set(QXT_FIND_COMPONENTS QxtGui)
 find_package(Qxt REQUIRED)
-message("Qxt:${QXT_INCLUDE_DIRS}")
 
 find_package(Tesseract REQUIRED)
 

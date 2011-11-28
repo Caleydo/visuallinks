@@ -18,11 +18,29 @@ if (TESSERACT_INCLUDE_DIR AND TESSERACT_LIBRARY)
   set(Tesseract_FIND_QUIETLY TRUE)
 endif (TESSERACT_INCLUDE_DIR AND TESSERACT_LIBRARY)
 
-FIND_PATH(TESSERACT_INCLUDE_DIR tesseract/baseapi.h)
+FIND_PATH(TESSERACT_INCLUDE_DIR baseapi.h
+  PATH_SUFFIXES
+    api
+    tesseract
+  PATHS
+    /usr/include
+    /usr/local/include
+    "C:\\tesseract-3.01"
+)
 
-FIND_LIBRARY( TESSERACT_LIBRARY
+FIND_LIBRARY(TESSERACT_LIBRARY
   NAMES tesseract_api
         tesseract
+        libtesseract
+  PATH_SUFFIXES
+    vs2010/Release
+    vs2008/Release
+    lib
+    lib64
+  PATHS
+    /usr
+    /usr/local
+    "C:\\tesseract-3.01"
 )
 
 if(TESSERACT_LIBRARY)
@@ -35,8 +53,6 @@ if(TESSERACT_LIBRARY)
 
   set(CMAKE_REQUIRED_INCLUDES ${TESSERACT_INCLUDE_DIR})
 endif(TESSERACT_LIBRARY)
-
-message("${TESSERACT_LIBRARY}->${TESSERACT_INCLUDE_DIR}")
 
 include(FindPackageHandleStandardArgs)
 FIND_PACKAGE_HANDLE_STANDARD_ARGS(Tesseract DEFAULT_MSG TESSERACT_INCLUDE_DIR TESSERACT_LIBRARY )
