@@ -210,14 +210,6 @@ void GLWidget::clearRenderMask()
   _render_mode = RENDER_NORMAL;
 }
 
-//----------------------------------------------------------------------------
-void GLWidget::clearScreen()
-{
-  _render_mode = RENDER_EMPTY;
-  repaint();
-  _render_mode = RENDER_NORMAL;
-}
-
 ShaderPtr shader;
 //------------------------------------------------------------------------------
 void GLWidget::initializeGL()
@@ -240,9 +232,6 @@ void GLWidget::paintGL()
   LOG_ENTER_FUNC() << "render_mask=" << _render_mode;
   glClear(GL_COLOR_BUFFER_BIT);
 
-  if( _render_mode == RENDER_EMPTY )
-    return glFinish();
-
   static bool took = false;
   static QPixmap bla;
 
@@ -261,13 +250,21 @@ void GLWidget::paintGL()
 //    return;
 
   glActiveTexture(GL_TEXTURE0);
-  glEnable(GL_TEXTURE_2D);
-  glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR );
-  glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR );
-  GLuint tex;
+  GLuint tex = -1;
 
-  if( !_render_mode == RENDER_NORMAL )
-    bindTexture(bla.toImage());
+  if( _render_mode == RENDER_MASK )
+  {
+    glDisable(GL_TEXTURE_2D);
+  }
+  else
+  {
+    glEnable(GL_TEXTURE_2D);
+
+    glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR );
+    glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR );
+
+    tex = bindTexture(bla.toImage());
+  }
 
   if( shader && false )
   {

@@ -35,11 +35,20 @@ namespace qtfullscreensystem
                              | Qt::MSWindowsOwnDC
                              | Qt::X11BypassWindowManagerHint
                              );
-    _gl_widget.setAttribute( Qt::WA_TranslucentBackground );
+    //_gl_widget.setAttribute( Qt::WA_TranslucentBackground );
+    _gl_widget.setWindowOpacity(0.7);
+
+    // update render mask
+    _gl_widget.setRenderMask();
+    _mask = _gl_widget.renderPixmap().createMaskFromColor( QColor(0,0,0) );
+    _mask.save( QString("mask.png") );
+    _gl_widget.setMask(_mask);
+    _gl_widget.clearRenderMask();
+
     _gl_widget.show();
 
-    connect(&_timer, SIGNAL(timeout()), this, SLOT(timeOut()));
-    _timer.start(1000);
+//    connect(&_timer, SIGNAL(timeout()), this, SLOT(timeOut()));
+//    _timer.start(1000);
   }
 
   //----------------------------------------------------------------------------
@@ -51,28 +60,13 @@ namespace qtfullscreensystem
   //----------------------------------------------------------------------------
   void Application::timeOut()
   {
-    _gl_widget.clearScreen();
-    _gl_widget.clearScreen();
-    QElapsedTimer t;
-    t.start();
-    do
-    {
-    QCoreApplication::processEvents(QEventLoop::AllEvents, 5);
-    } while( t.elapsed() < 25 );
-    QPixmap screen = QPixmap::grabWindow(QApplication::desktop()->winId());
-    _gl_widget.update();
-    QImage screenshot = screen.toImage();
-
-    static int count = 0;
-    screen.save(QString("desktop%1.png").arg(count));
-    std::cout << count++ << std::endl;
-
-    // update render mask
-//    _gl_widget.setRenderMask();
-//    _mask = _gl_widget.renderPixmap().createMaskFromColor( QColor(0,0,0,0) );
-//    //_mask.save( QString("mask%1.png").arg(count) );
-//    _gl_widget.setMask(_mask);
-//    _gl_widget.clearRenderMask();
+//    QPixmap screen = QPixmap::grabWindow(QApplication::desktop()->winId());
+//    _gl_widget.update();
+//    QImage screenshot = screen.toImage();
+//
+//    static int count = 0;
+//    screen.save(QString("desktop%1.png").arg(count));
+//    std::cout << count++ << std::endl;
 
 //
 //    if( screenshot != _last_screenshot )
