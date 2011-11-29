@@ -20,7 +20,7 @@ add_definitions(${QT_DEFINITIONS})
 set(QXT_FIND_COMPONENTS QxtGui)
 find_package(Qxt REQUIRED)
 
-find_package(Tesseract REQUIRED)
+find_package(Tesseract )
 
 set(SYSTEMROOT ${CMAKE_CURRENT_SOURCE_DIR})
 include_directories(
