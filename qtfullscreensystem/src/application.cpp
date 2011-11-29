@@ -31,26 +31,21 @@ namespace qtfullscreensystem
       QApplication::desktop()->screenGeometry(&_gl_widget)
     );
 
+    // don't allow user to change the window size
+    _gl_widget.setFixedSize( _gl_widget.size() );
+
     // transparent, always on top window without any decoration
     // TODO check windows
     _gl_widget.setWindowFlags( Qt::WindowStaysOnTopHint
                              | Qt::FramelessWindowHint
                              | Qt::MSWindowsOwnDC
-                             | Qt::X11BypassWindowManagerHint
+                             //| Qt::X11BypassWindowManagerHint
                              );
-    //_gl_widget.setAttribute( Qt::WA_TranslucentBackground );
-    _gl_widget.setWindowOpacity(0.7);
+    _gl_widget.setWindowOpacity(0.6);
 	_gl_widget.show();
 
-    // update render mask
-//    _gl_widget.setRenderMask();
-//    _mask = _gl_widget.renderPixmap().createMaskFromColor( QColor(0,0,0) );
-//    _mask.save( QString("mask.png") );
-//    _gl_widget.setMask(_mask);
-//    _gl_widget.clearRenderMask();
-
     connect(&_timer, SIGNAL(timeout()), this, SLOT(timeOut()));
-    _timer.start(5000);
+    _timer.start(500);
   }
 
   //----------------------------------------------------------------------------
@@ -62,39 +57,20 @@ namespace qtfullscreensystem
   //----------------------------------------------------------------------------
   void Application::timeOut()
   {
-//    QPixmap screen = QPixmap::grabWindow(QApplication::desktop()->winId());
-//    _gl_widget.update();
-//    QImage screenshot = screen.toImage();
-//
-//    static int count = 0;
-//    screen.save(QString("desktop%1.png").arg(count));
-//    std::cout << count++ << std::endl;
+    static int capture = 2;
 
-//
-//    if( screenshot != _last_screenshot )
-//    {
-//      std::cout << "changed" << std::endl;
-//
-//      _last_screenshot = screenshot;
+    switch( capture )
+    {
+      case 0:
+        _gl_widget.captureScreen();
+        capture = 3;
+        break;
+      case 2:
+        _gl_widget.updateGL();
+        break;
+    }
 
-      //_gl_widget.setMask( QApplication::desktop()->screenGeometry(&_gl_widget) );
-
-
-
-      // update render mask
-//      _gl_widget.setRenderMask();
-//      _mask = _gl_widget.renderPixmap().createMaskFromColor( QColor(0,0,0) );
-//
-//      _mask.save( QString("mask%1.png").arg(count++) );
-//      _gl_widget.clearRenderMask();
-//    }
-
-    // and show widget again...
-    //_gl_widget.setMask(_mask);
-    //_gl_widget.setMask( QApplication::desktop()->screenGeometry(&_gl_widget) );
-    //_gl_widget.setWindowOpacity(1);
-    //_gl_widget.show();
-    _gl_widget.update();
+    --capture;
   }
 
 } // namespace qtfullscreensystem

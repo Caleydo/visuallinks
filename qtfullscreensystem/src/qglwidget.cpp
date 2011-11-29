@@ -21,8 +21,8 @@
 #include <QApplication>
 #include <QBitmap>
 #include <QDesktopWidget>
-//#include <QPixmap>
 #include <QGLShaderProgram>
+#include <QMoveEvent>
 
 #define LOG_ENTER_FUNC() qDebug() << __FUNCTION__
 
@@ -197,6 +197,14 @@ GLWidget::~GLWidget()
 
 }
 
+//------------------------------------------------------------------------------
+void GLWidget::captureScreen()
+{
+  LOG_ENTER_FUNC();
+
+  _screenshot = QPixmap::grabWindow(QApplication::desktop()->winId());
+}
+
 ShaderPtr shader;
 //------------------------------------------------------------------------------
 void GLWidget::initializeGL()
@@ -211,16 +219,22 @@ void GLWidget::initializeGL()
   if( _fbo_links || _fbo_desktop )
     qDebug("At least one fbo already initialized!");
 
-  _fbo_links = std::make_shared<QGLFramebufferObject>
+  _fbo_links.reset
+  (
+    new QGLFramebufferObject
     (
       size(),
       QGLFramebufferObject::Depth
-    );
-  _fbo_desktop = std::make_shared<QGLFramebufferObject>
-     (
-       size(),
-       QGLFramebufferObject::Depth
-     );
+    )
+  );
+  _fbo_desktop.reset
+  (
+    new QGLFramebufferObject
+    (
+      size(),
+      QGLFramebufferObject::Depth
+    )
+  );
 
   if( !_fbo_links->isValid() || !_fbo_desktop->isValid() )
     qFatal("Failed to create framebufferobjects!");
@@ -385,9 +399,6 @@ void GLWidget::paintGL()
     }
   glEnd();
 
-  glFinish();
-
-
 #if 0
   glColor3f(1, 0, 1);
   glBegin(GL_LINE_STRIP);
@@ -425,51 +436,61 @@ void GLWidget::paintGL()
   _fbo_links->release();
 
   QImage links = _fbo_links->toImage();
-  links.save("fbo.png");
+  //links.save("fbo.png");
 
   QBitmap mask =
     QBitmap::fromImage( links.createMaskFromColor( qRgba(0,0,0,0) ) );
-  mask.save("mask.png");
+  //mask.save("mask.png");
   setMask(mask);
 
-  // get screenshot (grab screen and remove links)
-  _fbo_desktop->bind();
+  if( !_screenshot.isNull() )
+  {
+    qDebug("Update screenshot...");
 
-  glActiveTexture(GL_TEXTURE0);
-  glEnable(GL_TEXTURE_2D);
-  bindTexture( QPixmap::grabWindow(QApplication::desktop()->winId()) );
+    // remove links from screenshot
+    _fbo_desktop->bind();
 
-  glActiveTexture(GL_TEXTURE1);
-//  glEnable(GL_TEXTURE_2D);
-//  glBindTexture(GL_TEXTURE_2D, _fbo_links->texture());
+    glActiveTexture(GL_TEXTURE0);
+    glEnable(GL_TEXTURE_2D);
+    bindTexture( _screenshot );
 
-  glBegin( GL_QUADS );
+//    glActiveTexture(GL_TEXTURE1);
+  //  glEnable(GL_TEXTURE_2D);
+  //  glBindTexture(GL_TEXTURE_2D, _fbo_links->texture());
 
-    glColor3f(1,1,1);
+    glBegin( GL_QUADS );
 
-    glTexCoord2f(0,0);
-    glVertex2f(-1,-1);
+      glColor3f(1,1,1);
 
-    glTexCoord2f(1,0);
-    glVertex2f(1,-1);
+      glTexCoord2f(0,0);
+      glVertex2f(-1,-1);
 
-    glTexCoord2f(1,1);
-    glVertex2f(1,1);
+      glTexCoord2f(1,0);
+      glVertex2f(1,-1);
 
-    glTexCoord2f(0,1);
-    glVertex2f(-1,1);
+      glTexCoord2f(1,1);
+      glVertex2f(1,1);
 
-  glEnd();
+      glTexCoord2f(0,1);
+      glVertex2f(-1,1);
 
-  glDisable(GL_TEXTURE_2D);
-  glActiveTexture(GL_TEXTURE0);
-  glDisable(GL_TEXTURE_2D);
+    glEnd();
 
-  _fbo_desktop->release();
+//    glDisable(GL_TEXTURE_2D);
+//    glActiveTexture(GL_TEXTURE0);
+    glDisable(GL_TEXTURE_2D);
 
-  static int counter = 0;
-  counter++;
-  _fbo_desktop->toImage().save( QString("desktop%1.png").arg(counter) );
+    _fbo_desktop->release();
+
+    static int counter = 0;
+    if( !(counter++ % 5) )
+      _fbo_desktop->toImage().save( QString("desktop%1.png").arg(counter/5) );
+
+    _screenshot = QPixmap();
+  }
+
+  // normal draw...
+  glClear(GL_COLOR_BUFFER_BIT);
 }
 
 //------------------------------------------------------------------------------
@@ -479,6 +500,13 @@ void GLWidget::resizeGL(int w, int h)
 
   glViewport(0,0,w,h);
   //glOrtho(0, static_cast<float>(w)/h, 0, 1, -1.0, 1.0);
+}
+
+//------------------------------------------------------------------------------
+void GLWidget::moveEvent(QMoveEvent *event)
+{
+  if( event->pos() != QPoint(0,0) )
+    move( QPoint(0,0) );
 }
 
 } // namespace qtfullscreensystem

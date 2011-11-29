@@ -14,6 +14,11 @@ namespace qtfullscreensystem
       GLWidget(QWidget *parent = 0);
       virtual ~GLWidget();
 
+      /**
+       * Signal that the screen is ready for being captured
+       */
+      void captureScreen();
+
     protected:
 
       // QT OpenGL callbacks
@@ -21,10 +26,14 @@ namespace qtfullscreensystem
       virtual void paintGL();
       virtual void resizeGL(int width, int height);
 
+      virtual void moveEvent(QMoveEvent *event);
+
     private:
 
-      std::shared_ptr<QGLFramebufferObject> _fbo_links;
-      std::shared_ptr<QGLFramebufferObject> _fbo_desktop;
+      std::unique_ptr<QGLFramebufferObject> _fbo_links;
+      std::unique_ptr<QGLFramebufferObject> _fbo_desktop;
+
+      QPixmap _screenshot;
 
   };
 } // namespace qtfullscreensystem
