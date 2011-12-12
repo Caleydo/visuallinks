@@ -45,7 +45,7 @@ namespace qtfullscreensystem
 	_gl_widget.show();
 
     connect(&_timer, SIGNAL(timeout()), this, SLOT(timeOut()));
-    _timer.start(500);
+    _timer.start(100);
   }
 
   //----------------------------------------------------------------------------

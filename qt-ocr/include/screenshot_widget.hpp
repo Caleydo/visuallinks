@@ -6,10 +6,16 @@
 
 class ScreenshotWidget: public QWidget
 {
+  Q_OBJECT
+
   public:
 
     ScreenshotWidget(QWidget *parent = 0);
     virtual ~ScreenshotWidget();
+
+  private slots:
+
+    void updateClipboard();
 
   protected:
 

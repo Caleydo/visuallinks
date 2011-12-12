@@ -5,7 +5,7 @@
 #include <QMessageBox>
 #include <QMouseEvent>
 #include <QPainter>
-
+#include <QClipboard>
 
 #include <iostream>
 
@@ -18,7 +18,7 @@ ScreenshotWidget::ScreenshotWidget(QWidget *parent):
   // TODO check windows
   setWindowFlags( Qt::WindowStaysOnTopHint
                 | Qt::FramelessWindowHint
-                | Qt::X11BypassWindowManagerHint
+                //| Qt::X11BypassWindowManagerHint
                 );
   setWindowState( Qt::WindowMaximized );
   setGeometry( QApplication::desktop()->screenGeometry(this) );
@@ -28,6 +28,13 @@ ScreenshotWidget::ScreenshotWidget(QWidget *parent):
 ScreenshotWidget::~ScreenshotWidget()
 {
 
+}
+
+//------------------------------------------------------------------------------
+void ScreenshotWidget::updateClipboard()
+{
+  std::cout << "Clipboard: " << QApplication::clipboard()->text().toStdString() << std::endl;
+  std::cout << "Selection: " << QApplication::clipboard()->text(QClipboard::Selection).toStdString() << std::endl;
 }
 
 //------------------------------------------------------------------------------
@@ -121,7 +128,7 @@ void ScreenshotWidget::mouseReleaseEvent(QMouseEvent* event)
       QSize size( std::abs(_selection.right() - _selection.left()),
                   std::abs(_selection.top() - _selection.bottom()) );
 
-      detect( _screenshot.copy(_selection) /*.scaled(2 * size, Qt::KeepAspectRatio, Qt::SmoothTransformation)*/ );
+      detect( _screenshot.copy(_selection).scaled(4 * size, Qt::KeepAspectRatio, Qt::SmoothTransformation) );
     }
   }
 }
@@ -159,6 +166,7 @@ void ScreenshotWidget::detect(QPixmap selection)
     "tessedit_char_whitelist",
     "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789,.:;\"!?=+-/*_()[]"
   );
+  tess_api.SetVariable("tessedit_unrej_any_wd", "true");
 
   QImage img = selection.toImage();
 

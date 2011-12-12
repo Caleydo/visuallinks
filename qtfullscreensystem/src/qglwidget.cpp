@@ -21,8 +21,9 @@
 #include <QApplication>
 #include <QBitmap>
 #include <QDesktopWidget>
-#include <QGLShaderProgram>
 #include <QMoveEvent>
+
+#include <QGLShader>
 
 #define LOG_ENTER_FUNC() qDebug() << __FUNCTION__
 
@@ -239,6 +240,10 @@ void GLWidget::initializeGL()
   if( !_fbo_links->isValid() || !_fbo_desktop->isValid() )
     qFatal("Failed to create framebufferobjects!");
 
+  shader = loadShader("simple.vert", "remove_links.frag");
+  if( !shader )
+    qFatal("Failed to load shader.");
+
   glClearColor(0, 0, 0, 0);
   glEnable(GL_BLEND);
   glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
@@ -247,14 +252,14 @@ void GLWidget::initializeGL()
 //------------------------------------------------------------------------------
 void GLWidget::paintGL()
 {
-  LOG_ENTER_FUNC();
+  // X11: Window decorators add decoration after creating the window. So we need
+  // to get the new position of the window before drawing...
+  QPoint window_offset = mapToGlobal(QPoint());
+  LOG_ENTER_FUNC() << "window offset=" << window_offset;
 
   // render links to framebuffer
   _fbo_links->bind();
   glClear(GL_COLOR_BUFFER_BIT);
-
-//  if( !shader && _render_mode != RENDER_MASK )
-//    shader = loadShader("render_below.vert", "simple.frag");
 
 //  glActiveTexture(GL_TEXTURE0);
 //  GLuint tex = -1;
@@ -340,7 +345,8 @@ void GLWidget::paintGL()
     float2(  0.5,     0.5     ),
     float2(  0.6,     0.8     ),
     float2(  0.05,    0.6     ),
-    float2(  0.0,     0.8     )
+    float2(  0.0,     0.8     ),
+    float2(  0.5,     1.3     )
   };
 
   std::vector<float2> smoothed_points = smooth(points, 0.1, 2);
@@ -449,37 +455,44 @@ void GLWidget::paintGL()
 
     // remove links from screenshot
     _fbo_desktop->bind();
+    shader->bind();
 
     glActiveTexture(GL_TEXTURE0);
     glEnable(GL_TEXTURE_2D);
     bindTexture( _screenshot );
 
-//    glActiveTexture(GL_TEXTURE1);
-  //  glEnable(GL_TEXTURE_2D);
-  //  glBindTexture(GL_TEXTURE_2D, _fbo_links->texture());
+    glActiveTexture(GL_TEXTURE1);
+    glEnable(GL_TEXTURE_2D);
+    glBindTexture(GL_TEXTURE_2D, _fbo_links->texture());
+
+    float dx = static_cast<float>(window_offset.x()) / width(),
+          dy = static_cast<float>(window_offset.y()) / height();
+
+    shader->setUniformValue("desktop", 0);
+    shader->setUniformValue("links", 1);
+    shader->setUniformValue("offset", dx, dy);
 
     glBegin( GL_QUADS );
 
-      glColor3f(1,1,1);
+      glTexCoord2f(dx,dy);
+      glVertex2f(-1 + 2 * dx, -1 + 2 * dy);
 
-      glTexCoord2f(0,0);
-      glVertex2f(-1,-1);
-
-      glTexCoord2f(1,0);
-      glVertex2f(1,-1);
+      glTexCoord2f(1,dy);
+      glVertex2f(1,-1 + 2 * dy);
 
       glTexCoord2f(1,1);
       glVertex2f(1,1);
 
-      glTexCoord2f(0,1);
-      glVertex2f(-1,1);
+      glTexCoord2f(dx,1);
+      glVertex2f(-1 + 2 * dx, 1);
 
     glEnd();
 
-//    glDisable(GL_TEXTURE_2D);
-//    glActiveTexture(GL_TEXTURE0);
+    glDisable(GL_TEXTURE_2D);
+    glActiveTexture(GL_TEXTURE0);
     glDisable(GL_TEXTURE_2D);
 
+    shader->release();
     _fbo_desktop->release();
 
     static int counter = 0;
@@ -491,12 +504,37 @@ void GLWidget::paintGL()
 
   // normal draw...
   glClear(GL_COLOR_BUFFER_BIT);
+
+  glActiveTexture(GL_TEXTURE0);
+  glEnable(GL_TEXTURE_2D);
+  glBindTexture(GL_TEXTURE_2D,  _fbo_links->texture());
+
+  glBegin( GL_QUADS );
+
+    glColor3f(1,1,1);
+
+    glTexCoord2f(0,0);
+    glVertex2f(-1,-1);
+
+    glTexCoord2f(1,0);
+    glVertex2f(1,-1);
+
+    glTexCoord2f(1,1);
+    glVertex2f(1,1);
+
+    glTexCoord2f(0,1);
+    glVertex2f(-1,1);
+
+  glEnd();
+
+  glDisable(GL_TEXTURE_2D);
 }
 
 //------------------------------------------------------------------------------
 void GLWidget::resizeGL(int w, int h)
 {
-  LOG_ENTER_FUNC() << "(" << w << "|" << h << ")" << static_cast<float>(w)/h << ":" << 1;
+  LOG_ENTER_FUNC() << "(" << w << "|" << h << ")"
+                   << static_cast<float>(w)/h << ":" << 1;
 
   glViewport(0,0,w,h);
   //glOrtho(0, static_cast<float>(w)/h, 0, 1, -1.0, 1.0);

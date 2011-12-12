@@ -4,7 +4,7 @@ set( HEADER_FILES
 )
 
 set( HEADER_FILES_MOC
-#  include/screenshot_widget.hpp
+  include/screenshot_widget.hpp
 )
 
 set( SOURCE_FILES
