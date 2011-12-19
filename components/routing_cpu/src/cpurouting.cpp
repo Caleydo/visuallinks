@@ -25,14 +25,6 @@ namespace LinksRouting
 
     }
 
-    bool CPURouting::setCostInput(const Component::MapData& inputmap)
-    {
-      return true;
-    }
-    bool CPURouting::setColorCostInput(const Component::MapData& inputmap)
-    {
-      return true;
-    }
     void CPURouting::connect(CostAnalysis* costanalysis, LinksRouting::Renderer *renderer)
     {
 

@@ -1,10 +1,10 @@
 /******************************************************************************
 glsl.h
 Version: 1.0.0_rc4
-Last update: 2006/11/12 
+Last update: 2006/11/12
 
 * New in RC4:
-   > Support for Geometry Shader 
+   > Support for Geometry Shader
    > Shader Model 4: Support for unsigned integers
      (Vertex Attributes are currently unsupported, but easy to integrate if
       you actually need them)
@@ -45,11 +45,7 @@ shaders!
 #include <GL/glext.h>
 #endif
 
-
-
-
-//Markus: edited for DKT usage
-#include "HashedMap.h"
+#include <unordered_map>
 
 namespace cwc
 {
@@ -67,22 +63,22 @@ namespace cwc
    public:
                   glShaderObject();
       virtual     ~glShaderObject();
-        
+
       int         load(const char* filename);                     //!< \brief Loads a shader file. \param filename The name of the ASCII file containing the shader. \return Teturns 0 if everything is ok. -1: File not found, -2: Empty File, -3: no memory
       void        loadFromMemory(const char* program);      //!< \brief Load program from null-terminated char array. \param program Address of the memory containing the shader program.
-       
+
       bool        compile(void);                            //!< compile program
       const char*       getCompilerLog(void);                     //!< get compiler messages
-      GLint       getAttribLocation(const char* attribName);      //!< \brief Retrieve attribute location. \return Returns attribute location. \param attribName Specify attribute name.  
-    
+      GLint       getAttribLocation(const char* attribName);      //!< \brief Retrieve attribute location. \return Returns attribute location. \param attribName Specify attribute name.
+
    protected:
        int        program_type;  //!< The program type. 1=Vertex Program, 2=Fragment Program, 3=Geometry Progam, 0=none
 
        GLuint     ShaderObject;  //!< Shader Object
        GLubyte*   ShaderSource;  //!< ASCII Source-Code
-       
+
        GLcharARB* compiler_log;
-       
+
        bool       is_compiled;   //!< true if compiled
        bool       _memalloc;     //!< true if memory for shader source was allocated
    };
@@ -94,7 +90,7 @@ namespace cwc
    {
    public:
                   aVertexShader();  //!< Constructor for Vertex Shader
-      virtual     ~aVertexShader(); 
+      virtual     ~aVertexShader();
    };
 
 //-----------------------------------------------------------------------------
@@ -105,7 +101,7 @@ namespace cwc
    public:
                   aFragmentShader(); //!< Constructor for Fragment Shader
       virtual     ~aFragmentShader();
-    
+
    };
 
 //-----------------------------------------------------------------------------
@@ -126,14 +122,14 @@ namespace cwc
    {
       friend class glShaderManager;
       //Markus: edited for DKT usage
-      typedef HashedMap<GLint>::Type uniformsmap_t;
+      typedef std::unordered_map<std::string, GLint> uniformsmap_t;
       uniformsmap_t _uniforms;
 
    public:
-                 glShader();                  
+                 glShader();
       virtual    ~glShader();
       void       addShader(glShaderObject* ShaderProgram); //!< add a Vertex or Fragment Program \param ShaderProgram The shader object.
-      
+
       //!< Returns the OpenGL Program Object (only needed if you want to control everything yourself) \return The OpenGL Program Object
       GLuint     GetProgramObject(){return ProgramObject;}
 
@@ -142,13 +138,13 @@ namespace cwc
 
       void       begin();                           //!< use Shader. OpenGL calls will go through vertex, geometry and/or fragment shaders.
       void       end();                             //!< Stop using this shader. OpenGL calls will go through regular pipeline.
-      
+
       //now set directly in geh GLSL source
 //       // Geometry Shader: Input Type, Output and Number of Vertices out
 //       void       SetInputPrimitiveType(int nInputPrimitiveType);   //!< Set the input primitive type for the geometry shader
 //       void       SetOutputPrimitiveType(int nOutputPrimitiveType); //!< Set the output primitive type for the geometry shader
 //       void       SetVerticesOut(int nVerticesOut);                 //!< Set the maximal number of vertices the geometry shader can output
-     
+
       GLint       GetUniformLocation(const GLcharARB *name);  //!< Retrieve Location (index) of a Uniform Variable
 
       // Submitting Uniform Variables. You can set varname to 0 and specifiy index retrieved with GetUniformLocation (best performance)
@@ -173,21 +169,21 @@ namespace cwc
       bool       setUniform2fv(const GLcharARB* varname, GLsizei count, GLfloat *value, GLint index = -1); //!< Specify values of uniform array. \param varname The name of the uniform variable.
       bool       setUniform3fv(const GLcharARB* varname, GLsizei count, GLfloat *value, GLint index = -1); //!< Specify values of uniform array. \param varname The name of the uniform variable.
       bool       setUniform4fv(const GLcharARB* varname, GLsizei count, GLfloat *value, GLint index = -1); //!< Specify values of uniform array. \param varname The name of the uniform variable.
-      
+
       bool       setUniform1iv(const GLcharARB* varname, GLsizei count, GLint *value, GLint index = -1); //!< Specify values of uniform array. \param varname The name of the uniform variable.
       bool       setUniform2iv(const GLcharARB* varname, GLsizei count, GLint *value, GLint index = -1); //!< Specify values of uniform array. \param varname The name of the uniform variable.
       bool       setUniform3iv(const GLcharARB* varname, GLsizei count, GLint *value, GLint index = -1); //!< Specify values of uniform array. \param varname The name of the uniform variable.
       bool       setUniform4iv(const GLcharARB* varname, GLsizei count, GLint *value, GLint index = -1); //!< Specify values of uniform array. \param varname The name of the uniform variable.
-      
+
       bool       setUniform1uiv(const GLcharARB* varname, GLsizei count, GLuint *value, GLint index = -1); //!< Specify values of uniform array. Requires GL_EXT_gpu_shader4. \param varname The name of the uniform variable.
       bool       setUniform2uiv(const GLcharARB* varname, GLsizei count, GLuint *value, GLint index = -1); //!< Specify values of uniform array. Requires GL_EXT_gpu_shader4. \param varname The name of the uniform variable.
       bool       setUniform3uiv(const GLcharARB* varname, GLsizei count, GLuint *value, GLint index = -1); //!< Specify values of uniform array. Requires GL_EXT_gpu_shader4. \param varname The name of the uniform variable.
       bool       setUniform4uiv(const GLcharARB* varname, GLsizei count, GLuint *value, GLint index = -1); //!< Specify values of uniform array. Requires GL_EXT_gpu_shader4. \param varname The name of the uniform variable.
-      
+
       bool       setUniformMatrix2fv(const GLcharARB* varname, GLsizei count, GLboolean transpose, GLfloat *value, GLint index = -1); //!< Specify values of uniform 2x2 matrix. \param varname The name of the uniform variable.
       bool       setUniformMatrix3fv(const GLcharARB* varname, GLsizei count, GLboolean transpose, GLfloat *value, GLint index = -1); //!< Specify values of uniform 3x3 matrix. \param varname The name of the uniform variable.
       bool       setUniformMatrix4fv(const GLcharARB* varname, GLsizei count, GLboolean transpose, GLfloat *value, GLint index = -1); //!< Specify values of uniform 4x4 matrix. \param varname The name of the uniform variable.
- 
+
       // Receive Uniform variables:
       void       getUniformfv(const GLcharARB* varname, GLfloat* values, GLint index = -1); //!< Receive value of uniform variable. \param varname The name of the uniform variable.
       void       getUniformiv(const GLcharARB* varname, GLint* values, GLint index = -1); //!< Receive value of uniform variable. \param varname The name of the uniform variable.
@@ -195,13 +191,13 @@ namespace cwc
 
       /*! Bind Vertex Attribute Location
       Warning: NVidia implementation is different than the GLSL standard:
-      GLSL attempts to eliminate aliasing of vertex attributes but this is 
-      integral to NVIDIAs hardware approach and necessary for maintaining 
+      GLSL attempts to eliminate aliasing of vertex attributes but this is
+      integral to NVIDIAs hardware approach and necessary for maintaining
       compatibility with existing OpenGL applications that NVIDIA customers rely on.
       NVIDIAs GLSL implementation therefore does not allow built-in vertex attributes
-      to collide with a generic vertex attributes that is assigned to a particular vertex 
-      attribute index with glBindAttribLocation. For example, you should not use gl_Normal 
-      (a built-in vertex attribute) and also use glBindAttribLocation to bind a generic 
+      to collide with a generic vertex attributes that is assigned to a particular vertex
+      attribute index with glBindAttribLocation. For example, you should not use gl_Normal
+      (a built-in vertex attribute) and also use glBindAttribLocation to bind a generic
       vertex attribute named "whatever" to vertex attribute index 2 because gl_Normal aliases to index 2.
       \verbatim
       gl_Vertex                0
@@ -268,15 +264,15 @@ namespace cwc
 	   void        disable(void) //!< Disables Shader.
 	   {
 	      _noshader = false;
-	   } 
-     
+	   }
+
    protected:
       void        manageMemory(void){_mM = true;}
       void        UsesGeometryShader(bool bYesNo){ _bUsesGeometryShader = bYesNo;}
 
-   private:      
+   private:
       GLuint      ProgramObject;                      // GLProgramObject
-      
+
 
       GLcharARB*  linker_log;
       bool        is_linked;
@@ -286,12 +282,12 @@ namespace cwc
       bool        _noshader;
 
       bool        _bUsesGeometryShader;
-      
+
 //now set directly in the GLSL source
 //       int         _nInputPrimitiveType;
 //       int         _nOutputPrimitiveType;
 //       int         _nVerticesOut;
-        
+
    };
 
 //-----------------------------------------------------------------------------
@@ -307,7 +303,7 @@ namespace cwc
        // Regular GLSL (Vertex+Fragment Shader)
        glShader* loadfromFile(const char* vertexFile, const char* fragmentFile);    //!< load vertex/fragment shader from file. If you specify 0 for one of the shaders, the fixed function pipeline is used for that part. \param vertexFile Vertex Shader File. \param fragmentFile Fragment Shader File.
        glShader* loadfromMemory(const char* vertexMem, const char* fragmentMem); //!< load vertex/fragment shader from memory. If you specify 0 for one of the shaders, the fixed function pipeline is used for that part.
-       
+
        // With Geometry Shader (Vertex+Geomentry+Fragment Shader)
        glShader* loadfromFile(const char* vertexFile, const char* geometryFile, const char* fragmentFile); //!< load vertex/geometry/fragment shader from file. If you specify 0 for one of the shaders, the fixed function pipeline is used for that part. \param vertexFile Vertex Shader File. \param geometryFile Geometry Shader File \param fragmentFile Fragment Shader File.
        glShader* loadfromMemory(const char* vertexMem, const char* geometryMem, const char* fragmentMem); //!< load vertex/geometry/fragment shader from memory. If you specify 0 for one of the shaders, the fixed function pipeline is used for that part.
@@ -316,11 +312,11 @@ namespace cwc
 //        void      SetInputPrimitiveType(int nInputPrimitiveType);    //!< Set the input primitive type for the geometry shader \param nInputPrimitiveType Input Primitive Type, for example GL_TRIANGLES
 //        void      SetOutputPrimitiveType(int nOutputPrimitiveType);  //!< Set the output primitive type for the geometry shader \param nOutputPrimitiveType Output Primitive Type, for example GL_TRIANGLE_STRIP
 //        void      SetVerticesOut(int nVerticesOut);                  //!< Set the maximal number of vertices the geometry shader can output \param nVerticesOut Maximal number of output vertices. It is possible to output less vertices!
-//   
+//
        bool      free(glShader* o); //!< Remove the shader and free the memory occupied by this shader.
 
    private:
-       std::vector<glShader*>  _shaderObjectList; 
+       std::vector<glShader*>  _shaderObjectList;
        //now set directly in the GLSL source
 //        int                     _nInputPrimitiveType;
 //        int                     _nOutputPrimitiveType;
@@ -328,11 +324,11 @@ namespace cwc
    };
 
 //-----------------------------------------------------------------------------
-// Global functions to initialize OpenGL Extensions and check for GLSL and 
+// Global functions to initialize OpenGL Extensions and check for GLSL and
 // OpenGL2. Also functions to check if Shader Model 4 is available and if
 // Geometry Shaders are supported.
 bool InitOpenGLExtensions(void); //!< Initialize OpenGL Extensions (using glew) \ingroup GLSL
-bool HasGLSLSupport(void);       //!< Returns true if OpenGL Shading Language is supported. (This function will return a GLSL version number in a future release) \ingroup GLSL  
+bool HasGLSLSupport(void);       //!< Returns true if OpenGL Shading Language is supported. (This function will return a GLSL version number in a future release) \ingroup GLSL
 bool HasOpenGL2Support(void);    //!< Returns true if OpenGL 2.0 is supported. This function is deprecated and shouldn't be used anymore. \ingroup GLSL \deprecated
 bool HasGeometryShaderSupport(void); //!< Returns true if Geometry Shaders are supported. \ingroup GLSL
 bool HasShaderModel4(void); //!< Returns true if Shader Model 4 is supported. \ingroup GLSL

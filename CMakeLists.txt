@@ -37,6 +37,9 @@ if(CMAKE_COMPILER_IS_GNUCXX)
   set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fmessage-length=0 -Wall -O2 -g -std=c++0x")
 endif()
 
+add_subdirectory(${COMPONENTS_DIR}/tools)
+include_directories(${COMPONENTS_DIR}/tools)
+
 #TODO we should do that in a better way, so we can get the include directories and libs to link out of the subdirectory..
 #add components
 add_subdirectory(${COMPONENTS_DIR}/staticcore ${BIN_DIR}/staticcore)
@@ -78,7 +81,7 @@ set(COMPONENTS_INC_DIR ${COMPONENTS_INC_DIR} ${COMPONENTS_DIR}/transparencyanaly
 #add default applications
 add_subdirectory(${PROJROOT}/qtfullscreensystem ${BIN_DIR}/qtfullscreensystem)
 add_subdirectory(${PROJROOT}/qt-ocr ${BIN_DIR}/qt-ocr)
-add_subdirectory(${PROJROOT}/singleimagesystem ${BIN_DIR}/singleimagesystem)
+#add_subdirectory(${PROJROOT}/singleimagesystem ${BIN_DIR}/singleimagesystem)
 
 
 #add interface files to the project

@@ -5,11 +5,14 @@ set(COMPONENTSRC_DIR ${COMPONENTROOT}/src)
 set(COMPONENTINC_DIR ${COMPONENTROOT}/include)
 include_directories(${LINKS_INCLUDE_DIR} ${COMPONENTINC_DIR})
 
-set(HEADER_FILES ${COMPONENTINC_DIR}/staticcore.h
-    )
+set( HEADER_FILES
+  include/staticcore.h
+)
 
 
-set(SOURCE_FILES ${COMPONENTSRC_DIR}/staticcore.cpp
-    )
+set( SOURCE_FILES
+  src/slots.cpp
+  src/staticcore.cpp
+)
 
 add_library(staticcore ${HEADER_FILES} ${SOURCE_FILES})

@@ -1,15 +1,23 @@
 #include "staticcore.h"
+
 #include <iostream>
+
 namespace LinksRouting
 {
   StaticCore::StaticCore() : config(0)
   {
-    requiredComponents = Component::Costanalysis | Component::Routing | Component::Renderer;
+    requiredComponents = Component::Costanalysis;// | Component::Routing | Component::Renderer;
   }
 
   StaticCore::~StaticCore()
   {
     shutdown();
+  }
+
+  //----------------------------------------------------------------------------
+  SlotCollector StaticCore::getSlotCollector()
+  {
+    return SlotCollector(_slots);
   }
 
   bool StaticCore::startup(const std::string& startup)
@@ -18,12 +26,18 @@ namespace LinksRouting
     return true;
   }
 
-  bool StaticCore::attachComponent(Component* comp, unsigned int type )
+  //----------------------------------------------------------------------------
+  bool StaticCore::attachComponent(Component* comp, unsigned int type)
   {
+    std::cout << "[StaticCore] Adding component (" << comp->name() << ")..."
+              << std::endl;
+
+    _components.push_back(comp);
     //add component to the list
-    components.push_back(ComponentInfo(comp, getTypes(comp, type)));
+//    components.push_back(ComponentInfo(comp, getTypes(comp, type)));
     return true;
   }
+
   Component* StaticCore::getComponent(Component::Type type)
   {
     Component* found = 0;
@@ -40,8 +54,18 @@ namespace LinksRouting
     }
     return found;
   }
+
+  //----------------------------------------------------------------------------
   bool StaticCore::init()
   {
+    SlotCollector slot_collector(_slots);
+    for( auto c = _components.begin(); c != _components.end(); ++c )
+      (*c)->publishSlots(slot_collector);
+
+    for( auto c = _components.begin(); c != _components.end(); ++c )
+      (*c)->subscribeSlots(_slots);
+
+#if 0
     //try to put together a running system
     unsigned int runningTypes = 0;
 
@@ -123,8 +147,19 @@ namespace LinksRouting
     for(; it != components.end(); ++it)
       if(it->is != 0)
         it->comp->init();
+#endif
     return true;
   }
+
+  //----------------------------------------------------------------------------
+  bool StaticCore::initGL()
+  {
+    for( auto c = _components.begin(); c != _components.end(); ++c )
+      (*c)->initGL();
+
+    return true;
+  }
+
   void StaticCore::shutdown()
   {
     ComponentList::iterator it = components.begin();
@@ -137,9 +172,12 @@ namespace LinksRouting
   }
   void StaticCore::process()
   {
-    RunningComponentList::iterator it = running_components.begin();
-    for(;it != running_components.end(); ++it)
-      it->compinfo->comp->process(static_cast<Component::Type>(it->type));
+    for( auto c = _components.begin(); c != _components.end(); ++c )
+      (*c)->process();
+
+//    RunningComponentList::iterator it = running_components.begin();
+//    for(;it != running_components.end(); ++it)
+//      it->compinfo->comp->process(static_cast<Component::Type>(it->type));
   }
 
   Config* StaticCore::getConfig()

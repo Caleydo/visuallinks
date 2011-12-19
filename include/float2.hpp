@@ -10,7 +10,7 @@
 #define _FLOAT2_HPP_
 
 #include <cmath>
-#include <iosfwd>
+#include <iostream>
 
 /**
  * A simple 2d vector

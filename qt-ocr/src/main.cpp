@@ -18,8 +18,8 @@ int main(int argc, char *argv[])
   QxtGlobalShortcut shortcut_handler;
   shortcut_handler.setShortcut( QKeySequence(shortcut) );
 
-  //QObject::connect(&shortcut_handler, SIGNAL(activated()), &w, SLOT(show()));
-  QObject::connect(&shortcut_handler, SIGNAL(activated()), &w, SLOT(updateClipboard()));
+  QObject::connect(&shortcut_handler, SIGNAL(activated()), &w, SLOT(show()));
+  //QObject::connect(&shortcut_handler, SIGNAL(activated()), &w, SLOT(updateClipboard()));
   //QObject::connect(QApplication::clipboard(), SIGNAL(selectionChanged()), &w, SLOT(updateClipboard()));
 
   std::cout << "Welcome to ocr for links. Press "

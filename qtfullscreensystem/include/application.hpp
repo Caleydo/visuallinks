@@ -12,8 +12,6 @@
 #include "qglwidget.hpp"
 
 #include <QApplication>
-#include <QBitmap>
-#include <QImage>
 #include <QTimer>
 
 namespace qtfullscreensystem
@@ -32,12 +30,6 @@ namespace qtfullscreensystem
 
       QTimer    _timer;
       GLWidget  _gl_widget;
-
-      /** The last screenshot of the whole desktop */
-      QImage _last_screenshot;
-
-      /** The mask for the parts of the overlay to be visible */
-      QBitmap _mask;
 
     private slots:
 

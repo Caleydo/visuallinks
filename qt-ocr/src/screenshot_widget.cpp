@@ -128,7 +128,7 @@ void ScreenshotWidget::mouseReleaseEvent(QMouseEvent* event)
       QSize size( std::abs(_selection.right() - _selection.left()),
                   std::abs(_selection.top() - _selection.bottom()) );
 
-      detect( _screenshot.copy(_selection).scaled(4 * size, Qt::KeepAspectRatio, Qt::SmoothTransformation) );
+      detect( _screenshot.copy(_selection).scaled(4 * size) );
     }
   }
 }
@@ -169,6 +169,7 @@ void ScreenshotWidget::detect(QPixmap selection)
   tess_api.SetVariable("tessedit_unrej_any_wd", "true");
 
   QImage img = selection.toImage();
+  img.save("selection.png");
 
   tess_api.SetImage
   (

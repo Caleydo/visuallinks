@@ -10,7 +10,7 @@ namespace LinksRouting
   class TransparencyAnalysis : public virtual Component
   {
   public:
-    virtual bool setSceneInput(const Component::MapData& inputmap) = 0;
+//    virtual bool setSceneInput(const Component::MapData& inputmap) = 0;
     virtual void connect(CostAnalysis* costanalysis, LinksRouting::Renderer* renderer) = 0;
   };
 };

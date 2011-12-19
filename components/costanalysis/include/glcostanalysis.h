@@ -1,43 +1,50 @@
 #ifndef LR_GLCOSTANALYSIS
 #define LR_GLCOSTANALYSIS
 
-#include <string>
+#include "costanalysis.h"
+#include "common/componentarguments.h"
+#include "slots.hpp"
+#include "slotdata/image.hpp"
 
-#include <costanalysis.h>
-#include <common/componentarguments.h>
+#include <string>
 
 namespace LinksRouting
 {
-  class GlCostAnalysis:
-    public CostAnalysis,
-    public ComponentArguments
+  class GlCostAnalysis: public CostAnalysis, public ComponentArguments
   {
-  protected:
-    std::string myname;
-  public:
-    GlCostAnalysis();
-    virtual ~GlCostAnalysis();
+    protected:
+      std::string myname;
+    public:
+      GlCostAnalysis();
+      virtual ~GlCostAnalysis();
 
-    bool startup(Core* core, unsigned int type);
-    void init();
-    void shutdown();
-    bool supports(Type type) const
-    {
-      return type == Component::Costanalysis;
-    }
-    const std::string& name() const
-    {
-      return myname;
-    }
+      virtual void publishSlots(SlotCollector& slots);
 
-    void process(Type type);
+      bool startup(Core* core, unsigned int type);
+      void init();
+      void shutdown();
+      bool supports(Type type) const
+      {
+        return type == Component::Costanalysis;
+      }
+      const std::string& name() const
+      {
+        return myname;
+      }
 
-    bool setSceneInput(const Component::MapData& inputmap);
-    bool setCostreductionInput(const Component::MapData& inputmap);
-    void connect(LinksRouting::Routing* routing);
+      void process(Type type);
 
-    void computeColorCostMap(const Color& c);
+//      bool setSceneInput(const Component::MapData& inputmap);
+//      bool setCostreductionInput(const Component::MapData& inputmap);
+      void connect(LinksRouting::Routing* routing);
+
+      void computeColorCostMap(const Color& c);
+
+    private:
+
+      slot_t<SlotType::Image>::type _slot_costmap;
 
   };
-};
+} // namespace LinksRouting
+
 #endif //LR_GLCOSTANALYSIS
