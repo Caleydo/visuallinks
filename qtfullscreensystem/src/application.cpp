@@ -35,15 +35,6 @@ namespace qtfullscreensystem
   //----------------------------------------------------------------------------
   void Application::timeOut()
   {
-    static bool c = true;
-
-    if( c )
-      _gl_widget.captureScreen();
-    else
-      _gl_widget.updateGL();
-
-    c = !c;
-    return;
     static int capture = 2;
 
     switch( capture )

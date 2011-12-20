@@ -51,11 +51,13 @@ namespace qtfullscreensystem
 
       // TODO make readonly
       LinksRouting::slot_t<LinksRouting::SlotType::Image>::type _subscribe_links;
+      LinksRouting::slot_t<LinksRouting::SlotType::Image>::type _subscribe_costmap;
 
       /** And now the components */
-      LinksRouting::StaticCore  _core;
-      LinksRouting::XmlConfig   _config;
-      LinksRouting::GlRenderer  _renderer;
+      LinksRouting::StaticCore      _core;
+      LinksRouting::XmlConfig       _config;
+      LinksRouting::GlCostAnalysis  _cost_analysis;
+      LinksRouting::GlRenderer      _renderer;
 
   };
 } // namespace qtfullscreensystem

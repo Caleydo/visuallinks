@@ -90,7 +90,7 @@ ShaderPtr loadShader( QString vert, QString frag )
                   | Qt::MSWindowsOwnDC
                   //| Qt::X11BypassWindowManagerHint
                   );
-    setWindowOpacity(0.6);
+    setWindowOpacity(0.5);
     setMask(QRegion(-1, -1, 1, 1));
 
     if( !isValid() )
@@ -116,10 +116,12 @@ ShaderPtr loadShader( QString vert, QString frag )
 
     _core.startup(argv[1]);
     //_core.attachComponent(&_config);
+    _core.attachComponent(&_cost_analysis);
     _core.attachComponent(&_renderer);
     _core.init();
 
-    _subscribe_links = _core.getSlot<LinksRouting::SlotType::Image>("/rendered-links");
+    _subscribe_links = _core.getSlotSubscriber().getSlot<LinksRouting::SlotType::Image>("/rendered-links");
+    _subscribe_costmap = _core.getSlotSubscriber().getSlot<LinksRouting::SlotType::Image>("/costmap");
   }
 
   //----------------------------------------------------------------------------
@@ -221,16 +223,28 @@ void GLWidget::initializeGL()
     glDisable(GL_TEXTURE_2D);
 
     static QImage links(size(), QImage::Format_RGB888);
+    static QImage costmap(size(), QImage::Format_RGB888);
 
     glPushAttrib(GL_CLIENT_PIXEL_STORE_BIT);
     glPixelStorei(GL_PACK_ALIGNMENT, 1);
     glReadPixels(0, 0, width(), height(), GL_RGB, GL_UNSIGNED_BYTE, links.bits());
+
+    glEnable(GL_TEXTURE_2D);
+    glBindTexture(GL_TEXTURE_2D, _subscribe_costmap->_data->id);
+    glGetTexImage(GL_TEXTURE_2D, 0, GL_RGB, GL_UNSIGNED_BYTE, costmap.bits());
+    glDisable(GL_TEXTURE_2D);
+
     glPopAttrib();
 
     //links.save("fbo.png");
     QBitmap mask = QBitmap::fromImage( links.mirrored().createMaskFromColor( qRgb(0,0,0) ) );
     //mask.save("mask.png");
     setMask(mask);
+
+    static int counter = 0;
+    costmap.mirrored().save(QString("costmap%1.png").arg(counter++));
+
+    // TODO render flipped to not need mirror anymore
   }
 
   //----------------------------------------------------------------------------
@@ -253,8 +267,6 @@ void GLWidget::initializeGL()
   //----------------------------------------------------------------------------
   void GLWidget::updateScreenShot(QPoint window_offset)
   {
-    _slot_desktop->setValid(false);
-
     if( _screenshot.isNull() )
     {
       qWarning("No screenshot available...");
@@ -262,6 +274,7 @@ void GLWidget::initializeGL()
     }
 
     qDebug("Update screenshot...");
+    _slot_desktop->setValid(false);
 
     // remove links from screenshot
     _fbo_desktop->bind();
@@ -306,9 +319,9 @@ void GLWidget::initializeGL()
     _fbo_desktop->release();
     _slot_desktop->setValid(true);
 
-    static int counter = 0;
+//    static int counter = 0;
     //if( !(counter++ % 5) )
-      _fbo_desktop->toImage().save( QString("desktop%1.png").arg(counter++) );
+//      _fbo_desktop->toImage().save( QString("desktop%1.png").arg(counter++) );
 
     _screenshot = QPixmap();
   }

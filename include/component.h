@@ -67,7 +67,7 @@ namespace LinksRouting
        * Override to publish data to slots
        */
       virtual void publishSlots(SlotCollector& slot_list) {};
-      virtual void subscribeSlots(const slots_t slot_list) {};
+      virtual void subscribeSlots(SlotSubscriber& slot_subscriber) {};
 
       virtual bool startup(Core* core, unsigned int type) = 0;
       virtual void init() = 0;

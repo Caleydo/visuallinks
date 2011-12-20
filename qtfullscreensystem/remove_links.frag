@@ -8,7 +8,7 @@ void main()
   vec4 link_color = texture2D(links, gl_TexCoord[0].xy);
   
   if( gl_TexCoord[0].y > offset.y && link_color.rgb != vec3(0,0,0) )
-    gl_FragColor = (desktop_color - 0.6 * link_color) / 0.4;
+    gl_FragColor = (desktop_color - 0.5 * link_color) / 0.5;
   else
     gl_FragColor = desktop_color;
 }

@@ -13,3 +13,7 @@ set(SOURCE_FILES ${COMPONENTSRC_DIR}/glcostanalysis.cpp
     )
 
 add_library(glcostanalysis ${HEADER_FILES} ${SOURCE_FILES})
+target_link_libraries(glcostanalysis
+  tools
+  glsl
+)

@@ -1,6 +1,5 @@
 #include "glrenderer.h"
 #include "float2.hpp"
-#include "slotdata/image.hpp"
 
 #include <iostream>
 

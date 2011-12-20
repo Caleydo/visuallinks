@@ -47,4 +47,11 @@ namespace LinksRouting
 
     _slots[name] = slot;
   }
+
+  //----------------------------------------------------------------------------
+  SlotSubscriber::SlotSubscriber(slots_t& slots):
+    _slots( slots )
+  {
+
+  }
 } // namespace LinksRouting

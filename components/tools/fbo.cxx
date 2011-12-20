@@ -367,10 +367,10 @@ namespace gl
     glPopAttrib();
   }
 
-  void FBO::activateDrawBuffer(int num)
+  void FBO::activateDrawBuffer(int num, int start)
   {
     std::vector<GLenum> attachments;
-    for( int i = 0; i < num; ++i )
+    for( int i = start; i < start + num; ++i )
       attachments.push_back(GL_COLOR_ATTACHMENT0_EXT + i);
     glDrawBuffers(num, &attachments[0]);
   }

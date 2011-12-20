@@ -20,6 +20,12 @@ namespace LinksRouting
     return SlotCollector(_slots);
   }
 
+  //----------------------------------------------------------------------------
+  SlotSubscriber StaticCore::getSlotSubscriber()
+  {
+    return SlotSubscriber(_slots);
+  }
+
   bool StaticCore::startup(const std::string& startup)
   {
     startupstr = startup;
@@ -62,8 +68,9 @@ namespace LinksRouting
     for( auto c = _components.begin(); c != _components.end(); ++c )
       (*c)->publishSlots(slot_collector);
 
+    SlotSubscriber slot_subscriber(_slots);
     for( auto c = _components.begin(); c != _components.end(); ++c )
-      (*c)->subscribeSlots(_slots);
+      (*c)->subscribeSlots(slot_subscriber);
 
 #if 0
     //try to put together a running system

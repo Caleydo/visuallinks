@@ -150,5 +150,6 @@ void main()
     gl_FragData[0].rgba = scalesaliency*0.005*vec4(saliency, saliency, saliency, 1.0);
     #endif
     
+    gl_FragData[0].a = 1;// = texture2D(input1, gl_TexCoord[0].xy);
   } 
 }

@@ -97,7 +97,7 @@ namespace gl
       void resize(unsigned int width, unsigned int height);
       void cleanUp();
       void addColorBuffer(int num);
-      void activateDrawBuffer(int num);
+      void activateDrawBuffer(int num, int start = 0);
       void bindTex(int i);
 
       void calculateCoords(std::vector<float>& vertex,

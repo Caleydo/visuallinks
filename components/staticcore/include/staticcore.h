@@ -65,16 +65,7 @@ namespace LinksRouting
       ~StaticCore();
 
       SlotCollector getSlotCollector();
-      template<typename DataType>
-      typename slot_t<DataType>::type getSlot(const std::string& name)// const
-      {
-        auto slot = _slots.find(name);
-
-        if( slot == _slots.end() )
-          throw std::runtime_error("No such slot: " + name);
-
-        return std::dynamic_pointer_cast<typename slot_t<DataType>::raw_type>(slot->second.lock());
-      }
+      SlotSubscriber getSlotSubscriber();
 
       virtual bool startup(const std::string& startup);
       virtual bool attachComponent(Component* comp, unsigned int type =

@@ -13,6 +13,7 @@
 #include <string>
 #include <memory>
 #include <cassert>
+#include <stdexcept>
 
 namespace LinksRouting
 {
@@ -112,6 +113,34 @@ namespace LinksRouting
     private:
 
       void appendSlot(const std::string& name, slot_ref_t slot);
+
+      slots_t   &_slots;
+  };
+
+  /**
+   * A wrapper around a slot list which only allows subscribing slots.
+   */
+  class SlotSubscriber
+  {
+    public:
+
+      SlotSubscriber(slots_t& slots);
+
+      /**
+       * Get the Slot with the given name.
+       */
+      template<typename DataType>
+      typename slot_t<DataType>::type getSlot(const std::string& name)// const
+      {
+        auto slot = _slots.find(name);
+
+        if( slot == _slots.end() )
+          throw std::runtime_error("No such slot: " + name);
+
+        return std::dynamic_pointer_cast<typename slot_t<DataType>::raw_type>(slot->second.lock());
+      }
+
+    private:
 
       slots_t   &_slots;
   };
