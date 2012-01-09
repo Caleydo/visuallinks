@@ -64,6 +64,9 @@ namespace LinksRouting
   //----------------------------------------------------------------------------
   bool StaticCore::init()
   {
+    for( auto c = _components.begin(); c != _components.end(); ++c )
+      (*c)->init();
+
     SlotCollector slot_collector(_slots);
     for( auto c = _components.begin(); c != _components.end(); ++c )
       (*c)->publishSlots(slot_collector);

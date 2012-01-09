@@ -4,6 +4,7 @@
 #include <QClipboard>
 #include <QxtGlobalShortcut>
 
+#include <google/profiler.h>
 #include <iostream>
 
 int main(int argc, char *argv[])
@@ -27,5 +28,6 @@ int main(int argc, char *argv[])
             << " to select region."
             << std::endl;
 
+  //ProfilerStart("test.txt");
   return app.exec();
 }

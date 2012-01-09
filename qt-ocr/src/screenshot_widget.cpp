@@ -7,6 +7,7 @@
 #include <QPainter>
 #include <QClipboard>
 
+#include <google/profiler.h>
 #include <iostream>
 
 //------------------------------------------------------------------------------
@@ -182,6 +183,8 @@ void ScreenshotWidget::detect(QPixmap selection)
 
   tess_api.Recognize(nullptr);
   //tess_api.DumpPGM("test.pgm");
+
+  //ProfilerFlush();
 
   QMessageBox msgBox;
   msgBox.setText(tess_api.GetUTF8Text());

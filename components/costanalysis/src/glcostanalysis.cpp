@@ -54,6 +54,8 @@ namespace LinksRouting
     // TODO
     _slot_costmap->_data->id = _saliency_map_fbo.colorBuffers.at(0);
     _slot_costmap->_data->type = SlotType::Image::OpenGLTexture;
+    _slot_costmap->_data->width = vp[2];
+    _slot_costmap->_data->height = vp[3];
 
     _feature_map_shader = _shader_manager.loadfromFile(0, "featureMap.glsl");
     _saliency_map_shader = _shader_manager.loadfromFile(0, "saliencyFilter.glsl");
@@ -66,6 +68,8 @@ namespace LinksRouting
 
   void GlCostAnalysis::process(Type type)
   {
+    _slot_costmap->setValid(false);
+
     if( !_feature_map_shader )
       throw std::runtime_error("Feature map shader not loaded.");
 
@@ -145,7 +149,6 @@ namespace LinksRouting
 
        glTexCoord2f(0,1);
        glVertex2f(-1,1);
-
      glEnd();
 
     //------------
@@ -179,10 +182,17 @@ namespace LinksRouting
     glDisable(GL_TEXTURE_2D);
 
     glActiveTexture(GL_TEXTURE0);
+
+    // we need a smaller map for the routing process
+    _saliency_map_fbo.bindTex(0);
+    glGenerateMipmap(GL_TEXTURE_2D);
+
     glDisable(GL_TEXTURE_2D);
 
     _saliency_map_shader->end();
     _saliency_map_fbo.unbind();
+
+    _slot_costmap->setValid(true);
   }
 
   void GlCostAnalysis::connect(LinksRouting::Routing* routing)

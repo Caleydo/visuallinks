@@ -41,6 +41,7 @@ set( HEADER_FILES
 
 add_executable(qt-ocr ${HEADER_FILES} ${SOURCE_FILES})
 target_link_libraries( qt-ocr
+  profiler
   ${COMPONENTS_LIBS}
   ${QT_QTCORE_LIBRARY}
   ${QT_QTGUI_LIBRARY}

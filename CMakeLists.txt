@@ -65,8 +65,8 @@ set(COMPONENTS_INC_DIR ${COMPONENTS_INC_DIR} ${COMPONENTS_DIR}/routing_cpu/inclu
 set(COMPONENTS_LIBS ${COMPONENTS_LIBS} cpurouting)
 
 add_subdirectory(${COMPONENTS_DIR}/routing_gpu ${BIN_DIR}/routing_gpu)
-#set(COMPONENTS_INC_DIR ${COMPONENTS_INC_DIR} ${COMPONENTS_DIR}/routing_gpu/include)
-#set(COMPONENTS_LIBS ${COMPONENTS_LIBS} gpurouting)
+set(COMPONENTS_INC_DIR ${COMPONENTS_INC_DIR} ${COMPONENTS_DIR}/routing_gpu/include)
+set(COMPONENTS_LIBS ${COMPONENTS_LIBS} gpurouting)
 
 add_subdirectory(${COMPONENTS_DIR}/routing_ice_proxy ${BIN_DIR}/routing_ice_proxy)
 #set(COMPONENTS_INC_DIR ${COMPONENTS_INC_DIR} ${COMPONENTS_DIR}/routing_ice_proxy/include)

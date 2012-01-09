@@ -7,7 +7,7 @@
 #include "staticcore.h"
 #include "xmlconfig.h"
 #include "glcostanalysis.h"
-#include "cpurouting.h"
+#include "gpurouting.h"
 #include "glrenderer.h"
 
 #include <QGLWidget>
@@ -57,6 +57,7 @@ namespace qtfullscreensystem
       LinksRouting::StaticCore      _core;
       LinksRouting::XmlConfig       _config;
       LinksRouting::GlCostAnalysis  _cost_analysis;
+      LinksRouting::GPURouting      _routing;
       LinksRouting::GlRenderer      _renderer;
 
   };

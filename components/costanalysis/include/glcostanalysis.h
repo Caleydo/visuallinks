@@ -21,8 +21,8 @@ namespace LinksRouting
       GlCostAnalysis();
       virtual ~GlCostAnalysis();
 
-      virtual void publishSlots(SlotCollector& slots);
-      virtual void subscribeSlots(SlotSubscriber& slot_subscriber);
+      void publishSlots(SlotCollector& slots);
+      void subscribeSlots(SlotSubscriber& slot_subscriber);
 
       bool startup(Core* core, unsigned int type);
       void init();
