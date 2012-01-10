@@ -1,6 +1,8 @@
 #include "gpurouting.h"
 
 #include <iostream>
+#include <fstream>
+#include <cmath>
 
 #if defined(__APPLE__) || defined(__MACOSX)
 # error "Context sharing not supported yet."
@@ -131,6 +133,8 @@ namespace LinksRouting
               << "\n -- driver version:\t " << _cl_device.getInfo<CL_DRIVER_VERSION>()
               << "\n -- compute units:\t " << _cl_device.getInfo<CL_DEVICE_MAX_COMPUTE_UNITS>()
               << "\n -- workgroup size:\t " << _cl_device.getInfo<CL_DEVICE_MAX_WORK_GROUP_SIZE>()
+              << "\n -- global memory:\t " << (_cl_device.getInfo<CL_DEVICE_GLOBAL_MEM_SIZE>() >> 20) << " MiB"
+              << "\n -- local memory:\t " << (_cl_device.getInfo<CL_DEVICE_LOCAL_MEM_SIZE>() >> 10) << " KiB"
               << "\n -- clock frequency:\t " << _cl_device.getInfo<CL_DEVICE_MAX_CLOCK_FREQUENCY>()
               << std::endl;
 
@@ -140,26 +144,17 @@ namespace LinksRouting
     // -----------------------------
     // And now the OpenCL program
 
-    const std::string program = INLINE_TEXT(
-      __kernel void test_kernel( read_only image2d_t costmap,
-                                 const int max_x,
-                                 const int max_y )
-      {
-          const sampler_t sampler = CLK_FILTER_NEAREST
-                                  | CLK_NORMALIZED_COORDS_FALSE
-                                  | CLK_ADDRESS_CLAMP_TO_EDGE;
 
-          for(int x = 0; x < max_x; ++x)
-            for(int y = 0; y < max_y; ++y)
-              read_imagei(costmap, sampler, (int2)(x, y));
-      }
-    );
-    const cl::Program::Sources source
-    (
-      1,
-      std::make_pair(program.c_str(), program.length())
-    );
-    _cl_program = cl::Program(_cl_context, source);
+    std::ifstream source_file("routing.cl");
+    if( !source_file )
+      throw std::runtime_error("Failed to open routing.cl");
+    std::string source( std::istreambuf_iterator<char>(source_file),
+                       (std::istreambuf_iterator<char>()) );
+
+    cl::Program::Sources sources;
+    sources.push_back( std::make_pair(source.c_str(), source.length()) );
+
+    _cl_program = cl::Program(_cl_context, sources);
 
     try
     {
@@ -188,6 +183,8 @@ namespace LinksRouting
 
   void GPURouting::process(Type type)
   {
+    try
+    {
     const GLint miplevel = 2; // 1/4 size
 
     if( !_subscribe_costmap->isValid() )
@@ -225,9 +222,25 @@ namespace LinksRouting
     glFinish();
     _cl_command_queue.enqueueAcquireGLObjects(&memory_gl);
 
+    unsigned int width = _subscribe_costmap->_data->width / std::pow(2, miplevel),
+                 height = _subscribe_costmap->_data->height / std::pow(2, miplevel),
+                 num_points = width * height;
+
+    cl::Buffer buf(_cl_context, CL_MEM_READ_WRITE, num_points * sizeof(unsigned int));
+    cl::Buffer queue(_cl_context, CL_MEM_READ_WRITE, num_points * sizeof(unsigned int));
+
     _cl_kernel.setArg(0, memory_gl[0]);
-    _cl_kernel.setArg(1, _subscribe_costmap->_data->width);
-    _cl_kernel.setArg(2, _subscribe_costmap->_data->height);
+    _cl_kernel.setArg(1, buf);
+    _cl_kernel.setArg(2, queue);
+
+    int dim[] = {width, height},
+        start[] = {10, 20},
+        target[] = {300, 200};
+
+    _cl_kernel.setArg(3, 2 * sizeof(int), dim);
+    _cl_kernel.setArg(4, 2 * sizeof(int), start);
+    _cl_kernel.setArg(5, 2 * sizeof(int), target);
+    //_cl_command_queue.finish();
 
     _cl_command_queue.enqueueNDRangeKernel
     (
@@ -237,8 +250,30 @@ namespace LinksRouting
       cl::NullRange
     );
 
+    //_cl_command_queue.finish();
     _cl_command_queue.enqueueReleaseGLObjects(&memory_gl);
     _cl_command_queue.finish();
+
+    static int c = 5;
+    if( !--c )
+    {
+      std::vector<unsigned int> host_mem(num_points);
+      _cl_command_queue.enqueueReadBuffer(buf, true, 0, num_points * sizeof(unsigned int), &host_mem[0]);
+
+      std::ofstream img("test.pgm");
+      img << "P2\n"
+          << width << " " << height << "\n"
+          << "65535\n";
+
+      for( unsigned int i = 0; i < num_points; ++i )
+        img << host_mem[i] << "\n";
+      throw std::runtime_error("stop");
+    }
+    }
+    catch(cl::Error& err)
+    {
+      std::cerr << err.err() << "->" << err.what() << std::endl;
+    }
   }
 
   void GPURouting::connect(CostAnalysis* costanalysis,
