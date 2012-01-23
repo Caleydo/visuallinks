@@ -26,7 +26,9 @@ namespace LinksRouting
     {
       public:
 
-        Slot() = default;
+        //C++10 not yet fully supported...
+        //Slot() = default;
+        Slot() { }
 
         virtual ~Slot() = 0;
 
@@ -40,9 +42,12 @@ namespace LinksRouting
          */
         void setValid(bool val);
 
+        
+    private:
         // No slot copying
-        Slot(const Slot&) = delete;
-        const Slot& operator=(const Slot&) = delete;
+        //C++10 not yet fully supported...
+        Slot(const Slot&);// = delete;
+        const Slot& operator=(const Slot&);// = delete;
 
       protected:
 

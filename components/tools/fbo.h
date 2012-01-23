@@ -30,8 +30,9 @@ namespace gl
           _multisample;
       bool _hasDepthBuffer, _hasStencilBuffer;
 
-      FBO(const FBO&) = delete;
-      const FBO& operator=(const FBO&) = delete;
+  private:
+      FBO(const FBO&); // = delete;
+      const FBO& operator=(const FBO&); // = delete;
 
     public:
       GLuint fbo;

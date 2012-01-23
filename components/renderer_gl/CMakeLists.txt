@@ -9,6 +9,12 @@ include_directories(
   ${PROJROOT}/components/tools
 )
 
+if(WIN32)
+find_package(GLEW REQUIRED)
+include_directories( ${GLEW_INCLUDE_DIR} )
+set(ADDITIONAL_LIBS ${ADDITIONAL_LIBS} ${GLEW_LIBRARIES})
+endif(WIN32)
+
 set(HEADER_FILES
   ${COMPONENTINC_DIR}/glrenderer.h
 )
@@ -19,4 +25,4 @@ set(SOURCE_FILES
 )
 
 add_library(glrenderer ${HEADER_FILES} ${SOURCE_FILES})
-target_link_libraries(glrenderer tools)
+target_link_libraries(glrenderer tools ${ADDITIONAL_LIBS})

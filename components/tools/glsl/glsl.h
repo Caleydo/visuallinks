@@ -46,6 +46,7 @@ shaders!
 #endif
 
 #include <unordered_map>
+#include <string>
 
 namespace cwc
 {

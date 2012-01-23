@@ -28,7 +28,7 @@ class ScreenshotWidget: public QWidget
 
   private:
 
-    enum class State
+    enum State
     {
       SELECT_POSITION,
       SELECT_SIZE

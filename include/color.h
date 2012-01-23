@@ -1,5 +1,5 @@
-#ifndef LR_COLOR
-#define LR_COLOR
+#ifndef LR_COLOR_INCLUDED
+#define LR_COLOR_INCLUDED
 
 namespace LinksRouting
 {

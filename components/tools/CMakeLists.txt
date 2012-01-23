@@ -2,6 +2,13 @@ include_directories(
   ${LINKS_INCLUDE_DIR}
 )
 
+if(WIN32)
+find_package(GLEW REQUIRED)
+include_directories(
+  ${GLEW_INCLUDE_DIR}
+)
+endif(WIN32)
+
 set(HEADER_FILES
   fbo.h
 )

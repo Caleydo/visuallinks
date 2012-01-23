@@ -7,7 +7,7 @@
 #if defined(__APPLE__) || defined(__MACOSX)
 # error "Context sharing not supported yet."
 #elif defined(_WIN32)
-# include <GL/wgl.h>
+//# include <GL/wgl.h>
 #else
 # include <GL/glx.h>
 #endif
@@ -222,8 +222,8 @@ namespace LinksRouting
     glFinish();
     _cl_command_queue.enqueueAcquireGLObjects(&memory_gl);
 
-    unsigned int width = _subscribe_costmap->_data->width / std::pow(2, miplevel),
-                 height = _subscribe_costmap->_data->height / std::pow(2, miplevel),
+    unsigned int width = _subscribe_costmap->_data->width / (1 << miplevel),
+                 height = _subscribe_costmap->_data->height / (1 << miplevel),
                  num_points = width * height;
 
     cl::Buffer buf(_cl_context, CL_MEM_READ_WRITE, num_points * sizeof(unsigned int));
