@@ -225,6 +225,7 @@ void GLWidget::initializeGL()
 
     static QImage links(size(), QImage::Format_RGB888);
     static QImage costmap(size(), QImage::Format_RGB888);
+    static QImage desktop(size(), QImage::Format_RGB888);
 
     glPushAttrib(GL_CLIENT_PIXEL_STORE_BIT);
     glPixelStorei(GL_PACK_ALIGNMENT, 1);
@@ -235,6 +236,11 @@ void GLWidget::initializeGL()
     glGetTexImage(GL_TEXTURE_2D, 0, GL_RGB, GL_UNSIGNED_BYTE, costmap.bits());
     glDisable(GL_TEXTURE_2D);
 
+    glEnable(GL_TEXTURE_2D);
+    glBindTexture(GL_TEXTURE_2D, _slot_desktop->_data->id);
+    glGetTexImage(GL_TEXTURE_2D, 0, GL_RGB, GL_UNSIGNED_BYTE, desktop.bits());
+    glDisable(GL_TEXTURE_2D);
+
     glPopAttrib();
 
     //links.save("fbo.png");
@@ -243,7 +249,10 @@ void GLWidget::initializeGL()
     setMask(mask);
 
     static int counter = 0;
-    costmap.mirrored().save(QString("costmap%1.png").arg(counter++));
+    desktop.mirrored().save(QString("desktop%1.png").arg(counter));
+    costmap.mirrored().save(QString("costmap%1.png").arg(counter));
+    links.mirrored().save(QString("links%1.png").arg(counter));
+    ++counter;
 
     // TODO render flipped to not need mirror anymore
   }

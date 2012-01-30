@@ -12,7 +12,7 @@ uniform float scalesaliency;
 //#define COMPFUNCTION(a,b) 0.5*(a.x+a.y+a.z+b.x+b.y+b.z)
 //#define COMPFUNCITON(a,b) (a.x+a.y+a.z+b.x+b.y+b.z)
 #define COMPFUNCITON(a,b) (max(a.x,b.x)+max(a.y,b.y)+max(a.z,b.z))
-#if 1
+#if 0
 const int samples = 5;
 const float gauss_a[] = {0.9999590358044f,0.0000204820978f,0.0000000000000f,0.0000000000000f,0.0000000000000f };
 const float gauss_b[] = {0.1989179613526f,0.1768569944064f,0.1242988073553f,0.0690570725796f,0.0303281449824f };

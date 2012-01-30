@@ -59,16 +59,54 @@ namespace LinksRouting
     if( platforms.empty() )
       throw std::runtime_error("Got no OpenCL platform.");
 
-    const std::string extensions =
-      platforms[0].getInfo<CL_PLATFORM_EXTENSIONS>();
+    //TODO: select devices to use
+    cl::Platform use_platform;
+    std::vector<cl::Device> use_devices;
+    //for now:
+    use_platform = platforms.front();
 
-    std::cout << "OpenCL Platform Info:"
-              << "\n -- platform:\t " << platforms[0].getInfo<CL_PLATFORM_NAME>()
-              << "\n -- version:\t " << platforms[0].getInfo<CL_PLATFORM_VERSION>()
-              << "\n -- vendor:\t " << platforms[0].getInfo<CL_PLATFORM_VENDOR>()
-              << "\n -- profile:\t " << platforms[0].getInfo<CL_PLATFORM_PROFILE>()
-              << "\n -- extensions:\t " << extensions
-              << std::endl;
+    //for (cl::Platform &tplatform : platforms) 
+    for(size_t i = 0; i < platforms.size(); ++i)
+    {
+      cl::Platform &tplatform = platforms[i];
+
+      const std::string extensions =
+        tplatform.getInfo<CL_PLATFORM_EXTENSIONS>();
+
+      std::cout << "OpenCL Platform Info:"
+                << "\n -- platform:\t " << tplatform.getInfo<CL_PLATFORM_NAME>()
+                << "\n -- version:\t " << tplatform.getInfo<CL_PLATFORM_VERSION>()
+                << "\n -- vendor:\t " << tplatform.getInfo<CL_PLATFORM_VENDOR>()
+                << "\n -- profile:\t " << tplatform.getInfo<CL_PLATFORM_PROFILE>()
+                << std::endl;
+    
+      std::vector<cl::Device> devices;
+      tplatform.getDevices(CL_DEVICE_TYPE_GPU, &devices);
+      //for (cl::Device &tdevice : devices)
+      for (size_t j = 0; j < devices.size(); ++j)
+      {
+         cl::Device &tdevice = devices[j];
+         const std::string dextensions = tdevice.getInfo<CL_DEVICE_EXTENSIONS>();
+         std::cout << "\tDevice Info:"
+                   << "\n\t -- clock freq:\t " << tdevice.getInfo<CL_DEVICE_MAX_CLOCK_FREQUENCY>()
+                   << "\n\t -- mem size:\t " << tdevice.getInfo<CL_DEVICE_GLOBAL_MEM_SIZE>()
+                   << "\n\t -- extensions:\t " << dextensions
+                   << std::endl;
+         //for now (use first only)
+         if(i == 0)
+#if defined(__APPLE__) || defined(__MACOSX)
+         if( dextensions.find("cl_apple_gl_sharing") != std::string::npos )
+#else
+         if( extensions.find("cl_khr_gl_sharing") != std::string::npos )
+#endif
+         {
+           use_devices.clear();
+           use_devices.push_back(tdevice);
+         }
+      }
+
+    }
+    
 
     // -----------------------------
     // OpenCL context
@@ -76,11 +114,6 @@ namespace LinksRouting
     std::vector<cl_context_properties> properties;
 
 #if defined(__APPLE__) || defined(__MACOSX)
-    if( extensions.find("cl_apple_gl_sharing") == std::string::npos )
-      throw std::runtime_error
-      (
-        "OpenCL - OpenGL sharing not supported (cl_apple_gl_sharing)"
-      );
 
 # error "Not implemented yet."
 
@@ -88,11 +121,6 @@ namespace LinksRouting
     properties.push_back( CL_CONTEXT_PROPERTY_USE_CGL_SHAREGROUP_APPLE );
     properties.push_back( (cl_context_properties)CGLGetShareGroup(CGLGetCurrentContext()) );
 #else
-    if( extensions.find("cl_khr_gl_sharing") == std::string::npos )
-      throw std::runtime_error
-      (
-        "OpenCL - OpenGL sharing not supported (cl_khr_gl_sharing)"
-      );
 
 # ifdef _WIN32
     properties.push_back( CL_GL_CONTEXT_KHR );
@@ -110,10 +138,12 @@ namespace LinksRouting
 #endif
 
     properties.push_back( CL_CONTEXT_PLATFORM );
-    properties.push_back( (cl_context_properties)platforms[0]() );
+    properties.push_back( (cl_context_properties)use_platform() );
     properties.push_back(0);
 
-    _cl_context = cl::Context(CL_DEVICE_TYPE_GPU, &properties[0]);
+    _cl_context = cl::Context(use_devices, &properties[0]);
+
+    //_cl_context = cl::Context(CL_DEVICE_TYPE_GPU, &properties[0]);
 
     // -----------------------------
     // OpenCL device
@@ -174,7 +204,7 @@ namespace LinksRouting
               << "\n -- Log: " << _cl_program.getBuildInfo<CL_PROGRAM_BUILD_LOG>(_cl_device)
               << std::endl;
 
-    _cl_kernel = cl::Kernel(_cl_program, "test_kernel");
+    _cl_kernel = cl::Kernel(_cl_program, "prepareRouting");
   }
   void GPURouting::shutdown()
   {
@@ -231,22 +261,22 @@ namespace LinksRouting
 
     _cl_kernel.setArg(0, memory_gl[0]);
     _cl_kernel.setArg(1, buf);
-    _cl_kernel.setArg(2, queue);
+    //_cl_kernel.setArg(2, queue);
 
     int dim[] = {width, height},
         start[] = {10, 20},
         target[] = {300, 200};
 
-    _cl_kernel.setArg(3, 2 * sizeof(int), dim);
-    _cl_kernel.setArg(4, 2 * sizeof(int), start);
-    _cl_kernel.setArg(5, 2 * sizeof(int), target);
+    _cl_kernel.setArg(2, 2 * sizeof(int), dim);
+    //_cl_kernel.setArg(4, 2 * sizeof(int), start);
+    //_cl_kernel.setArg(5, 2 * sizeof(int), target);
     //_cl_command_queue.finish();
 
     _cl_command_queue.enqueueNDRangeKernel
     (
       _cl_kernel,
       cl::NullRange,
-      cl::NDRange(1),
+      cl::NDRange(width,height),
       cl::NullRange
     );
 

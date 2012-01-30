@@ -48,8 +48,8 @@ namespace LinksRouting
     GLint vp[4];
     glGetIntegerv(GL_VIEWPORT, vp);
 
-    _feature_map_fbo.init(vp[2], vp[3], GL_RGBA8, 1, false);
-    _saliency_map_fbo.init(vp[2], vp[3], GL_RGBA8, 3, false);
+    _feature_map_fbo.init(vp[2], vp[3], GL_RGBA32F, 1, false);
+    _saliency_map_fbo.init(vp[2], vp[3], GL_RGBA32F, 3, false);
 
     // TODO
     _slot_costmap->_data->id = _saliency_map_fbo.colorBuffers.at(0);
@@ -128,12 +128,7 @@ namespace LinksRouting
      _saliency_map_shader->setUniform1i("step", 0);
      _saliency_map_shader->setUniform2f("texincrease", 1.0f/vp[2], 1.0f/vp[3]);
 
-     const bool VOLUME_RENDERING = false,
-                TEXTURED_OBJECT = false;
-     float saliencyscale = VOLUME_RENDERING
-                         ? 1.5f
-                         : (TEXTURED_OBJECT ? 1.0f : 3.5f);
-     _saliency_map_shader->setUniform1f("scalesaliency", saliencyscale);
+     _saliency_map_shader->setUniform1f("scalesaliency", 1.0f);
 
      glBegin(GL_QUADS);
        glColor3f(1,1,1);
@@ -184,6 +179,7 @@ namespace LinksRouting
     glActiveTexture(GL_TEXTURE0);
 
     // we need a smaller map for the routing process
+    //TODO create a subsampled map before and then just calculate it on a lower level
     _saliency_map_fbo.bindTex(0);
     glGenerateMipmap(GL_TEXTURE_2D);
 
@@ -191,6 +187,7 @@ namespace LinksRouting
 
     _saliency_map_shader->end();
     _saliency_map_fbo.unbind();
+
 
     _slot_costmap->setValid(true);
   }

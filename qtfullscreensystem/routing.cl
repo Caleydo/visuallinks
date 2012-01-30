@@ -1,3 +1,23 @@
+
+float getPenalty(read_only image2d_t costmap, int2 pos)
+{
+  const sampler_t sampler = CLK_FILTER_NEAREST
+                          | CLK_NORMALIZED_COORDS_FALSE
+                          | CLK_ADDRESS_CLAMP_TO_EDGE;
+
+  return read_imagef(costmap, sampler, pos).x;
+}
+
+__kernel void prepareRouting(read_only image2d_t costmap,
+                           global uint* nodes,
+                           const int2 dim)
+{
+  int2 id = {get_global_id(0), get_global_id(1)};
+  nodes[dim.x*id.y+id.x] = 255*min(1.0f,getPenalty(costmap, id));
+}
+
+#if 0
+
 /*
  The values stored in the resulting map contain the cost the reach each node and
  which is its predecessor on the path there. It contains 32 Bits for each node
@@ -126,13 +146,15 @@ __kernel void test_kernel( read_only image2d_t costmap,
               // simplify and scale the cost calculation a bit...
               factor = 100 * (0.5/alpha_L * alpha_P * link_width + 1);
 
+
   // Initialize all to "Not visited" and startnode to zero
   for(uint i = 0; i < dim.x * dim.y; ++i)
     nodes[i] = VALUE_NOT_VISITED;
+
   uint start_index = makeIndex(start, dim);
   nodes[ start_index ] = 0;
   heap_insert(&data, start_index);
-  int count = 40000;
+  int count = 10;
   uint max_size = 0;
   // Start with Dijkstra    
   do
@@ -171,3 +193,5 @@ __kernel void test_kernel( read_only image2d_t costmap,
   
   nodes[ 0 ] = max_size;
 }
+
+#endif

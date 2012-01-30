@@ -153,7 +153,7 @@ namespace LinksRouting
     GLint vp[4];
     glGetIntegerv(GL_VIEWPORT, vp);
 
-    _links_fbo.init(vp[2], vp[3], GL_RGB8);
+    _links_fbo.init(vp[2], vp[3], GL_RGBA8, 1, false, GL_NEAREST);
     _slot_links->_data->id = _links_fbo.colorBuffers.at(0);
   }
 
@@ -171,6 +171,7 @@ namespace LinksRouting
 
     _slot_links->setValid(false);
     _links_fbo.bind();
+    glClearColor(0,0,0,0);
     glClear(GL_COLOR_BUFFER_BIT);
 
     glColor3f(1.0, 1.0, 1.0);
