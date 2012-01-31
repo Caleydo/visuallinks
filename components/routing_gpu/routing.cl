@@ -16,6 +16,7 @@ __kernel void prepareRouting(read_only image2d_t costmap,
   nodes[dim.x*id.y+id.x] = 255*min(1.0f,getPenalty(costmap, id));
 }
 
+
 #if 0
 
 /*

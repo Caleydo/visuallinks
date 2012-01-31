@@ -9,6 +9,10 @@ set(COMPONENTS_LIBS )
 set(BIN_DIR ${PROJROOT}/bin)
 set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} ${PROJROOT}/cmake)
 
+#include macros
+include( cmake/CopyFiles.cmake )
+include( cmake/AddComponent.cmake )
+
 #set interface files
 set( INTERFACE_FILES
   ${LINKS_INCLUDE_DIR}/core.h
@@ -42,41 +46,15 @@ include_directories(${COMPONENTS_DIR}/tools)
 
 #TODO we should do that in a better way, so we can get the include directories and libs to link out of the subdirectory..
 #add components
-add_subdirectory(${COMPONENTS_DIR}/staticcore ${BIN_DIR}/staticcore)
-set(COMPONENTS_INC_DIR ${COMPONENTS_INC_DIR} ${COMPONENTS_DIR}/staticcore/include)
-set(COMPONENTS_LIBS ${COMPONENTS_LIBS} staticcore)
-
-add_subdirectory(${COMPONENTS_DIR}/xmlconfig ${BIN_DIR}/xmlconfig)
-set(COMPONENTS_INC_DIR ${COMPONENTS_INC_DIR} ${COMPONENTS_DIR}/xmlconfig/include)
-set(COMPONENTS_LIBS ${COMPONENTS_LIBS} xmlconfig)
-set(COMPONENTS_INC_DIR ${COMPONENTS_INC_DIR} ${COMPONENTS_DIR}/xmlconfig/)
-set(COMPONENTS_LIBS ${COMPONENTS_LIBS} tinyxml)
-
-add_subdirectory(${COMPONENTS_DIR}/costanalysis ${BIN_DIR}/costanalysis)
-set(COMPONENTS_INC_DIR ${COMPONENTS_INC_DIR} ${COMPONENTS_DIR}/costanalysis/include)
-set(COMPONENTS_LIBS ${COMPONENTS_LIBS} glcostanalysis)
-
-add_subdirectory(${COMPONENTS_DIR}/renderer_gl ${BIN_DIR}/renderer_gl)
-set(COMPONENTS_INC_DIR ${COMPONENTS_INC_DIR} ${COMPONENTS_DIR}/renderer_gl/include)
-set(COMPONENTS_LIBS ${COMPONENTS_LIBS} glrenderer)
-
-add_subdirectory(${COMPONENTS_DIR}/routing_cpu ${BIN_DIR}/routing_cpu)
-set(COMPONENTS_INC_DIR ${COMPONENTS_INC_DIR} ${COMPONENTS_DIR}/routing_cpu/include)
-set(COMPONENTS_LIBS ${COMPONENTS_LIBS} cpurouting)
-
-add_subdirectory(${COMPONENTS_DIR}/routing_gpu ${BIN_DIR}/routing_gpu)
-set(COMPONENTS_INC_DIR ${COMPONENTS_INC_DIR} ${COMPONENTS_DIR}/routing_gpu/include)
-set(COMPONENTS_LIBS ${COMPONENTS_LIBS} gpurouting)
-
-add_subdirectory(${COMPONENTS_DIR}/routing_ice_proxy ${BIN_DIR}/routing_ice_proxy)
-#set(COMPONENTS_INC_DIR ${COMPONENTS_INC_DIR} ${COMPONENTS_DIR}/routing_ice_proxy/include)
-#set(COMPONENTS_LIBS ${COMPONENTS_LIBS} gpurouting)
-
-add_subdirectory(${COMPONENTS_DIR}/transparencyanalysis ${BIN_DIR}/transparencyanalysis)
-set(COMPONENTS_INC_DIR ${COMPONENTS_INC_DIR} ${COMPONENTS_DIR}/transparencyanalysis/include)
-#set(COMPONENTS_LIBS ${COMPONENTS_LIBS} gpurouting)
-
-
+add_component(staticcore)
+add_component(xmlconfig)
+add_component(costanalysis)
+add_component(renderer_gl)
+add_component(routing_cpu off)
+add_component(routing_gpu)
+add_component(routing_ice_proxy off)
+add_component(transparencyanalysis off)
+#message("comp inc:\n${COMPONENTS_INC_DIR} \ncomp libs:\n${COMPONENTS_LIBS}\ndepeping files:\n${COMPONENTS_DEPENDING_FILES}")
 
 #add default applications
 add_subdirectory(${PROJROOT}/qtfullscreensystem ${BIN_DIR}/qtfullscreensystem)

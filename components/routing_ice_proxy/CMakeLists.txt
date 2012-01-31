@@ -13,3 +13,4 @@ set(SOURCE_FILES ${COMPONENTSRC_DIR}/routingiceproxy.cpp
     )
 
 add_library(routingiceproxy ${HEADER_FILES} ${SOURCE_FILES})
+add_component_data(${COMPONENTINC_DIR} routingiceproxy)

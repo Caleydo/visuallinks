@@ -16,3 +16,7 @@ set(SOURCE_FILES ${COMPONENTSRC_DIR}/xmlconfig.cpp
     )
 
 add_library(xmlconfig ${HEADER_FILES} ${SOURCE_FILES})
+
+set(REQ_INC_DIRS ${COMPONENTINC_DIR} ${COMPONENTROOT})
+set(REQ_LIBS  tinyxml xmlconfig)
+add_component_data(REQ_INC_DIRS REQ_LIBS)

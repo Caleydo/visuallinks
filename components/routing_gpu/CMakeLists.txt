@@ -18,10 +18,14 @@ set(HEADER_FILES
   ${COMPONENTINC_DIR}/gpurouting.h
 )
 
-
 set(SOURCE_FILES
   ${COMPONENTSRC_DIR}/gpurouting.cpp
 )
 
-add_library(gpurouting ${HEADER_FILES} ${SOURCE_FILES})
+set(CL_FILES
+  ${COMPONENTROOT}/routing.cl
+)
+
+add_library(gpurouting ${HEADER_FILES} ${SOURCE_FILES} ${CL_FILES})
 target_link_libraries(gpurouting ${OPENCL_LIBRARIES})
+add_component_data(${COMPONENTINC_DIR} gpurouting ${CL_FILES})

@@ -1,3 +1,6 @@
+
+set(COMPONENTROOT ${CMAKE_CURRENT_SOURCE_DIR})
+
 include_directories(
   ${LINKS_INCLUDE_DIR}
 )
@@ -20,3 +23,4 @@ set(SOURCE_FILES
 add_definitions(-DNOMULTISAMPLING)
 add_library(tools ${HEADER_FILES} ${SOURCE_FILES})
 add_subdirectory(glsl)
+

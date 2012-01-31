@@ -16,3 +16,5 @@ set( SOURCE_FILES
 )
 
 add_library(staticcore ${HEADER_FILES} ${SOURCE_FILES})
+
+add_component_data(${COMPONENTINC_DIR} staticcore)
