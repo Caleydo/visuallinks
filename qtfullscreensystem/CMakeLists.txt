@@ -18,6 +18,10 @@ set( SHADER_FILES
 	${CMAKE_CURRENT_SOURCE_DIR}/remove_links.frag
 )
 
+set( RUNTIME_FILES ${SHADER_FILES}
+	${CMAKE_CURRENT_SOURCE_DIR}/qtconfig.xml
+)
+
 set (ADDITIONAL_INCLUDE_DIRS
 )
 set (ADDITIONAL_LIBS
@@ -66,4 +70,4 @@ target_link_libraries( qtfullscreensystem
   ${ADDITIONAL_LIBS}
 )
 use_components(qtfullscreensystem)
-runtime_files(qtfullscreensystem SHADER_FILES)
+runtime_files(qtfullscreensystem RUNTIME_FILES)

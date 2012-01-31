@@ -7,22 +7,23 @@ namespace LinksRouting
 
   }
 
-  void XmlConfig::initFrom(const std::string& configstr)
+  bool XmlConfig::initFrom(const std::string& configstr)
   {
     doc = new TiXmlDocument(configstr);
     if(!doc->LoadFile())
     {
       std::cerr << "LinksSystem XmlConfig Error, can not load config " << configstr << ": \"" <<  doc->ErrorDesc() << "\"" << std::endl << " at " << doc->ErrorRow() << ":" << doc->ErrorCol() << std::endl;
-      return;
+      return false;
     }
 
     config = doc->FirstChild("config");
     if(config == NULL || config->ToElement() == NULL)
     {
       std::cerr << "LinksSystem XmlConfig Error: no \"config\" node in document" << std::endl;
-      return;
+      return false;
     }
     isInit = true;
+    return true;
   }
   void XmlConfig::attach(Component* component, unsigned int type)
   {
@@ -52,6 +53,8 @@ namespace LinksRouting
 
   void XmlConfig::process(Type type)
   {
+    if(!isInit)
+      return;
     //for now just process xml config once
     //we could check for file modifications every second and update config if a change occurs...
     static bool processed = false;

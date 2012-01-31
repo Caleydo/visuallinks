@@ -135,7 +135,7 @@ namespace LinksRouting
   public:
     XmlConfig();
 
-    void initFrom(const std::string& config);
+    bool initFrom(const std::string& config);
     void attach(Component* component, unsigned int type);
 
     bool startup(Core* core, unsigned int type);

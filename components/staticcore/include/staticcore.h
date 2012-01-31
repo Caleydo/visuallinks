@@ -16,8 +16,6 @@
 
 namespace LinksRouting
 {
-  typedef std::vector<Component*> components_t;
-
   class StaticCore: public Core
   {
       struct ComponentInfo
@@ -25,38 +23,17 @@ namespace LinksRouting
           Component* comp;
           unsigned int canbe;
           unsigned int is;
-          ComponentInfo(Component* c, unsigned int can) :
+          ComponentInfo(Component* c, unsigned int can, unsigned int now = 0) :
                 comp(c),
                 canbe(can),
-                is(0)
+                is(now)
           {
           }
-      };
-      typedef std::list<ComponentInfo> ComponentList;
-      ComponentList components;
-      struct RunningComponent
-      {
-          ComponentInfo* compinfo;
-          unsigned int type;
-          RunningComponent(ComponentInfo* info, unsigned int t) :
-                compinfo(info),
-                type(t)
-          {
-          }
-          bool operator <(const RunningComponent& other)
-          {
-            return type < other.type;
-          }
-      };
-      typedef std::list<RunningComponent> RunningComponentList;
-      RunningComponentList running_components;
-      Config* config;
-
-      unsigned int requiredComponents;
-      std::string startupstr;
-
-      void connectComponents();
-      Component* findRunningComponent(Component::Type type);
+          operator Component*() { return comp; }
+      };     
+      
+      typedef std::vector<ComponentInfo> components_t;
+      
       static unsigned int getTypes(Component* component, unsigned int mask);
 
     public:
@@ -83,8 +60,20 @@ namespace LinksRouting
       /** The attached components */
       components_t _components;
 
+      /** Types of components running */
+      unsigned int _runningComponents;
+
       /** Slots used for communication between components */
       slots_t _slots;
+
+      /** Config to be used */
+      Config* _config;
+
+      /** Requrired components */
+      unsigned int _requiredComponents;
+
+      /** Command line arguments */
+      std::string _startupstr;
 
   };
 }
