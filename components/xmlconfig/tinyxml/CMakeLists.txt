@@ -8,6 +8,7 @@ SET(tinyxml_SOURCES
   tinyxmlparser.cpp
   tinystr.cpp
 )
+
 ADD_DEFINITIONS( -DTIXML_USE_STL )
 
 add_library(tinyxml STATIC ${tinyxml_SOURCES})
