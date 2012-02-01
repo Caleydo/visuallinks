@@ -215,7 +215,6 @@ namespace LinksRouting
   {
     try
     {
-    const GLint miplevel = 2; // 1/4 size
 
     if( !_subscribe_costmap->isValid() )
     {
@@ -244,7 +243,7 @@ namespace LinksRouting
          _cl_context,
          CL_MEM_READ_ONLY,
          GL_TEXTURE_2D,
-         miplevel,
+         0,
          _subscribe_costmap->_data->id
        )
     );
@@ -252,25 +251,44 @@ namespace LinksRouting
     glFinish();
     _cl_command_queue.enqueueAcquireGLObjects(&memory_gl);
 
-    unsigned int width = _subscribe_costmap->_data->width / (1 << miplevel),
-                 height = _subscribe_costmap->_data->height / (1 << miplevel),
+    unsigned int width = _subscribe_costmap->_data->width,
+                 height = _subscribe_costmap->_data->height,
                  num_points = width * height;
+
+    //testdata:
+    struct uint4
+    {
+      union
+      {
+        unsigned int v[4];
+        struct
+        {
+          unsigned int x,y,z,w;
+        };
+      };
+      uint4(unsigned int _x, unsigned int _y, unsigned int _z, unsigned int _w) : x(_x), y(_y), z(_z), w(_w) { }
+    };
+    std::vector<uint4> h_targets;
+    h_targets.push_back(uint4(10, 20, 10, 10));
+    h_targets.push_back(uint4(200, 300, 10, 10));
+    //
 
     cl::Buffer buf(_cl_context, CL_MEM_READ_WRITE, num_points * sizeof(unsigned int));
     cl::Buffer queue(_cl_context, CL_MEM_READ_WRITE, num_points * sizeof(unsigned int));
+    cl::Buffer targets(_cl_context, CL_MEM_READ_WRITE, h_targets.size()*sizeof(cl_uint4));
+    _cl_command_queue.enqueueWriteBuffer(targets, true, 0, h_targets.size()*sizeof(cl_uint4), &h_targets[0]);
 
     _cl_kernel.setArg(0, memory_gl[0]);
     _cl_kernel.setArg(1, buf);
     //_cl_kernel.setArg(2, queue);
 
-    int dim[] = {width, height},
-        start[] = {10, 20},
-        target[] = {300, 200};
+    int dim[] = {width, height};
 
-    _cl_kernel.setArg(2, 2 * sizeof(int), dim);
-    //_cl_kernel.setArg(4, 2 * sizeof(int), start);
-    //_cl_kernel.setArg(5, 2 * sizeof(int), target);
-    //_cl_command_queue.finish();
+    
+    _cl_kernel.setArg(2, targets);
+    int numtargets = h_targets.size();
+    _cl_kernel.setArg(3, sizeof(int), &numtargets);
+    _cl_kernel.setArg(4, 2 * sizeof(int), dim);
 
     _cl_command_queue.enqueueNDRangeKernel
     (
@@ -279,8 +297,6 @@ namespace LinksRouting
       cl::NDRange(width,height),
       cl::NullRange
     );
-
-    //_cl_command_queue.finish();
     _cl_command_queue.enqueueReleaseGLObjects(&memory_gl);
     _cl_command_queue.finish();
 
@@ -290,13 +306,15 @@ namespace LinksRouting
       std::vector<unsigned int> host_mem(num_points);
       _cl_command_queue.enqueueReadBuffer(buf, true, 0, num_points * sizeof(unsigned int), &host_mem[0]);
 
-      std::ofstream img("test.pgm");
+      std::ofstream img("test.pgm", std::ios_base::trunc );
       img << "P2\n"
           << width << " " << height << "\n"
-          << "65535\n";
+          << "255\n";
 
       for( unsigned int i = 0; i < num_points; ++i )
+      {
         img << host_mem[i] << "\n";
+      }
       throw std::runtime_error("stop");
     }
     }

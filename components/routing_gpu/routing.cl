@@ -8,13 +8,20 @@ float getPenalty(read_only image2d_t costmap, int2 pos)
   return read_imagef(costmap, sampler, pos).x;
 }
 
+//it might be better to do that via opengl or something (arbitrary node shapes etc)
 __kernel void prepareRouting(read_only image2d_t costmap,
                            global uint* nodes,
+                           global uint4* startingPoints,
+                           const uint numStartingPoints,
                            const int2 dim)
 {
   int2 id = {get_global_id(0), get_global_id(1)};
   nodes[dim.x*id.y+id.x] = 255*min(1.0f,getPenalty(costmap, id));
 }
+
+
+
+
 
 
 #if 0
