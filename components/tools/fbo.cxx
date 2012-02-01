@@ -273,7 +273,7 @@ namespace gl
                  int height,
                  int posx,
                  int posy,
-                 unsigned int colorBuffer,
+                 int colorBuffer,
                  bool resetviewport,
                  bool resetmatrix,
                  bool invertTexCoordsY)
@@ -294,8 +294,11 @@ namespace gl
                     resetviewport, resetmatrix, invertTexCoordsY);
 
     glPushAttrib(GL_TEXTURE_BIT | GL_ENABLE_BIT);
-    glEnable(GL_TEXTURE_2D);
-    bindTex(colorBuffer);
+    if(colorBuffer >= 0)
+    {
+      glEnable(GL_TEXTURE_2D);
+      bindTex(colorBuffer);
+    }
 
     renderQuad(vertexcoords, draw);
 
@@ -487,6 +490,21 @@ namespace gl
       throw std::runtime_error(
           "Add colorBuffer: Frame Buffer setup incomplete");
     glPopAttrib();
+  }
+
+  void FBO::renderQuad(const float vertex[4],
+                             const float texcoords[4])
+  {
+    glBegin(GL_QUADS);
+    glTexCoord2f(texcoords[0], texcoords[2]);
+    glVertex2f(vertex[0], vertex[2]);
+    glTexCoord2f(texcoords[1], texcoords[2]);
+    glVertex2f(vertex[1], vertex[2]);
+    glTexCoord2f(texcoords[1], texcoords[3]);
+    glVertex2f(vertex[1], vertex[3]);
+    glTexCoord2f(texcoords[0], texcoords[3]);
+    glVertex2f(vertex[0], vertex[3]);
+    glEnd();
   }
   void FBO::renderQuad(const std::vector<float>& vertex,
                        const std::vector<float>& texcoords)

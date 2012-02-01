@@ -117,9 +117,6 @@ namespace LinksRouting
   //----------------------------------------------------------------------------
   GlRenderer::GlRenderer() : myname("GlRenderer")
   {
-    //DUMMYTEST
-    registerArg("TestDouble", TestDouble);
-    registerArg("TestString", TestString);
   }
 
   //----------------------------------------------------------------------------
@@ -166,8 +163,6 @@ namespace LinksRouting
   //----------------------------------------------------------------------------
   void GlRenderer::process(Type type)
   {
-    //DUMMYTEST
-    std::cout << "TestDouble: " << TestDouble << " TestString: " << TestString << std::endl;
 
     _slot_links->setValid(false);
     _links_fbo.bind();

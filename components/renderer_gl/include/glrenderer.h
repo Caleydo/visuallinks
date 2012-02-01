@@ -14,9 +14,6 @@ namespace LinksRouting
   {
     protected:
       std::string myname;
-      //DUMMYTESt
-      double TestDouble;
-      std::string TestString;
     public:
 
       GlRenderer();

@@ -17,7 +17,8 @@ set(HEADER_FILES ${COMPONENTINC_DIR}/glcostanalysis.h
 set(SOURCE_FILES ${COMPONENTSRC_DIR}/glcostanalysis.cpp
     )
 
-set(SHADER_FILES ${COMPONENTROOT}/featureMap.glsl
+set(SHADER_FILES ${COMPONENTROOT}/downSample.glsl
+				 ${COMPONENTROOT}/featureMap.glsl
 				 ${COMPONENTROOT}/saliencyFilter.glsl)
 
 add_library(glcostanalysis ${HEADER_FILES} ${SOURCE_FILES} ${SHADER_FILES})

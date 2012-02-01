@@ -10,7 +10,7 @@ namespace LinksRouting
   GlCostAnalysis::GlCostAnalysis():
     myname("GlCostAnalysis")
   {
-
+    registerArg("DownsampleCost", _downsample = 2);
   }
 
   //----------------------------------------------------------------------------
@@ -48,17 +48,21 @@ namespace LinksRouting
     GLint vp[4];
     glGetIntegerv(GL_VIEWPORT, vp);
 
-    _feature_map_fbo.init(vp[2], vp[3], GL_RGBA32F, 1, false);
-    _saliency_map_fbo.init(vp[2], vp[3], GL_RGBA32F, 3, false);
+    size_t width = vp[2] / _downsample,
+           height = vp[3] / _downsample;
+    _feature_map_fbo.init(width, height, GL_RGBA32F, 1, false, GL_NEAREST);
+    _saliency_map_fbo.init(width, height, GL_RGBA32F, 3, false, GL_NEAREST);
+    _downsampled_input_fbo.init(width, height, GL_RGBA8, 1, false, GL_NEAREST);
 
     // TODO
     _slot_costmap->_data->id = _saliency_map_fbo.colorBuffers.at(0);
     _slot_costmap->_data->type = SlotType::Image::OpenGLTexture;
-    _slot_costmap->_data->width = vp[2];
-    _slot_costmap->_data->height = vp[3];
+    _slot_costmap->_data->width = width;
+    _slot_costmap->_data->height = height;
 
     _feature_map_shader = _shader_manager.loadfromFile(0, "featureMap.glsl");
     _saliency_map_shader = _shader_manager.loadfromFile(0, "saliencyFilter.glsl");
+    _downsample_shader = _shader_manager.loadfromFile(0, "downSample.glsl");
   }
 
   void GlCostAnalysis::shutdown()
@@ -70,36 +74,60 @@ namespace LinksRouting
   {
     _slot_costmap->setValid(false);
 
-    if( !_feature_map_shader )
-      throw std::runtime_error("Feature map shader not loaded.");
+    GLuint inputtex = _subscribe_desktop->_data->id;
+    size_t width = _downsampled_input_fbo.width,
+           height = _downsampled_input_fbo.height;
+
+    //---------------------------------
+    // downsample
+    //---------------------------------
+
+    if(_downsample > 0)
+    {
+      if( !_downsample_shader )
+        throw std::runtime_error("Downsample shader not loaded.");
+
+      _downsampled_input_fbo.bind();
+      _downsample_shader->begin();
+      _downsample_shader->setUniform1i("input0", 0);
+      _downsample_shader->setUniform1i("samples", _downsample);
+      _downsample_shader->setUniform2f("texincrease", 1.0f/_subscribe_desktop->_data->width, 1.0f/_subscribe_desktop->_data->height);
+
+      glEnable(GL_TEXTURE_2D);
+      glBindTexture(GL_TEXTURE_2D, inputtex);
+
+      glColor3f(1,1,1);
+      _downsampled_input_fbo.draw(width, height, 0,0, -1, true, true); 
+
+       glDisable(GL_TEXTURE_2D);
+
+      _downsample_shader->end();
+      _downsampled_input_fbo.unbind();
+
+      inputtex = _downsampled_input_fbo.colorBuffers.at(0);
+    }
+
+
+
+
 
     //---------------------------------
     // do feature map (step 1)
     //---------------------------------
+
+    if( !_feature_map_shader )
+      throw std::runtime_error("Feature map shader not loaded.");
 
     _feature_map_fbo.bind();
     _feature_map_shader->begin();
     _feature_map_shader->setUniform1i("input0", 0);
 
     glEnable(GL_TEXTURE_2D);
-    glBindTexture(GL_TEXTURE_2D, _subscribe_desktop->_data->id);
+    glBindTexture(GL_TEXTURE_2D, inputtex);
 
-    glBegin(GL_QUADS);
-      glColor3f(1,1,1);
+    glColor3f(1,1,1);
+    _feature_map_fbo.draw(width, height, 0,0, -1, true, true); 
 
-      glTexCoord2f(0,0);
-      glVertex2f(-1,-1);
-
-      glTexCoord2f(1,0);
-      glVertex2f(1,-1);
-
-      glTexCoord2f(1,1);
-      glVertex2f(1,1);
-
-      glTexCoord2f(0,1);
-      glVertex2f(-1,1);
-
-    glEnd();
     glDisable(GL_TEXTURE_2D);
 
     _feature_map_shader->end();
@@ -115,36 +143,19 @@ namespace LinksRouting
     //-----------
     // first pass
 
-    GLint vp[4];
-    glGetIntegerv(GL_VIEWPORT, vp);
 
     _saliency_map_fbo.activateDrawBuffer(2, 1);
-
-     glEnable(GL_TEXTURE_2D);
-     _feature_map_fbo.bindTex(0);
 
      _saliency_map_shader->setUniform1i("input0", 0);
      _saliency_map_shader->setUniform1i("input1", 1);
      _saliency_map_shader->setUniform1i("step", 0);
-     _saliency_map_shader->setUniform2f("texincrease", 1.0f/vp[2], 1.0f/vp[3]);
+     _saliency_map_shader->setUniform2f("texincrease", 1.0f/width, 1.0f/height);
 
      _saliency_map_shader->setUniform1f("scalesaliency", 1.0f);
 
-     glBegin(GL_QUADS);
-       glColor3f(1,1,1);
 
-       glTexCoord2f(0,0);
-       glVertex2f(-1,-1);
-
-       glTexCoord2f(1,0);
-       glVertex2f(1,-1);
-
-       glTexCoord2f(1,1);
-       glVertex2f(1,1);
-
-       glTexCoord2f(0,1);
-       glVertex2f(-1,1);
-     glEnd();
+     glColor3f(1,1,1);
+     _feature_map_fbo.draw(width, height, 0,0, 0, true, true); 
 
     //------------
     // second pass
@@ -158,31 +169,12 @@ namespace LinksRouting
 
     _saliency_map_shader->setUniform1i("step", 1);
 
-    glBegin(GL_QUADS);
-      glColor3f(1,1,1);
-
-      glTexCoord2f(0,0);
-      glVertex2f(-1,-1);
-
-      glTexCoord2f(1,0);
-      glVertex2f(1,-1);
-
-      glTexCoord2f(1,1);
-      glVertex2f(1,1);
-
-      glTexCoord2f(0,1);
-      glVertex2f(-1,1);
-    glEnd();
+    glColor3f(1,1,1);
+    _feature_map_fbo.draw(width, height, 0,0, -1, true, true); 
 
     glDisable(GL_TEXTURE_2D);
 
     glActiveTexture(GL_TEXTURE0);
-
-    // we need a smaller map for the routing process
-    //TODO create a subsampled map before and then just calculate it on a lower level
-    _saliency_map_fbo.bindTex(0);
-    glGenerateMipmap(GL_TEXTURE_2D);
-
     glDisable(GL_TEXTURE_2D);
 
     _saliency_map_shader->end();

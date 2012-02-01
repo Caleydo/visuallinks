@@ -85,7 +85,7 @@ namespace gl
                 int height,
                 int posx = 0,
                 int posy = 0,
-                unsigned int colorBuffer = 0,
+                int colorBuffer = 0,
                 bool resetviewport = false,
                 bool resetmatrix = false,
                 bool invertTexCoordsY = false);
@@ -112,6 +112,8 @@ namespace gl
                            bool invertTexCoords = false);
       static void renderQuad(const std::vector<float>& vertex,
                              const std::vector<float>& texcoords);
+      static void renderQuad(const float vertex[4],
+                             const float texcoords[4]);
       static void pushMatrices();
       static void popMatrices();
   };

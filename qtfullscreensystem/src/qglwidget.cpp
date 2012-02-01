@@ -117,7 +117,7 @@ ShaderPtr loadShader( QString vert, QString frag )
     _core.startup(argv[1]);
     _core.attachComponent(&_config);
     _core.attachComponent(&_cost_analysis);
-    _core.attachComponent(&_routing);
+    //_core.attachComponent(&_routing);
     _core.attachComponent(&_renderer);
     _core.init();
 
@@ -174,6 +174,8 @@ void GLWidget::initializeGL()
     qFatal("Failed to create framebufferobject!");
 
   _slot_desktop->_data->id = _fbo_desktop->texture();
+  _slot_desktop->_data->width = size().width();
+  _slot_desktop->_data->height = size().height();
 
   shader = loadShader("simple.vert", "remove_links.frag");
   if( !shader )
@@ -223,8 +225,9 @@ void GLWidget::initializeGL()
     glEnd();
     glDisable(GL_TEXTURE_2D);
 
+
     static QImage links(size(), QImage::Format_RGB888);
-    static QImage costmap(size(), QImage::Format_RGB888);
+    static QImage costmap(QSize(_subscribe_costmap->_data->width, _subscribe_costmap->_data->height), QImage::Format_RGB888);
     static QImage desktop(size(), QImage::Format_RGB888);
 
     glPushAttrib(GL_CLIENT_PIXEL_STORE_BIT);

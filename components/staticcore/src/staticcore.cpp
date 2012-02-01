@@ -6,7 +6,11 @@ namespace LinksRouting
 {
   StaticCore::StaticCore() : _config(0), _runningComponents(0)
   {
-    _requiredComponents = Component::Costanalysis;// | Component::Routing | Component::Renderer;
+#ifdef _DEBUG
+    _requiredComponents = 0;
+#else
+    _requiredComponents = Component::Costanalysis | Component::Routing | Component::Renderer;
+#endif
   }
 
   StaticCore::~StaticCore()
@@ -80,17 +84,6 @@ namespace LinksRouting
       return false;
     }
 
-    for( auto c = _components.begin(); c != _components.end(); ++c )
-      c->comp->init();
-
-    SlotCollector slot_collector(_slots);
-    for( auto c = _components.begin(); c != _components.end(); ++c )
-      c->comp->publishSlots(slot_collector);
-
-    SlotSubscriber slot_subscriber(_slots);
-    for( auto c = _components.begin(); c != _components.end(); ++c )
-      c->comp->subscribeSlots(slot_subscriber);
-
     if(_config)
     {
       if(!_config->initFrom(_startupstr))
@@ -101,6 +94,20 @@ namespace LinksRouting
     }
     else
       std::cout << "LinksRouting StaticCore Warning: no config provided." << std::endl;
+
+    for( auto c = _components.begin(); c != _components.end(); ++c )
+      if(c->comp != static_cast<Component*>(_config))
+        c->comp->init();
+
+    SlotCollector slot_collector(_slots);
+    for( auto c = _components.begin(); c != _components.end(); ++c )
+      c->comp->publishSlots(slot_collector);
+
+    SlotSubscriber slot_subscriber(_slots);
+    for( auto c = _components.begin(); c != _components.end(); ++c )
+      c->comp->subscribeSlots(slot_subscriber);
+
+
     return true;
   }
 
