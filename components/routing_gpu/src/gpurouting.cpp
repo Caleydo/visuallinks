@@ -300,7 +300,7 @@ namespace LinksRouting
     _cl_command_queue.enqueueReleaseGLObjects(&memory_gl);
     _cl_command_queue.finish();
 
-    static int c = 5;
+    static int c = 8;
     if( !--c )
     {
       std::vector<unsigned int> host_mem(num_points);

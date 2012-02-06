@@ -23,6 +23,8 @@ namespace LinksRouting
   void GlCostAnalysis::publishSlots(SlotCollector& slots)
   {
     _slot_costmap = slots.create<SlotType::Image>("/costmap");
+    _slot_featuremap = slots.create<SlotType::Image>("/featuremap");
+    _slot_downsampledinput = slots.create<SlotType::Image>("/downsampled_desktop");
   }
 
   //----------------------------------------------------------------------------
@@ -51,14 +53,13 @@ namespace LinksRouting
     size_t width = vp[2] / _downsample,
            height = vp[3] / _downsample;
     _feature_map_fbo.init(width, height, GL_RGBA32F, 1, false, GL_NEAREST);
-    _saliency_map_fbo.init(width, height, GL_RGBA32F, 3, false, GL_NEAREST);
+    _saliency_map_fbo.init(width, height, GL_R32F, 3, false, GL_NEAREST);
     _downsampled_input_fbo.init(width, height, GL_RGBA8, 1, false, GL_NEAREST);
 
     // TODO
-    _slot_costmap->_data->id = _saliency_map_fbo.colorBuffers.at(0);
-    _slot_costmap->_data->type = SlotType::Image::OpenGLTexture;
-    _slot_costmap->_data->width = width;
-    _slot_costmap->_data->height = height;
+    *_slot_costmap->_data = SlotType::Image(width, height, _saliency_map_fbo.colorBuffers.at(0));
+    *_slot_downsampledinput->_data = SlotType::Image(width, height, _downsampled_input_fbo.colorBuffers.at(0));
+    *_slot_featuremap->_data = SlotType::Image(width, height, _feature_map_fbo.colorBuffers.at(0));
 
     _feature_map_shader = _shader_manager.loadfromFile(0, "featureMap.glsl");
     _saliency_map_shader = _shader_manager.loadfromFile(0, "saliencyFilter.glsl");

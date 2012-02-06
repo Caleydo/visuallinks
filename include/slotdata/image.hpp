@@ -16,7 +16,7 @@ namespace SlotType
 
   struct Image
   {
-    enum
+    enum Type
     {
       ImageRGBA8,
       ImageGray8,
@@ -36,6 +36,26 @@ namespace SlotType
     };
     unsigned int width, height;
     unsigned int layers;
+    Image()
+    { }
+    Image(unsigned int w, 
+          unsigned int h, 
+          unsigned int i,  
+          Type t = OpenGLTexture, 
+          unsigned int l = 1) : 
+              type(t), id(i),
+              width(w), height(h),
+              layers(l)
+    { }
+    Image(unsigned int w, 
+          unsigned int h, 
+          unsigned char* d,  
+          Type t = ImageRGBA8, 
+          unsigned int l = 1) : 
+              type(t), pdata(d),
+              width(w), height(h),
+              layers(l)
+    { }         
   };
 
 } // namespace SlotType

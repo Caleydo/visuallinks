@@ -50,6 +50,8 @@ namespace LinksRouting
     private:
 
       slot_t<SlotType::Image>::type _slot_costmap;
+      slot_t<SlotType::Image>::type _slot_featuremap;
+      slot_t<SlotType::Image>::type _slot_downsampledinput;
       slot_t<SlotType::Image>::type _subscribe_desktop;
 
       gl::FBO   _feature_map_fbo;

@@ -189,6 +189,16 @@ void GLWidget::initializeGL()
 }
 
   //----------------------------------------------------------------------------
+  void writeOutTexture(LinksRouting::slot_t<LinksRouting::SlotType::Image>::type& slot, const QString& name)
+  {
+    QImage image(QSize(slot->_data->width, slot->_data->height), QImage::Format_RGB888);
+    glEnable(GL_TEXTURE_2D);
+    glBindTexture(GL_TEXTURE_2D, slot->_data->id);
+    glGetTexImage(GL_TEXTURE_2D, 0, GL_RGB, GL_UNSIGNED_BYTE, image.bits());
+    glDisable(GL_TEXTURE_2D);
+    image.mirrored().save(name);
+  }
+  //----------------------------------------------------------------------------
   void GLWidget::paintGL()
   {
     // X11: Window decorators add decoration after creating the window. So we
@@ -225,36 +235,27 @@ void GLWidget::initializeGL()
     glEnd();
     glDisable(GL_TEXTURE_2D);
 
+    static int counter = 0;
 
     static QImage links(size(), QImage::Format_RGB888);
-    static QImage costmap(QSize(_subscribe_costmap->_data->width, _subscribe_costmap->_data->height), QImage::Format_RGB888);
-    static QImage desktop(size(), QImage::Format_RGB888);
-
     glPushAttrib(GL_CLIENT_PIXEL_STORE_BIT);
     glPixelStorei(GL_PACK_ALIGNMENT, 1);
     glReadPixels(0, 0, width(), height(), GL_RGB, GL_UNSIGNED_BYTE, links.bits());
+    links.mirrored().save(QString("links%1.png").arg(counter));
 
-    glEnable(GL_TEXTURE_2D);
-    glBindTexture(GL_TEXTURE_2D, _subscribe_costmap->_data->id);
-    glGetTexImage(GL_TEXTURE_2D, 0, GL_RGB, GL_UNSIGNED_BYTE, costmap.bits());
-    glDisable(GL_TEXTURE_2D);
-
-    glEnable(GL_TEXTURE_2D);
-    glBindTexture(GL_TEXTURE_2D, _slot_desktop->_data->id);
-    glGetTexImage(GL_TEXTURE_2D, 0, GL_RGB, GL_UNSIGNED_BYTE, desktop.bits());
-    glDisable(GL_TEXTURE_2D);
+    writeOutTexture(_subscribe_costmap, QString("costmap%1.png").arg(counter));
+    writeOutTexture(_slot_desktop, QString("desktop%1.png").arg(counter));
+    writeOutTexture(_core.getSlotSubscriber().getSlot<LinksRouting::SlotType::Image>("/downsampled_desktop"), QString("downsampled_desktop%1.png").arg(counter));
+    writeOutTexture(_core.getSlotSubscriber().getSlot<LinksRouting::SlotType::Image>("/featuremap"), QString("featuremap%1.png").arg(counter));
 
     glPopAttrib();
 
     //links.save("fbo.png");
     QBitmap mask = QBitmap::fromImage( links.mirrored().createMaskFromColor( qRgb(0,0,0) ) );
     //mask.save("mask.png");
-    setMask(mask);
+    setMask(mask);    
 
-    static int counter = 0;
-    desktop.mirrored().save(QString("desktop%1.png").arg(counter));
-    costmap.mirrored().save(QString("costmap%1.png").arg(counter));
-    links.mirrored().save(QString("links%1.png").arg(counter));
+
     ++counter;
 
     // TODO render flipped to not need mirror anymore
