@@ -3,6 +3,13 @@
   <ComponentCostanalysis>
 	<DownsampleCost type="Integer" val="2" />
   </ComponentCostanalysis>
+  
+  <GPURouting>
+	<BlockSizeX type="Integer" val="8" />
+	<BlockSizeY type="Integer" val="8" />
+  </GPURouting>
+  
+  
   <!-- <ComponentRenderer>
     <TestDouble type="Float" val="0.25" />
   </ComponentRenderer>

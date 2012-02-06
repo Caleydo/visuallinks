@@ -11,12 +11,44 @@ float getPenalty(read_only image2d_t costmap, int2 pos)
 //it might be better to do that via opengl or something (arbitrary node shapes etc)
 __kernel void prepareRouting(read_only image2d_t costmap,
                            global uint* nodes,
+                           global uint4* queue,
+                           global uint* queue_pos,
                            global uint4* startingPoints,
                            const uint numStartingPoints,
-                           const int2 dim)
+                           const int2 dim,
+                           const int2 blocks)
 {
-  int2 id = {get_global_id(0), get_global_id(1)};
-  nodes[dim.x*id.y+id.x] = 255*min(1.0f,getPenalty(costmap, id));
+  __local bool hasStartingPoint;
+  
+
+  int3 id = {get_global_id(0), get_global_id(1), get_global_id(2)};
+
+
+  if(get_local_id(0) == 0 && get_local_id(1) == 0 && get_local_id(2) == 0)
+    hasStartingPoint = false;
+  barrier(CLK_LOCAL_MEM_FENCE);
+
+  if(get_local_id(0) < dim.x && get_local_id(01) < dim.y)
+  {
+    uint cost = 0xFFFFFFFF;
+    if(startingPoints[id.z].x <= id.x && id.x <= startingPoints[id.z].z &&
+        startingPoints[id.z].y <= id.y && id.y <= startingPoints[id.z].w)
+    {
+        cost = 0;
+        hasStartingPoint = true;
+    }
+    //prepare data
+    nodes[dim.x*id.y+id.x + dim.x*dim.y*id.z] = cost;
+    if(hasStartingPoint == true)
+    {
+      //TODO insert into queue
+    }
+  }
+  
+
+  
+
+  //nodes[dim.x*id.y+id.x] = 255*min(1.0f,getPenalty(costmap, id));
 }
 
 

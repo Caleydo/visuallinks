@@ -189,7 +189,7 @@ void GLWidget::initializeGL()
 }
 
   //----------------------------------------------------------------------------
-  void writeOutTexture(LinksRouting::slot_t<LinksRouting::SlotType::Image>::type& slot, const QString& name)
+  void writeOutTexture(const LinksRouting::slot_t<LinksRouting::SlotType::Image>::type& slot, const QString& name)
   {
     QImage image(QSize(slot->_data->width, slot->_data->height), QImage::Format_RGB888);
     glEnable(GL_TEXTURE_2D);

@@ -61,13 +61,22 @@ namespace LinksRouting
 
     private:
 
+      template<typename T>
+      static T divup(T a, T b)
+      {
+        return (a + b - 1)/b;
+      }
+
       slot_t<SlotType::Image>::type _subscribe_costmap;
 
       cl::Context       _cl_context;
       cl::Device        _cl_device;
       cl::CommandQueue  _cl_command_queue;
       cl::Program       _cl_program;
-      cl::Kernel        _cl_kernel;
+      cl::Kernel        _cl_prepare_kernel;
+      cl::Kernel        _cl_shortestpath_kernel;
+
+      int _blockSize[2];
 
   };
 }

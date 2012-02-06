@@ -21,7 +21,8 @@ namespace LinksRouting
   GPURouting::GPURouting() :
         myname("GPURouting")
   {
-
+    registerArg("BlockSizeX", _blockSize[0] = 8);
+    registerArg("BlockSizeY", _blockSize[1] = 8);
   }
 
   //------------------------------------------------------------------------------
@@ -204,7 +205,7 @@ namespace LinksRouting
               << "\n -- Log: " << _cl_program.getBuildInfo<CL_PROGRAM_BUILD_LOG>(_cl_device)
               << std::endl;
 
-    _cl_kernel = cl::Kernel(_cl_program, "prepareRouting");
+    _cl_prepare_kernel = cl::Kernel(_cl_program, "prepareRouting");
   }
   void GPURouting::shutdown()
   {
@@ -269,33 +270,38 @@ namespace LinksRouting
       uint4(unsigned int _x, unsigned int _y, unsigned int _z, unsigned int _w) : x(_x), y(_y), z(_z), w(_w) { }
     };
     std::vector<uint4> h_targets;
-    h_targets.push_back(uint4(10, 20, 10, 10));
-    h_targets.push_back(uint4(200, 300, 10, 10));
+    h_targets.push_back(uint4(10*width/100, 11*height/100, 10*width/100+10, 11*height/100+10));
+    h_targets.push_back(uint4(90*width/100, 90*height/100, 90*width/100+10, 90*height/100+10));
+    h_targets.push_back(uint4(91*width/100, 10*height/100, 91*width/100+10, 10*height/100+10));
     //
 
-    cl::Buffer buf(_cl_context, CL_MEM_READ_WRITE, num_points * sizeof(unsigned int));
-    cl::Buffer queue(_cl_context, CL_MEM_READ_WRITE, num_points * sizeof(unsigned int));
+    //the costs
+    unsigned int numBlocks[2] = {divup<unsigned>(width,_blockSize[0]),divup<unsigned>(height,_blockSize[1])};
+    unsigned int sumBlocks = numBlocks[0]*numBlocks[1];
+    cl::Buffer buf(_cl_context, CL_MEM_READ_WRITE, num_points * h_targets.size() * sizeof(unsigned int));
+
+    cl::Buffer queue_pos(_cl_context, CL_MEM_READ_WRITE, sumBlocks * h_targets.size() * sizeof(unsigned int));
+    cl::Buffer queue(_cl_context, CL_MEM_READ_WRITE, sumBlocks * h_targets.size() * sizeof(cl_uint4));
     cl::Buffer targets(_cl_context, CL_MEM_READ_WRITE, h_targets.size()*sizeof(cl_uint4));
     _cl_command_queue.enqueueWriteBuffer(targets, true, 0, h_targets.size()*sizeof(cl_uint4), &h_targets[0]);
 
-    _cl_kernel.setArg(0, memory_gl[0]);
-    _cl_kernel.setArg(1, buf);
-    //_cl_kernel.setArg(2, queue);
-
-    int dim[] = {width, height};
-
-    
-    _cl_kernel.setArg(2, targets);
+    _cl_prepare_kernel.setArg(0, memory_gl[0]);
+    _cl_prepare_kernel.setArg(1, buf);
+    _cl_prepare_kernel.setArg(2, queue);
+    _cl_prepare_kernel.setArg(3, queue_pos);
+    _cl_prepare_kernel.setArg(4, targets);
     int numtargets = h_targets.size();
-    _cl_kernel.setArg(3, sizeof(int), &numtargets);
-    _cl_kernel.setArg(4, 2 * sizeof(int), dim);
+    _cl_prepare_kernel.setArg(5, sizeof(int), &numtargets);
+    int dim[] = {width, height};
+    _cl_prepare_kernel.setArg(6, 2 * sizeof(int), dim);
+    _cl_prepare_kernel.setArg(7, 2 * sizeof(int), numBlocks);
 
     _cl_command_queue.enqueueNDRangeKernel
     (
-      _cl_kernel,
+      _cl_prepare_kernel,
       cl::NullRange,
-      cl::NDRange(width,height),
-      cl::NullRange
+      cl::NDRange(_blockSize[0]*numBlocks[0],_blockSize[1]*numBlocks[1],numtargets),
+      cl::NDRange(_blockSize[0], _blockSize[1], 1)
     );
     _cl_command_queue.enqueueReleaseGLObjects(&memory_gl);
     _cl_command_queue.finish();
@@ -303,15 +309,15 @@ namespace LinksRouting
     static int c = 8;
     if( !--c )
     {
-      std::vector<unsigned int> host_mem(num_points);
-      _cl_command_queue.enqueueReadBuffer(buf, true, 0, num_points * sizeof(unsigned int), &host_mem[0]);
+      std::vector<unsigned int> host_mem(num_points*numtargets);
+      _cl_command_queue.enqueueReadBuffer(buf, true, 0, num_points * numtargets * sizeof(unsigned int), &host_mem[0]);
 
       std::ofstream img("test.pgm", std::ios_base::trunc );
       img << "P2\n"
-          << width << " " << height << "\n"
+          << width << " " << height*numtargets << "\n"
           << "255\n";
 
-      for( unsigned int i = 0; i < num_points; ++i )
+      for( unsigned int i = 0; i < num_points*numtargets; ++i )
       {
         img << host_mem[i] << "\n";
       }
