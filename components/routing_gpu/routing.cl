@@ -10,7 +10,7 @@ float getPenalty(read_only image2d_t costmap, int2 pos)
 
 //it might be better to do that via opengl or something (arbitrary node shapes etc)
 __kernel void prepareRouting(read_only image2d_t costmap,
-                           global uint* nodes,
+                           global float* nodes,
                            global uint4* queue,
                            global uint* queue_pos,
                            global uint4* startingPoints,
@@ -30,7 +30,7 @@ __kernel void prepareRouting(read_only image2d_t costmap,
 
   if(get_local_id(0) < dim.x && get_local_id(01) < dim.y)
   {
-    uint cost = 0xFFFFFFFF;
+    float cost = 0.01f*MAXFLOAT;
     if(startingPoints[id.z].x <= id.x && id.x <= startingPoints[id.z].z &&
         startingPoints[id.z].y <= id.y && id.y <= startingPoints[id.z].w)
     {
@@ -45,14 +45,81 @@ __kernel void prepareRouting(read_only image2d_t costmap,
     }
   }
   
-
-  
-
   //nodes[dim.x*id.y+id.x] = 255*min(1.0f,getPenalty(costmap, id));
 }
 
 
+local float* accessLocalCost(local float* l_costs, int2 id)
+{
+  return l_costs + (id.x+1 + (id.y+1)*(get_local_size(0)+2));
+}
 
+__kernel void routing(read_only image2d_t costmap,
+                      global float* nodes,
+                      global uint4* queue,
+                      global uint* queue_pos,
+                      global uint4* startingPoints,
+                      const uint numStartingPoints,
+                      const int2 dim,
+                      const int2 blocks,
+                      local float* l_costs)
+{
+  int3 id = {get_global_id(0), get_global_id(1), get_global_id(2)};
+
+  //copy cost to local
+  int local_linid = get_local_id(1)*get_local_size(0) + get_local_id(0);
+  for(int i = local_linid; i < (get_local_size(0)+2)*(get_local_size(1)+2); i += get_local_size(0)*get_local_size(1))
+  {
+    int2 global_pos = (int2)(get_group_id(0)*get_local_size(0),get_group_id(1)*get_local_size(1));
+    global_pos += (int2)(i%(get_local_size(0)+2),i/(get_local_size(0)+2)) - (int2)(1,1);
+    
+    float incost = 0.01f*MAXFLOAT;
+    if(global_pos.x > 0 && global_pos.x < dim.x &&
+       global_pos.y > 0 && global_pos.y < dim.y)
+      incost = nodes[dim.x*global_pos.y + global_pos.x + dim.x*dim.y*id.z]; 
+    l_costs[i] = incost;
+  }
+
+  local bool change;
+  if(local_linid == 0)
+    change = true;
+  barrier(CLK_LOCAL_MEM_FENCE);
+
+  int2 localid = (int2)(get_local_id(0),get_local_id(1));
+  int2 globalid = (int2)(get_global_id(0),get_global_id(1));
+
+  //iterate over it
+  float myPenalty = getPenalty(costmap, globalid);
+  float local * myval = accessLocalCost(l_costs, localid);
+  while(change)
+  {
+    if(local_linid == 0)
+      change = false;
+    barrier(CLK_LOCAL_MEM_FENCE);
+
+    float lastmyval = *myval;
+    
+    int2 offset;
+    for(offset.y = -1; offset.y  <= 1; ++offset.y)
+      for(offset.x = -1; offset.x <= 1; ++offset.x)
+      {
+
+        float d = native_sqrt((float)(offset.x*offset.x+offset.y*offset.y));
+        float penalty = 0.5f*(myPenalty + getPenalty(costmap, globalid + offset));
+        float c_other = *accessLocalCost(l_costs, localid + offset);
+        *myval = min(*myval, c_other + 0.01f*d + d*penalty);
+      }
+
+    if(*myval != lastmyval)
+      change = true;    
+
+    barrier(CLK_LOCAL_MEM_FENCE);
+  }
+
+  //write back
+  nodes[dim.x*globalid.y + globalid.x + dim.x*dim.y*id.z] = *myval;
+  //nodes[dim.x*globalid.y + globalid.x + dim.x*dim.y*id.z] =  getPenalty(costmap, globalid);
+}
 
 
 
