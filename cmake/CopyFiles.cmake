@@ -6,7 +6,7 @@ MACRO(COPY_FILE_IF_CHANGED in_file out_file target)
 		ARGS       -E copy_if_different ${in_file} ${out_file}
 		COMMENT    "${in_file}->${out_file}"
 	)
-	add_dependencies(${target} ${in_file})
+	#add_dependencies(${target} ${in_file})
 ENDMACRO(COPY_FILE_IF_CHANGED)
 
 MACRO(COPY_FILE_INTO_DIRECTORY_IF_CHANGED in_file out_dir target)

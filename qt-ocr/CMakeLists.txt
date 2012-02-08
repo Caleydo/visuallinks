@@ -22,6 +22,7 @@ find_package(Qxt REQUIRED)
 
 find_package(Tesseract )
 
+if(${TESSERACT_INCLUDE_DIR})
 set(SYSTEMROOT ${CMAKE_CURRENT_SOURCE_DIR})
 include_directories(
   ${LINKS_INCLUDE_DIR}
@@ -48,3 +49,4 @@ target_link_libraries( qt-ocr
   ${QXT_LIBRARIES}
   ${TESSERACT_LIBRARY}
 )
+endif()
