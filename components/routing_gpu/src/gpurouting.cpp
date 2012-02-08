@@ -206,6 +206,7 @@ namespace LinksRouting
               << std::endl;
 
     _cl_prepare_kernel = cl::Kernel(_cl_program, "prepareRouting");
+    _cl_shortestpath_kernel = cl::Kernel(_cl_program, "routing");
   }
   void GPURouting::shutdown()
   {
@@ -278,7 +279,7 @@ namespace LinksRouting
     //the costs
     unsigned int numBlocks[2] = {divup<unsigned>(width,_blockSize[0]),divup<unsigned>(height,_blockSize[1])};
     unsigned int sumBlocks = numBlocks[0]*numBlocks[1];
-    cl::Buffer buf(_cl_context, CL_MEM_READ_WRITE, num_points * h_targets.size() * sizeof(unsigned int));
+    cl::Buffer buf(_cl_context, CL_MEM_READ_WRITE, num_points * h_targets.size() * sizeof(float));
 
     cl::Buffer queue_pos(_cl_context, CL_MEM_READ_WRITE, sumBlocks * h_targets.size() * sizeof(unsigned int));
     cl::Buffer queue(_cl_context, CL_MEM_READ_WRITE, sumBlocks * h_targets.size() * sizeof(cl_uint4));
@@ -303,23 +304,54 @@ namespace LinksRouting
       cl::NDRange(_blockSize[0]*numBlocks[0],_blockSize[1]*numBlocks[1],numtargets),
       cl::NDRange(_blockSize[0], _blockSize[1], 1)
     );
+    
+
+    _cl_shortestpath_kernel.setArg(0, memory_gl[0]);
+    _cl_shortestpath_kernel.setArg(1, buf);
+    _cl_shortestpath_kernel.setArg(2, queue);
+    _cl_shortestpath_kernel.setArg(3, queue_pos);
+    _cl_shortestpath_kernel.setArg(4, targets);
+    _cl_shortestpath_kernel.setArg(5, sizeof(int), &numtargets);
+    _cl_shortestpath_kernel.setArg(6, 2 * sizeof(int), dim);
+    _cl_shortestpath_kernel.setArg(7, 2 * sizeof(int), numBlocks);
+    _cl_shortestpath_kernel.setArg(8, sizeof(float)*(_blockSize[0]+2)*(_blockSize[1]+2), NULL);
+    
+    for(int iteration = 0; iteration < 200; ++iteration)
+    {
+      _cl_command_queue.enqueueNDRangeKernel
+      (
+        _cl_shortestpath_kernel,
+        cl::NullRange,
+        cl::NDRange(_blockSize[0]*numBlocks[0],_blockSize[1]*numBlocks[1],numtargets),
+        cl::NDRange(_blockSize[0], _blockSize[1], 1)
+      );
+    }
+
+
     _cl_command_queue.enqueueReleaseGLObjects(&memory_gl);
     _cl_command_queue.finish();
 
     static int c = 8;
     if( !--c )
     {
-      std::vector<unsigned int> host_mem(num_points*numtargets);
-      _cl_command_queue.enqueueReadBuffer(buf, true, 0, num_points * numtargets * sizeof(unsigned int), &host_mem[0]);
+      std::vector<float> host_mem(num_points*numtargets);
+      _cl_command_queue.enqueueReadBuffer(buf, true, 0, num_points * numtargets * sizeof(float), &host_mem[0]);
 
-      std::ofstream img("test.pgm", std::ios_base::trunc );
-      img << "P2\n"
-          << width << " " << height*numtargets << "\n"
-          << "255\n";
+      std::ofstream fimg("test.pfm", std::ios_base::out | std::ios_base::binary | std::ios_base::trunc );
+      fimg << "PF\n";
+      fimg << width << " " << height*numtargets << '\n';
+      fimg << -1.0f << '\n';
+
+      //std::ofstream img("test.pgm", std::ios_base::trunc);
+      //img << "P2\n"
+      //    << width << " " << height*numtargets << "\n"
+      //    << "255\n";
 
       for( unsigned int i = 0; i < num_points*numtargets; ++i )
       {
-        img << host_mem[i] << "\n";
+        //img << host_mem[i] << "\n";
+        for(int j = 0; j < 3; ++j)
+          fimg.write(reinterpret_cast<char*>(&host_mem[i]),sizeof(float));
       }
       throw std::runtime_error("stop");
     }
