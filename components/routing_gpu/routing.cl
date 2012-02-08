@@ -1,4 +1,156 @@
 
+//QUEUE
+
+struct _QueueElement
+{
+  ushort2 block;
+  ushort node;
+  ushort _unused_;
+  float priority;
+  uint state;
+};
+typedef struct _QueueElement QueueElement;
+
+
+#define  QueueElementEmpty 0
+#define  QueueElementReady 1
+#define  QueueElementReading 2
+#define  QueueElementRead 0
+void checkAndSetQueueState(volatile global QueueElement* element, uint state, uint expected)
+{
+  while(atomic_cmpxchg(&element->state, expected, state) != expected);
+}
+void setQueueState(volatile global QueueElement* element, uint state)
+{
+  uint old = atomic_xchg(&element->state, state);
+  //check: old + 1 % (QueueElementReading+1) == state
+}
+
+struct _QueueGlobal
+{
+  uint front;
+  uint back;
+  int filllevel;
+};
+typedef struct _QueueGlobal QueueGlobal;
+
+#define QueueLinkActive 0x80000000
+uint getQueuePosAndLock(volatile global uint* myQueueLink)
+{
+  while(true)
+  {
+    uint old = atomic_or(myQueueLink,QueueLinkActive);
+    if(!(old & QueueLinkActive))
+    {
+      //this one is not active
+      return 0;
+    }
+    else if((old & ~QueueLinkActive) == 0)
+    {
+      //it is just modified -> load again
+      continue;
+    }
+    else
+    {
+      //this is the current position
+      return (old & ~QueueLinkActive);
+    }
+  }
+}
+
+void setQueuePos(volatile global uint* myQueueLink, uint pos)
+{
+  uint old = atomic_xchg(myQueueLink, pos | QueueLinkActive);
+  //check old == QueueLinkActive
+}
+
+void unLockQueuePos(volatile global uint* myQueueLink)
+{
+  uint old = atomic_xchg(myQueueLink, 0);
+}
+
+void Enqueue(volatile global QueueGlobal* queueInfo, 
+             volatile global QueueElement* queue,
+             volatile global uint* queueLink,
+             QueueElement* element,
+             uint2 dim,
+             uint queueSize)
+{
+  //check if element is already in tehe Queue:
+  volatile global uint* myQueueLink = queueLink + (element->block.x + element->block.y*dim.x + dim.x*dim.y*element->node);
+  uint queuePos = getQueuePosAndLock(myQueueLink);
+  if(queuePos != 0)
+  {
+    //just update the priority, could be that this has just been dropped out of the queue.
+    //as long as the queue is big enough, this should not influence any other
+    //as long as the float is positive this should produce the right result!
+    atomic_max((volatile global uint*)(&queue[queuePos].priority), as_uint(element->priority));
+  }
+  else
+  {
+    //inc size 
+    uint filllevel = atomic_inc(&queueInfo->filllevel);
+    
+    //make sure there is enough space?
+    //assert(filllevel < queueSize)
+
+    //insert a new element
+    uint pos = atomic_inc(&queueInfo->back)%queueSize;
+
+    //make sure it is free?
+    //checkAndSetQueueState(queue + pos, QueueElementEmpty, QueueElementEmpty);
+
+    //insert the data
+    queue[pos].block = element->block;
+    queue[pos].priority = element->priority;
+    queue[pos].node = element->node;
+    write_mem_fence(CLK_GLOBAL_MEM_FENCE);
+    
+    //set the link
+    setQueuePos(myQueueLink, pos);
+    write_mem_fence(CLK_GLOBAL_MEM_FENCE);
+
+    //activate the queue element
+    setQueueState(queue + pos,  QueueElementReady);
+  }
+}
+
+bool Dequeue(volatile global QueueGlobal* queueInfo, 
+             volatile global QueueElement* queue,
+             volatile global uint* queueLink,
+             QueueElement* element,
+             uint2 dim,
+             uint queueSize)
+{
+  //is there something to get?
+  if(atomic_dec(&queueInfo->filllevel) <= 0)
+  {
+    atomic_inc(&queueInfo->filllevel);
+    return false;
+  }
+
+  //pop the front of the queue
+  uint pos = atomic_inc(&queueInfo->front)%queueSize;
+  
+  //wait for the element to be written/change to reading
+  checkAndSetQueueState(queue + pos, QueueElementReading, QueueElementReady);
+  
+  //read
+  element->block = queue[pos].block;
+  element->node =  queue[pos].node;
+
+  volatile global uint* myQueueLink = queueLink + (element->block.x + element->block.y*dim.x + dim.x*dim.y*element->node);
+
+  //remove link
+  unLockQueuePos(myQueueLink);
+
+  //free queue element
+  setQueueState(queue + pos, QueueElementRead);
+  return true;
+}
+//
+
+
 float getPenalty(read_only image2d_t costmap, int2 pos)
 {
   const sampler_t sampler = CLK_FILTER_NEAREST
