@@ -40,7 +40,7 @@ namespace qtfullscreensystem
 
       virtual void moveEvent(QMoveEvent *event);
 
-      void updateScreenShot(QPoint window_offset);
+      void updateScreenShot(QPoint window_offset,  QPoint window_end);
 
     private:
 

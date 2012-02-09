@@ -11,6 +11,7 @@
 #include <cstddef>
 #include <iostream>
 #include <memory>
+#include <algorithm>
 
 #include <GL/gl.h>
 
@@ -117,7 +118,7 @@ ShaderPtr loadShader( QString vert, QString frag )
     _core.startup(argv[1]);
     _core.attachComponent(&_config);
     _core.attachComponent(&_cost_analysis);
-    _core.attachComponent(&_routing);
+    //_core.attachComponent(&_routing);
     _core.attachComponent(&_renderer);
     _core.init();
 
@@ -201,13 +202,15 @@ void GLWidget::initializeGL()
   //----------------------------------------------------------------------------
   void GLWidget::paintGL()
   {
-    // X11: Window decorators add decoration after creating the window. So we
-    // need to get the new position of the window before drawing...
+    // X11: Window decorators add decoration after creating the window.
+    // Win7: may not allow a window on top of the task bar
+    //So we need to get the new frame of the window before drawing...
     QPoint window_offset = mapToGlobal(QPoint());
-    LOG_ENTER_FUNC() << "window offset=" << window_offset;
+    QPoint window_end = mapToGlobal(QPoint(width(), height()));
+    LOG_ENTER_FUNC() << "window frame=" << window_offset <<" <-> " <<  window_end;
 
     _core.process();
-    updateScreenShot(window_offset);
+    updateScreenShot(window_offset, window_end);
 
     // normal draw...
     glClear(GL_COLOR_BUFFER_BIT);
@@ -279,7 +282,7 @@ void GLWidget::initializeGL()
   }
 
   //----------------------------------------------------------------------------
-  void GLWidget::updateScreenShot(QPoint window_offset)
+  void GLWidget::updateScreenShot(QPoint window_offset, QPoint window_end)
   {
     if( _screenshot.isNull() )
     {
@@ -302,26 +305,36 @@ void GLWidget::initializeGL()
     glEnable(GL_TEXTURE_2D);
     glBindTexture(GL_TEXTURE_2D, _subscribe_links->_data->id);
 
-    float dx = static_cast<float>(window_offset.x()) / width(),
-          dy = static_cast<float>(window_offset.y()) / height();
+
+    float w0x = static_cast<float>(window_offset.x()) / _screenshot.width(),
+          w0y = 1- static_cast<float>(window_end.y()) / _screenshot.height();
+
+    float w1x = static_cast<float>(window_end.x()) / _screenshot.width(),
+          w1y = 1- static_cast<float>(window_offset.y()) / _screenshot.height();
+
+    //y for opengl and windows are swapped
+    //std::swap(w0y,w1y);
 
     shader->setUniformValue("desktop", 0);
     shader->setUniformValue("links", 1);
-    shader->setUniformValue("offset", dx, dy);
 
     glBegin( GL_QUADS );
 
-      glTexCoord2f(dx,dy);
-      glVertex2f(-1 + 2 * dx, -1 + 2 * dy);
+      glMultiTexCoord2f(GL_TEXTURE0, 0,0);
+      glMultiTexCoord2f(GL_TEXTURE1, w0x,w0y);
+      glVertex2f(-1, -1);
 
-      glTexCoord2f(1,dy);
-      glVertex2f(1,-1 + 2 * dy);
+      glMultiTexCoord2f(GL_TEXTURE0,1,0);
+      glMultiTexCoord2f(GL_TEXTURE1,w1x,w0y);
+      glVertex2f(1,-1);
 
-      glTexCoord2f(1,1);
+      glMultiTexCoord2f(GL_TEXTURE0,1,1);
+      glMultiTexCoord2f(GL_TEXTURE1,w1x,w1y);
       glVertex2f(1,1);
 
-      glTexCoord2f(dx,1);
-      glVertex2f(-1 + 2 * dx, 1);
+      glMultiTexCoord2f(GL_TEXTURE0,0,1);
+      glMultiTexCoord2f(GL_TEXTURE1,w0x,w1y);
+      glVertex2f(-1, 1);
 
     glEnd();
 
