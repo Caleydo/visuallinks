@@ -31,6 +31,9 @@ struct _QueueGlobal
   uint front;
   uint back;
   int filllevel;
+  uint activeBlocks;
+  uint processedBlocks;
+  int debug;
 };
 typedef struct _QueueGlobal QueueGlobal;
 
@@ -73,11 +76,11 @@ void Enqueue(volatile global QueueGlobal* queueInfo,
              volatile global QueueElement* queue,
              volatile global uint* queueLink,
              QueueElement* element,
-             uint2 dim,
+             int2 blocks,
              uint queueSize)
 {
   //check if element is already in tehe Queue:
-  volatile global uint* myQueueLink = queueLink + (element->block.x + element->block.y*dim.x + dim.x*dim.y*element->node);
+  volatile global uint* myQueueLink = queueLink + (element->block.x + element->block.y*blocks.x + blocks.x*blocks.y*element->node);
   uint queuePos = getQueuePosAndLock(myQueueLink);
   if(queuePos != 0)
   {
@@ -110,8 +113,12 @@ void Enqueue(volatile global QueueGlobal* queueInfo,
     setQueuePos(myQueueLink, pos);
     write_mem_fence(CLK_GLOBAL_MEM_FENCE);
 
+    //increase the number of active Blocks
+    atomic_inc(&queueInfo->activeBlocks);
+
     //activate the queue element
     setQueueState(queue + pos,  QueueElementReady);
+
   }
 }
 
@@ -119,7 +126,7 @@ bool Dequeue(volatile global QueueGlobal* queueInfo,
              volatile global QueueElement* queue,
              volatile global uint* queueLink,
              QueueElement* element,
-             uint2 dim,
+             int2 blocks,
              uint queueSize)
 {
   //is there something to get?
@@ -139,7 +146,7 @@ bool Dequeue(volatile global QueueGlobal* queueInfo,
   element->block = queue[pos].block;
   element->node =  queue[pos].node;
 
-  volatile global uint* myQueueLink = queueLink + (element->block.x + element->block.y*dim.x + dim.x*dim.y*element->node);
+  volatile global uint* myQueueLink = queueLink + (element->block.x + element->block.y*blocks.x + blocks.x*blocks.y*element->node);
 
   //remove link
   unLockQueuePos(myQueueLink);
@@ -160,15 +167,22 @@ float getPenalty(read_only image2d_t costmap, int2 pos)
   return read_imagef(costmap, sampler, pos).x;
 }
 
+__kernel void clearQueueLink(global uint* queueLink)
+{
+  queueLink[get_global_id(0)] = 0;
+}
+
 //it might be better to do that via opengl or something (arbitrary node shapes etc)
 __kernel void prepareRouting(read_only image2d_t costmap,
-                           global float* nodes,
-                           global uint4* queue,
-                           global uint* queue_pos,
+                           global float* routecost,
+                           global QueueElement* queue,
+                           global uint* queueLink,
+                           global QueueGlobal* queueInfo,
+                           uint queueSize,
                            global uint4* startingPoints,
                            const uint numStartingPoints,
                            const int2 dim,
-                           const int2 blocks)
+                           const int2 numBlocks)
 {
   __local bool hasStartingPoint;
   
@@ -180,7 +194,7 @@ __kernel void prepareRouting(read_only image2d_t costmap,
     hasStartingPoint = false;
   barrier(CLK_LOCAL_MEM_FENCE);
 
-  if(get_local_id(0) < dim.x && get_local_id(01) < dim.y)
+  if(get_local_id(0) < dim.x && get_local_id(1) < dim.y)
   {
     float cost = 0.01f*MAXFLOAT;
     if(startingPoints[id.z].x <= id.x && id.x <= startingPoints[id.z].z &&
@@ -190,14 +204,19 @@ __kernel void prepareRouting(read_only image2d_t costmap,
         hasStartingPoint = true;
     }
     //prepare data
-    nodes[dim.x*id.y+id.x + dim.x*dim.y*id.z] = cost;
-    if(hasStartingPoint == true)
+    routecost[dim.x*id.y+id.x + dim.x*dim.y*id.z] = cost;
+    barrier(CLK_LOCAL_MEM_FENCE);
+    if(hasStartingPoint && get_local_id(0) == 0 && get_local_id(1) == 0)
     {
-      //TODO insert into queue
+      //insert into queue
+      QueueElement element;
+      element.block = (ushort2)(get_group_id(0), get_group_id(1));
+      element.node = id.z;
+      element.priority = 0;
+
+      Enqueue(queueInfo, queue, queueLink, &element, numBlocks, queueSize);
     }
   }
-  
-  //nodes[dim.x*id.y+id.x] = 255*min(1.0f,getPenalty(costmap, id));
 }
 
 
@@ -206,16 +225,203 @@ local float* accessLocalCost(local float* l_costs, int2 id)
   return l_costs + (id.x+1 + (id.y+1)*(get_local_size(0)+2));
 }
 
+void copyInLocalData(global float* routecost,
+           int3 blockid,
+           local float* l_costs,
+           int2 dim)
+{
+  blockid.x *= get_local_size(0);
+  blockid.y *= get_local_size(1);
+
+  //copy cost to local
+  int local_linid = get_local_id(1)*get_local_size(0) + get_local_id(0);
+  for(int i = local_linid; i < (get_local_size(0)+2)*(get_local_size(1)+2); i += get_local_size(0)*get_local_size(1))
+  {
+    int2 global_pos = (int2)(blockid.x, blockid.y) + (int2)(i%(get_local_size(0)+2),i/(get_local_size(0)+2)) - (int2)(1,1);
+    
+    float incost = 0.01f*MAXFLOAT;
+    if(global_pos.x > 0 && global_pos.x < dim.x &&
+       global_pos.y > 0 && global_pos.y < dim.y)
+      incost = routecost[dim.x*global_pos.y + global_pos.x + dim.x*dim.y*blockid.z]; 
+    l_costs[i] = incost;
+  }
+}
+
+void copyOutLocalData(global float* routecost,
+           int3 blockid,
+           local float* l_costs,
+           int2 dim)
+{
+  //copy cost to global
+  int2 global_pos = (int2)(get_local_size(0)*blockid.x + get_local_id(0), get_local_size(1)*blockid.y + get_local_id(1));
+  if(global_pos.x < dim.x && global_pos.y < dim.y)
+    routecost[dim.x*global_pos.y + global_pos.x + dim.x*dim.y*blockid.z] = *accessLocalCost(l_costs, (int2)(get_local_id(0), get_local_id(1)));
+}
+
+bool route(read_only image2d_t costmap,
+           global float* routecost,
+           int3 blockid,
+           local float* l_costs,
+           int2 dim)
+{
+  copyInLocalData(routecost, blockid, l_costs, dim);
+
+
+  //route as long as there is change
+  local bool change;
+  change = true;
+  barrier(CLK_LOCAL_MEM_FENCE);
+
+  int2 localid = (int2)(get_local_id(0),get_local_id(1));
+  int2 globalid = (int2)(blockid.x*get_local_size(0)+get_local_id(0),blockid.y*get_local_size(1)+get_local_id(1));
+
+  //iterate over it
+  float myPenalty = getPenalty(costmap, globalid);
+  float local * myval = accessLocalCost(l_costs, localid);
+  int counter = -1;
+  while(change)
+  {
+    change = false;
+    barrier(CLK_LOCAL_MEM_FENCE);
+
+    float lastmyval = *myval;
+    
+    int2 offset;
+    for(offset.y = -1; offset.y  <= 1; ++offset.y)
+      for(offset.x = -1; offset.x <= 1; ++offset.x)
+      {
+        //TODO d is either 1 or M_SQRT2 - maybe it is faster to substitute
+        float d = native_sqrt((float)(offset.x*offset.x+offset.y*offset.y));
+        float penalty = 0.5f*(myPenalty + getPenalty(costmap, globalid + offset));
+        float c_other = *accessLocalCost(l_costs, localid + offset);
+        //TODO use custom params here
+        *myval = min(*myval, c_other + 0.01f*d + d*penalty);
+      }
+
+    if(*myval != lastmyval)
+      change = true;    
+    
+    barrier(CLK_LOCAL_MEM_FENCE);
+    ++counter;
+  }
+
+  copyOutLocalData(routecost, blockid, l_costs, dim);
+  return counter > 0;
+}
+
+void minBorderCosts(local float* l_costs,
+                    local float borderCosts[4])
+{
+  if(get_local_id(0) < 4)
+    borderCosts[get_local_id(0)] = MAXFLOAT;
+  barrier(CLK_LOCAL_MEM_FENCE);
+  float myCost = *accessLocalCost( l_costs, (int2)(get_local_id(0), get_local_id(1)) );
+  int target = -1;
+  if(get_local_id(0) == 0)
+    atomic_min((local uint*)(&borderCosts[0]), as_uint(myCost));
+  else if(get_local_id(0) == get_local_size(0) - 1)
+    atomic_min((local uint*)(&borderCosts[2]), as_uint(myCost));
+  if(get_local_id(1) == 0)
+    atomic_min((local uint*)(&borderCosts[1]), as_uint(myCost));
+  else if(get_local_id(1) == get_local_size(1) - 1)
+    atomic_min((local uint*)(&borderCosts[3]), as_uint(myCost));
+  barrier(CLK_LOCAL_MEM_FENCE);
+}
+
 __kernel void routing(read_only image2d_t costmap,
-                      global float* nodes,
-                      global uint4* queue,
-                      global uint* queue_pos,
-                      global uint4* startingPoints,
-                      const uint numStartingPoints,
+                      global float* routecost,
+                      volatile global QueueElement* queue,
+                      volatile global uint* queueLink,
+                      volatile global QueueGlobal* queueInfo,
+                      uint queueSize,
                       const int2 dim,
-                      const int2 blocks,
+                      const int2 numBlocks,
+                      const uint processedBlocksThreshold, 
                       local float* l_costs)
 {
+  while(queueInfo->activeBlocks > 0 && queueInfo->processedBlocks < processedBlocksThreshold)
+  {
+    local int3 blockId;
+    if(get_local_id(0) == 0 && get_local_id(1) == 0)
+    {
+      QueueElement element;
+      if(Dequeue(queueInfo, queue, queueLink, &element, numBlocks, queueSize))
+      {
+        blockId.x = element.block.x;
+        blockId.y = element.block.y;
+        blockId.z = element.node;
+      }
+      else
+        blockId.x = blockId.y = blockId.z = -1;
+    }
+    barrier(CLK_LOCAL_MEM_FENCE);
+    
+    if(blockId.x > -1)
+    {
+      //process it
+      bool change = route(costmap, routecost, blockId, l_costs, dim);
+
+      //add surrounding ones
+      if(change)
+      {
+        local float borderCosts[4];
+        minBorderCosts(l_costs, borderCosts);
+        if(get_local_id(0) == 0 && get_local_id(1) == 0)
+        {
+          QueueElement element;
+          element.block.x = blockId.x;
+          element.block.y = blockId.y;
+          element.node = blockId.z;
+
+          if(blockId.x - 1 >= 0)
+          {
+            element.block.x = blockId.x - 1;
+            element.priority = borderCosts[0];
+            Enqueue(queueInfo, queue, queueLink, &element, numBlocks, queueSize);
+            element.block.x = blockId.x;
+          }
+          if(blockId.x + 1 < numBlocks.x)
+          {
+            element.block.x = blockId.x + 1;
+            element.priority = borderCosts[2];
+            Enqueue(queueInfo, queue, queueLink, &element, numBlocks, queueSize);
+            element.block.x = blockId.x;
+          }
+          if(blockId.y - 1 >= 0)
+          {
+            element.block.y = blockId.y - 1;
+            element.priority = borderCosts[1];
+            Enqueue(queueInfo, queue, queueLink, &element, numBlocks, queueSize);
+          }
+          if(blockId.y + 1 < numBlocks.y)
+          {
+            element.block.y = blockId.y + 1;
+            element.priority = borderCosts[1];
+            Enqueue(queueInfo, queue, queueLink, &element, numBlocks, queueSize);
+          }
+        }
+      }
+      //else if(get_local_id(0) == 0 && get_local_id(1) == 0)
+      //  atomic_inc(&queueInfo->debug);
+
+      //update counter
+      if(get_local_id(0) == 0 && get_local_id(1) == 0)
+      {
+        atomic_dec(&queueInfo->activeBlocks);
+        atomic_inc(&queueInfo->processedBlocks);
+      }
+      
+    }
+    barrier(CLK_LOCAL_MEM_FENCE);
+  }
+}
+
+#if 0
+  int3 blockid = {get_group_id(0), get_group_id(1), get_global_id(2)};
+  route(costmap, routecost, blockid, l_costs, dim);
+  return;
+
+
   int3 id = {get_global_id(0), get_global_id(1), get_global_id(2)};
 
   //copy cost to local
@@ -228,7 +434,7 @@ __kernel void routing(read_only image2d_t costmap,
     float incost = 0.01f*MAXFLOAT;
     if(global_pos.x > 0 && global_pos.x < dim.x &&
        global_pos.y > 0 && global_pos.y < dim.y)
-      incost = nodes[dim.x*global_pos.y + global_pos.x + dim.x*dim.y*id.z]; 
+      incost = routecost[dim.x*global_pos.y + global_pos.x + dim.x*dim.y*id.z]; 
     l_costs[i] = incost;
   }
 
@@ -269,10 +475,9 @@ __kernel void routing(read_only image2d_t costmap,
   }
 
   //write back
-  nodes[dim.x*globalid.y + globalid.x + dim.x*dim.y*id.z] = *myval;
-  //nodes[dim.x*globalid.y + globalid.x + dim.x*dim.y*id.z] =  getPenalty(costmap, globalid);
+  routecost[dim.x*globalid.y + globalid.x + dim.x*dim.y*id.z] = *myval;
 }
-
+#endif
 
 
 #if 0

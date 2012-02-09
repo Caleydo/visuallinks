@@ -103,6 +103,7 @@ namespace LinksRouting
          {
            use_devices.clear();
            use_devices.push_back(tdevice);
+           break;
          }
       }
 
@@ -170,7 +171,7 @@ namespace LinksRouting
               << std::endl;
 
 
-    _cl_command_queue = cl::CommandQueue(_cl_context, _cl_device);
+    _cl_command_queue = cl::CommandQueue(_cl_context, _cl_device, CL_QUEUE_PROFILING_ENABLE);
 
     // -----------------------------
     // And now the OpenCL program
@@ -205,6 +206,7 @@ namespace LinksRouting
               << "\n -- Log: " << _cl_program.getBuildInfo<CL_PROGRAM_BUILD_LOG>(_cl_device)
               << std::endl;
 
+    _cl_clearQueueLink_kernel = cl::Kernel(_cl_program, "clearQueueLink");
     _cl_prepare_kernel = cl::Kernel(_cl_program, "prepareRouting");
     _cl_shortestpath_kernel = cl::Kernel(_cl_program, "routing");
   }
@@ -276,60 +278,142 @@ namespace LinksRouting
     h_targets.push_back(uint4(91*width/100, 10*height/100, 91*width/100+10, 10*height/100+10));
     //
 
-    //the costs
+
+    //structs used in kernel
+    struct cl_QueueElement
+    {
+      cl_ushort2 block;
+      cl_ushort node;
+      cl_ushort _unused_;
+      cl_float priority;
+      cl_uint state;
+    };
+    struct cl_QueueGlobal
+    {
+      cl_uint front;
+      cl_uint back;
+      cl_int filllevel;
+      cl_uint activeBlocks;
+      cl_uint processedBlocks;
+      cl_int debug;
+    };
+
+    //std::cout << sizeof(cl_QueueElement) << " " << sizeof(cl_QueueGlobal) << std::endl;
+
+    //setup queue
+    int numtargets = h_targets.size();
+    int dim[] = {width, height};
     unsigned int numBlocks[2] = {divup<unsigned>(width,_blockSize[0]),divup<unsigned>(height,_blockSize[1])};
     unsigned int sumBlocks = numBlocks[0]*numBlocks[1];
-    cl::Buffer buf(_cl_context, CL_MEM_READ_WRITE, num_points * h_targets.size() * sizeof(float));
+    unsigned int overAllBlocks = sumBlocks * numtargets;
+    unsigned int blockProcessThreshold = overAllBlocks*40;
+    cl::Buffer buf(_cl_context, CL_MEM_READ_WRITE, num_points * numtargets * sizeof(float));
 
-    cl::Buffer queue_pos(_cl_context, CL_MEM_READ_WRITE, sumBlocks * h_targets.size() * sizeof(unsigned int));
-    cl::Buffer queue(_cl_context, CL_MEM_READ_WRITE, sumBlocks * h_targets.size() * sizeof(cl_uint4));
-    cl::Buffer targets(_cl_context, CL_MEM_READ_WRITE, h_targets.size()*sizeof(cl_uint4));
-    _cl_command_queue.enqueueWriteBuffer(targets, true, 0, h_targets.size()*sizeof(cl_uint4), &h_targets[0]);
+    cl::Buffer queue_info(_cl_context, CL_MEM_READ_WRITE, sizeof(cl_QueueGlobal));
+    cl::Buffer queue_pos(_cl_context, CL_MEM_READ_WRITE, overAllBlocks * sizeof(unsigned int));
+    cl::Buffer queue(_cl_context, CL_MEM_READ_WRITE, overAllBlocks *sizeof(cl_QueueElement));
+    cl::Buffer targets(_cl_context, CL_MEM_READ_WRITE,numtargets*sizeof(cl_uint4));
+    
+    _cl_command_queue.enqueueWriteBuffer(targets, true, 0, numtargets*sizeof(cl_uint4), &h_targets[0]);
+
+    cl_QueueGlobal baseQueueInfo;
+    baseQueueInfo.front = 0;
+    baseQueueInfo.back = 0;
+    baseQueueInfo.filllevel = 0;
+    baseQueueInfo.activeBlocks = 0;
+    baseQueueInfo.processedBlocks = 0;
+    baseQueueInfo.debug = 0;
+
+    _cl_command_queue.enqueueWriteBuffer(queue_info, true, 0, sizeof(cl_QueueGlobal), &baseQueueInfo);
+
+    _cl_clearQueueLink_kernel.setArg(0, queue_pos);
+    cl::Event clearQueueLink_Event;
+    _cl_command_queue.enqueueNDRangeKernel
+    (
+      _cl_clearQueueLink_kernel,
+      cl::NullRange,
+      cl::NDRange(numBlocks[0]*numBlocks[1]*numtargets),
+      cl::NullRange,
+      0,
+      &clearQueueLink_Event
+    );
 
     _cl_prepare_kernel.setArg(0, memory_gl[0]);
     _cl_prepare_kernel.setArg(1, buf);
     _cl_prepare_kernel.setArg(2, queue);
     _cl_prepare_kernel.setArg(3, queue_pos);
-    _cl_prepare_kernel.setArg(4, targets);
-    int numtargets = h_targets.size();
-    _cl_prepare_kernel.setArg(5, sizeof(int), &numtargets);
-    int dim[] = {width, height};
-    _cl_prepare_kernel.setArg(6, 2 * sizeof(int), dim);
-    _cl_prepare_kernel.setArg(7, 2 * sizeof(int), numBlocks);
+    _cl_prepare_kernel.setArg(4, queue_info);
+    _cl_prepare_kernel.setArg(5, sizeof(unsigned int), &overAllBlocks);
+    _cl_prepare_kernel.setArg(6, targets);
+    _cl_prepare_kernel.setArg(7, sizeof(int), &numtargets);
+    _cl_prepare_kernel.setArg(8, 2 * sizeof(int), dim);
+    _cl_prepare_kernel.setArg(9, 2 * sizeof(int), numBlocks);
 
+    cl::Event prepare_kernel_Event;
     _cl_command_queue.enqueueNDRangeKernel
     (
       _cl_prepare_kernel,
       cl::NullRange,
       cl::NDRange(_blockSize[0]*numBlocks[0],_blockSize[1]*numBlocks[1],numtargets),
-      cl::NDRange(_blockSize[0], _blockSize[1], 1)
+      cl::NDRange(_blockSize[0], _blockSize[1], 1),
+      0,
+      &prepare_kernel_Event
     );
-    
 
     _cl_shortestpath_kernel.setArg(0, memory_gl[0]);
     _cl_shortestpath_kernel.setArg(1, buf);
     _cl_shortestpath_kernel.setArg(2, queue);
     _cl_shortestpath_kernel.setArg(3, queue_pos);
-    _cl_shortestpath_kernel.setArg(4, targets);
-    _cl_shortestpath_kernel.setArg(5, sizeof(int), &numtargets);
+    _cl_shortestpath_kernel.setArg(4, queue_info);
+    _cl_shortestpath_kernel.setArg(5, sizeof(unsigned int), &overAllBlocks);
     _cl_shortestpath_kernel.setArg(6, 2 * sizeof(int), dim);
     _cl_shortestpath_kernel.setArg(7, 2 * sizeof(int), numBlocks);
-    _cl_shortestpath_kernel.setArg(8, sizeof(float)*(_blockSize[0]+2)*(_blockSize[1]+2), NULL);
+    _cl_shortestpath_kernel.setArg(8, sizeof(unsigned int), &blockProcessThreshold);
+    _cl_shortestpath_kernel.setArg(9, sizeof(float)*(_blockSize[0]+2)*(_blockSize[1]+2), NULL);
     
-    for(int iteration = 0; iteration < 200; ++iteration)
-    {
-      _cl_command_queue.enqueueNDRangeKernel
-      (
-        _cl_shortestpath_kernel,
-        cl::NullRange,
-        cl::NDRange(_blockSize[0]*numBlocks[0],_blockSize[1]*numBlocks[1],numtargets),
-        cl::NDRange(_blockSize[0], _blockSize[1], 1)
-      );
-    }
+    cl::Event shortestpath_Event;
+    _cl_command_queue.enqueueNDRangeKernel
+    (
+      _cl_shortestpath_kernel,
+      cl::NullRange,
+      cl::NDRange(_blockSize[0]*numBlocks[0],_blockSize[1]*numBlocks[1],numtargets),
+      cl::NDRange(_blockSize[0], _blockSize[1], 1),
+      0,
+      &shortestpath_Event
+    );
 
+    //_cl_command_queue.enqueueReadBuffer(queue_info, true, 0, sizeof(cl_QueueGlobal), &baseQueueInfo);
+    //std::cout << "front: " << baseQueueInfo.front << " "
+    //          << "back: " << baseQueueInfo.back << " "
+    //          << "filllevel: " << baseQueueInfo.filllevel << " "
+    //          << "activeBlocks: " << baseQueueInfo.activeBlocks << " "
+    //          << "processedBlocks: " << baseQueueInfo.processedBlocks << " "
+    //          << "debug: " << baseQueueInfo.debug << "\n";
+    //std::vector<cl_QueueElement> test(baseQueueInfo.back-baseQueueInfo.front);
+    //_cl_command_queue.enqueueReadBuffer(queue, true, sizeof(cl_QueueElement)*baseQueueInfo.front, sizeof(cl_QueueElement)*(baseQueueInfo.back-baseQueueInfo.front), &test[0]);
+    //for(int i = 0; i < test.size(); ++i)
+    //{
+    //  std::cout << test[i].block.s[0] << " "
+    //            << test[i].block.s[1] << " "
+    //            << test[i].node << " "
+    //            << test[i].priority << "\n";
+    //}
+    //_cl_command_queue.finish();
 
     _cl_command_queue.enqueueReleaseGLObjects(&memory_gl);
     _cl_command_queue.finish();
+
+    cl_ulong start, end;
+    std::cout << "CLInfo:\n";
+    clearQueueLink_Event.getProfilingInfo(CL_PROFILING_COMMAND_END, &end);
+    clearQueueLink_Event.getProfilingInfo(CL_PROFILING_COMMAND_START, &start);
+    std::cout << " - clearing data: " << (end-start)/1000000.0 << "ms\n";
+    prepare_kernel_Event.getProfilingInfo(CL_PROFILING_COMMAND_END, &end);
+    prepare_kernel_Event.getProfilingInfo(CL_PROFILING_COMMAND_START, &start);
+    std::cout << " - preparing data: " << (end-start)/1000000.0  << "ms\n";
+    shortestpath_Event.getProfilingInfo(CL_PROFILING_COMMAND_END, &end);
+    shortestpath_Event.getProfilingInfo(CL_PROFILING_COMMAND_START, &start);
+    std::cout << " - routing: " << (end-start)/1000000.0  << "ms\n";
 
     static int c = 8;
     if( !--c )

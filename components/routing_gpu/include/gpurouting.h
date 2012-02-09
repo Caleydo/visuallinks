@@ -75,6 +75,7 @@ namespace LinksRouting
       cl::Program       _cl_program;
       cl::Kernel        _cl_prepare_kernel;
       cl::Kernel        _cl_shortestpath_kernel;
+      cl::Kernel        _cl_clearQueueLink_kernel;
 
       int _blockSize[2];
 
