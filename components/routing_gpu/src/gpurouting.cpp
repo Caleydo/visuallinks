@@ -4,12 +4,17 @@
 #include <fstream>
 #include <cmath>
 
+
 #if defined(__APPLE__) || defined(__MACOSX)
 # error "Context sharing not supported yet."
 #elif defined(_WIN32)
 //# include <GL/wgl.h>
+#include <direct.h>
+#define GetCurrentDir _getcwd
 #else
 # include <GL/glx.h>
+#include <unistd.h>
+#define GetCurrentDir getcwd
 #endif
 
 #define INLINE_TEXT(txt) #txt
@@ -183,14 +188,30 @@ namespace LinksRouting
     std::string source( std::istreambuf_iterator<char>(source_file),
                        (std::istreambuf_iterator<char>()) );
 
+    //now handled via include
+    //std::ifstream source_file2("sorting.cl");
+    //if( !source_file2 )
+    //  throw std::runtime_error("Failed to open sorting.cl");
+    //std::string source2( std::istreambuf_iterator<char>(source_file2),
+    //                   (std::istreambuf_iterator<char>()) );
+
     cl::Program::Sources sources;
     sources.push_back( std::make_pair(source.c_str(), source.length()) );
+    //sources.push_back( std::make_pair(source2.c_str(), source2.length()) );
 
     _cl_program = cl::Program(_cl_context, sources);
 
+    char c_cdir[1024];
+    if (!GetCurrentDir(c_cdir, 1024))
+      throw std::runtime_error("Failed to retrieve current working directory");
     try
     {
-      _cl_program.build(devices);
+      std::string buildargs;
+      buildargs += "-cl-fast-relaxed-math";
+      buildargs += " -I ";
+      buildargs += c_cdir;
+      //std::cout << buildargs << std::endl;
+      _cl_program.build(devices, buildargs.c_str());
     }
     catch(cl::Error& ex)
     {
@@ -209,6 +230,47 @@ namespace LinksRouting
     _cl_clearQueueLink_kernel = cl::Kernel(_cl_program, "clearQueueLink");
     _cl_prepare_kernel = cl::Kernel(_cl_program, "prepareRouting");
     _cl_shortestpath_kernel = cl::Kernel(_cl_program, "routing");
+
+    //test
+    int blocksize = 64;
+    int datasize = 4*blocksize;
+    cl::Kernel sorting_test = cl::Kernel(_cl_program, "sortTest");
+    cl::Buffer keys(_cl_context, CL_MEM_READ_WRITE, datasize*sizeof(cl_float));
+    cl::Buffer values(_cl_context, CL_MEM_READ_WRITE, datasize*sizeof(cl_uint));
+    std::vector<float> h_keys;
+    std::vector<int> h_values;
+    h_keys.reserve(datasize);
+    h_values.reserve(datasize);
+    for(int i = 0; i < datasize; ++i)
+    {
+      int v = rand();
+      h_keys.push_back(v/1000.0f);
+      h_values.push_back(v);
+    }
+    
+    _cl_command_queue.enqueueWriteBuffer(keys, true, 0, datasize*sizeof(cl_float), &h_keys[0]);
+    _cl_command_queue.enqueueWriteBuffer(values, true, 0, datasize*sizeof(cl_uint), &h_values[0]);
+
+    sorting_test.setArg(0, keys);
+    sorting_test.setArg(1, values);
+    sorting_test.setArg(2, 2*blocksize*sizeof(cl_float), NULL);
+    sorting_test.setArg(3, 2*blocksize*sizeof(cl_uint), NULL);
+
+   _cl_command_queue.enqueueNDRangeKernel
+    (
+      sorting_test,
+      cl::NullRange,
+      cl::NDRange(datasize/2),
+      cl::NDRange(blocksize)
+    );
+
+    _cl_command_queue.finish();
+    _cl_command_queue.enqueueReadBuffer(keys, true, 0, datasize*sizeof(cl_float), &h_keys[0]);
+    _cl_command_queue.enqueueReadBuffer(values, true, 0, datasize*sizeof(cl_uint), &h_values[0]);
+
+    for(int i = 0; i < datasize; ++i)
+      std::cout <<  "<" << h_keys[i] << "," << h_values[i] << ">,\n";
+    std::cout << std::endl;
   }
   void GPURouting::shutdown()
   {

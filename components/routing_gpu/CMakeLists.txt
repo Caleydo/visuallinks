@@ -24,8 +24,9 @@ set(SOURCE_FILES
 
 set(CL_FILES
   ${COMPONENTROOT}/routing.cl
+  ${COMPONENTROOT}/sorting.cl
 )
 
 add_library(gpurouting ${HEADER_FILES} ${SOURCE_FILES} ${CL_FILES})
 target_link_libraries(gpurouting ${OPENCL_LIBRARIES})
-add_component_data(${COMPONENTINC_DIR} gpurouting ${CL_FILES})
+add_component_data(${COMPONENTINC_DIR} gpurouting CL_FILES)

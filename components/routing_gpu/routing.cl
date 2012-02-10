@@ -1,6 +1,12 @@
 
-//QUEUE
+#define KEY_TYPE float
+#define VALUE_TYPE uint
 
+#include "sorting.cl"
+
+
+
+//QUEUE
 struct _QueueElement
 {
   ushort2 block;
