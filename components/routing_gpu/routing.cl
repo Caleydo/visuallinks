@@ -1,22 +1,14 @@
 
 #define KEY_TYPE float
 #define VALUE_TYPE uint
-
 #include "sorting.cl"
 
 
 
 //QUEUE
-struct _QueueElement
-{
-  ushort2 block;
-  ushort node;
-  ushort _unused_;
-  float priority;
-  uint state;
-};
-typedef struct _QueueElement QueueElement;
+typedef int4 QueueElement;
 
+#define QueueElementCopySteps 3
 
 #define  QueueElementEmpty 0
 #define  QueueElementReady 1
@@ -24,12 +16,28 @@ typedef struct _QueueElement QueueElement;
 #define  QueueElementRead 0
 void checkAndSetQueueState(volatile global QueueElement* element, uint state, uint expected)
 {
-  while(atomic_cmpxchg(&element->state, expected, state) != expected);
+  volatile global int* pstate = ((volatile global int*)element) + 3;
+  while(atomic_cmpxchg(pstate, expected, state) != expected);
 }
 void setQueueState(volatile global QueueElement* element, uint state)
 {
-  uint old = atomic_xchg(&element->state, state);
+  volatile global int* pstate = ((volatile global int*)element) + 3;
+  uint old = atomic_xchg(pstate, state);
   //check: old + 1 % (QueueElementReading+1) == state
+}
+uint getQueueState(volatile global QueueElement* element)
+{
+  return element->w;
+}
+
+int3 getBlockId(volatile global QueueElement* element)
+{
+  return (*element).xyz;
+}
+
+void setBlockId(volatile global QueueElement* element, int3 block)
+{
+  (*element).xyz = block;
 }
 
 struct _QueueGlobal
@@ -39,64 +47,42 @@ struct _QueueGlobal
   int filllevel;
   uint activeBlocks;
   uint processedBlocks;
+  uint sortingBarrier;
   int debug;
 };
 typedef struct _QueueGlobal QueueGlobal;
 
-#define QueueLinkActive 0x80000000
-uint getQueuePosAndLock(volatile global uint* myQueueLink)
+#define linAccess3D(id, dim) \
+  ((id).x + ( (id).y + (id).z  * (dim.y) )* (dim).x)
+
+float atomic_min_float(volatile global float* p, float val)
 {
-  while(true)
-  {
-    uint old = atomic_or(myQueueLink,QueueLinkActive);
-    if(!(old & QueueLinkActive))
-    {
-      //this one is not active
-      return 0;
-    }
-    else if((old & ~QueueLinkActive) == 0)
-    {
-      //it is just modified -> load again
-      continue;
-    }
-    else
-    {
-      //this is the current position
-      return (old & ~QueueLinkActive);
-    }
-  }
+  return as_float(atomic_min((volatile global uint*)(p),as_uint(val)));
 }
 
-void setQueuePos(volatile global uint* myQueueLink, uint pos)
-{
-  uint old = atomic_xchg(myQueueLink, pos | QueueLinkActive);
-  //check old == QueueLinkActive
-}
-
-void unLockQueuePos(volatile global uint* myQueueLink)
-{
-  uint old = atomic_xchg(myQueueLink, 0);
-}
 
 void Enqueue(volatile global QueueGlobal* queueInfo, 
              volatile global QueueElement* queue,
-             volatile global uint* queueLink,
-             QueueElement* element,
+             volatile global float* queuePriority,
+             int3 block,
+             float priority,
              int2 blocks,
              uint queueSize)
 {
   //check if element is already in tehe Queue:
-  volatile global uint* myQueueLink = queueLink + (element->block.x + element->block.y*blocks.x + blocks.x*blocks.y*element->node);
-  uint queuePos = getQueuePosAndLock(myQueueLink);
-  if(queuePos != 0)
-  {
-    //just update the priority, could be that this has just been dropped out of the queue.
-    //as long as the queue is big enough, this should not influence any other
-    //as long as the float is positive this should produce the right result!
-    atomic_max((volatile global uint*)(&queue[queuePos].priority), as_uint(element->priority));
-  }
+  
+  volatile global float* myQueuePriority = queuePriority + linAccess3D(block, blocks);
+
+  //update priority:
+  float old_priority = atomic_min_float(myQueuePriority, priority);
+  
+  //if there is a priority, it is in the queue
+  if(old_priority != MAXFLOAT)
+    return;
   else
   {
+    //add to queue
+
     //inc size 
     uint filllevel = atomic_inc(&queueInfo->filllevel);
     
@@ -107,18 +93,12 @@ void Enqueue(volatile global QueueGlobal* queueInfo,
     uint pos = atomic_inc(&queueInfo->back)%queueSize;
 
     //make sure it is free?
-    //checkAndSetQueueState(queue + pos, QueueElementEmpty, QueueElementEmpty);
+    //queue[pos] == QueueElementEmpty
 
     //insert the data
-    queue[pos].block = element->block;
-    queue[pos].priority = element->priority;
-    queue[pos].node = element->node;
+    setBlockId(queue + pos, block);
     write_mem_fence(CLK_GLOBAL_MEM_FENCE);
     
-    //set the link
-    setQueuePos(myQueueLink, pos);
-    write_mem_fence(CLK_GLOBAL_MEM_FENCE);
-
     //increase the number of active Blocks
     atomic_inc(&queueInfo->activeBlocks);
 
@@ -130,8 +110,8 @@ void Enqueue(volatile global QueueGlobal* queueInfo,
 
 bool Dequeue(volatile global QueueGlobal* queueInfo, 
              volatile global QueueElement* queue,
-             volatile global uint* queueLink,
-             QueueElement* element,
+             volatile global float* queuePriority,
+             int3* element,
              int2 blocks,
              uint queueSize)
 {
@@ -144,18 +124,25 @@ bool Dequeue(volatile global QueueGlobal* queueInfo,
 
   //pop the front of the queue
   uint pos = atomic_inc(&queueInfo->front)%queueSize;
+
+  //check for barrier
+  uint barrierPos = queueInfo->sortingBarrier;
+  uint back = queueInfo->back%queueSize;
+  while(barrierPos <= pos && barrierPos > back)
+  {
+    barrierPos = queueInfo->sortingBarrier;
+    queueInfo->debug += 100000;
+  }
   
   //wait for the element to be written/change to reading
   checkAndSetQueueState(queue + pos, QueueElementReading, QueueElementReady);
   
   //read
-  element->block = queue[pos].block;
-  element->node =  queue[pos].node;
-
-  volatile global uint* myQueueLink = queueLink + (element->block.x + element->block.y*blocks.x + blocks.x*blocks.y*element->node);
-
-  //remove link
-  unLockQueuePos(myQueueLink);
+  *element = getBlockId(queue + pos);
+  
+  //remove priority (mark as not in queue)
+  volatile global float* myQueuePriority = queuePriority + linAccess3D(*element, blocks);
+  atomic_xchg(myQueuePriority, MAXFLOAT);
 
   //free queue element
   setQueueState(queue + pos, QueueElementRead);
@@ -173,16 +160,16 @@ float getPenalty(read_only image2d_t costmap, int2 pos)
   return read_imagef(costmap, sampler, pos).x;
 }
 
-__kernel void clearQueueLink(global uint* queueLink)
+__kernel void clearQueueLink(global float* queuePriority)
 {
-  queueLink[get_global_id(0)] = 0;
+  queuePriority[get_global_id(0)] = MAXFLOAT;
 }
 
 //it might be better to do that via opengl or something (arbitrary node shapes etc)
 __kernel void prepareRouting(read_only image2d_t costmap,
                            global float* routecost,
                            global QueueElement* queue,
-                           global uint* queueLink,
+                           global float* queuePriority,
                            global QueueGlobal* queueInfo,
                            uint queueSize,
                            global uint4* startingPoints,
@@ -215,12 +202,8 @@ __kernel void prepareRouting(read_only image2d_t costmap,
     if(hasStartingPoint && get_local_id(0) == 0 && get_local_id(1) == 0)
     {
       //insert into queue
-      QueueElement element;
-      element.block = (ushort2)(get_group_id(0), get_group_id(1));
-      element.node = id.z;
-      element.priority = 0;
-
-      Enqueue(queueInfo, queue, queueLink, &element, numBlocks, queueSize);
+      int3 block = (int3)(get_group_id(0), get_group_id(1), id.z);
+      Enqueue(queueInfo, queue, queuePriority, block, 0, numBlocks, queueSize);
     }
   }
 }
@@ -334,10 +317,10 @@ void minBorderCosts(local float* l_costs,
   barrier(CLK_LOCAL_MEM_FENCE);
 }
 
-__kernel void routing(read_only image2d_t costmap,
+void routing_worker(read_only image2d_t costmap,
                       global float* routecost,
                       volatile global QueueElement* queue,
-                      volatile global uint* queueLink,
+                      volatile global float* queuePriority,
                       volatile global QueueGlobal* queueInfo,
                       uint queueSize,
                       const int2 dim,
@@ -350,15 +333,11 @@ __kernel void routing(read_only image2d_t costmap,
     local int3 blockId;
     if(get_local_id(0) == 0 && get_local_id(1) == 0)
     {
-      QueueElement element;
-      if(Dequeue(queueInfo, queue, queueLink, &element, numBlocks, queueSize))
-      {
-        blockId.x = element.block.x;
-        blockId.y = element.block.y;
-        blockId.z = element.node;
-      }
+      int3 element;
+      if(Dequeue(queueInfo, queue, queuePriority, &element, numBlocks, queueSize))
+        blockId = element;
       else
-        blockId.x = blockId.y = blockId.z = -1;
+        blockId.x = -1;
     }
     barrier(CLK_LOCAL_MEM_FENCE);
     
@@ -374,36 +353,28 @@ __kernel void routing(read_only image2d_t costmap,
         minBorderCosts(l_costs, borderCosts);
         if(get_local_id(0) == 0 && get_local_id(1) == 0)
         {
-          QueueElement element;
-          element.block.x = blockId.x;
-          element.block.y = blockId.y;
-          element.node = blockId.z;
-
+          int3 block = blockId;
           if(blockId.x - 1 >= 0)
           {
-            element.block.x = blockId.x - 1;
-            element.priority = borderCosts[0];
-            Enqueue(queueInfo, queue, queueLink, &element, numBlocks, queueSize);
-            element.block.x = blockId.x;
+            block.x = blockId.x - 1;
+            Enqueue(queueInfo, queue, queuePriority, block, borderCosts[0], numBlocks, queueSize);
+            block.x = blockId.x;
           }
           if(blockId.x + 1 < numBlocks.x)
           {
-            element.block.x = blockId.x + 1;
-            element.priority = borderCosts[2];
-            Enqueue(queueInfo, queue, queueLink, &element, numBlocks, queueSize);
-            element.block.x = blockId.x;
+            block.x = blockId.x + 1;
+            Enqueue(queueInfo, queue, queuePriority, block, borderCosts[2], numBlocks, queueSize);
+            block.x = blockId.x;
           }
           if(blockId.y - 1 >= 0)
           {
-            element.block.y = blockId.y - 1;
-            element.priority = borderCosts[1];
-            Enqueue(queueInfo, queue, queueLink, &element, numBlocks, queueSize);
+            block.y = blockId.y - 1;
+            Enqueue(queueInfo, queue, queuePriority, block, borderCosts[1], numBlocks, queueSize);
           }
           if(blockId.y + 1 < numBlocks.y)
           {
-            element.block.y = blockId.y + 1;
-            element.priority = borderCosts[1];
-            Enqueue(queueInfo, queue, queueLink, &element, numBlocks, queueSize);
+            block.y = blockId.y + 1;
+            Enqueue(queueInfo, queue, queuePriority, block, borderCosts[3], numBlocks, queueSize);
           }
         }
       }
@@ -422,6 +393,162 @@ __kernel void routing(read_only image2d_t costmap,
   }
 }
 
+
+uint wrappedAroundQueueId(uint id, uint queueSize)
+{
+  return min(id, id + queueSize);
+}
+void sortQueue(volatile global QueueElement* queue,
+               volatile global QueueGlobal* queueInfo,
+               volatile global float* queuePriorities,
+               uint queueSize,
+               const int2 numBlocks,
+               const uint processedBlocksThreshold, 
+               local float* l_priorites,
+               local uint* l_ids)
+{
+  local bool ok;
+  uint nextsort = queueSize + 1;
+  uint linid = get_local_id(1) * get_local_size(0) + get_local_id(0);
+  uint threads = get_local_size(0)*get_local_size(1);
+  uint sortMargin =  4*threads;
+
+  //prepare local ids
+  l_ids[linid] = linid;
+  l_ids[threads + linid] = threads + linid;
+  
+  while(queueInfo->activeBlocks > 0 && queueInfo->processedBlocks < processedBlocksThreshold)
+  {
+    ok = true;
+    barrier(CLK_LOCAL_MEM_FENCE); 
+
+    //restart at back?
+    if(nextsort > queueSize)
+      nextsort = queueInfo->back % queueSize; //the back might just be adding
+
+
+    //is the distance bigger than the margin? (ring buffer)
+    uint margin = wrappedAroundQueueId(nextsort - (queueInfo->front%queueSize), queueSize);
+    if(margin < sortMargin)
+    {
+      //margin is too small, dont even bother
+      nextsort = queueSize + 1;
+      continue;
+    }
+
+    //copy the data in
+    uint in_out_id0 = wrappedAroundQueueId(nextsort - 2*threads + linid, queueSize);
+    //make sure it is ready
+    int err_counter = 100;
+    while(getQueueState(queue + in_out_id0) != QueueElementReady && --err_counter);
+    if(!err_counter) ok = false;
+    int3 blockId0 = getBlockId(queue + in_out_id0);
+    l_priorites[linid] = queuePriorities[linAccess3D(blockId0, numBlocks)];
+
+    uint in_out_id1 = wrappedAroundQueueId(nextsort - threads + linid, queueSize);
+    //make sure it is ready
+    err_counter = 100;
+    while(getQueueState(queue + in_out_id1) != QueueElementReady && --err_counter);
+    if(!err_counter) ok = false;
+    int3 blockId1 = getBlockId(queue + in_out_id1);
+    l_priorites[threads +  linid] = queuePriorities[linAccess3D(blockId1, numBlocks)];
+
+    barrier(CLK_LOCAL_MEM_FENCE); 
+
+    if(!ok) //loading did not work
+      continue;
+
+    //sort
+    bitonicSort(linid,l_priorites,l_ids,2*get_local_size(0),true);
+
+    uint target0 = l_ids[linid];
+    uint target1 = l_ids[threads + linid];
+    
+    //copy blockids around
+    #define copyBlockIds(COMPONENT) \
+      barrier(CLK_LOCAL_MEM_FENCE); \
+      l_ids[target0] = blockId0.COMPONENT; \
+      l_ids[target1] = blockId1.COMPONENT; \
+      barrier(CLK_LOCAL_MEM_FENCE); \
+      blockId0.COMPONENT = l_ids[linid]; \
+      blockId1.COMPONENT = l_ids[threads + linid];
+
+    copyBlockIds(x);
+    copyBlockIds(y);
+    copyBlockIds(z);
+
+    #undef copyBlockIds
+
+    //check if we can write it back
+    margin = wrappedAroundQueueId(nextsort - (queueInfo->front%queueSize), queueSize);
+    if(margin > 3*threads)
+    {
+      //set the barrier
+      queueInfo->sortingBarrier =  wrappedAroundQueueId(nextsort - 2*threads, queueSize);
+      write_mem_fence(CLK_GLOBAL_MEM_FENCE);
+
+      //check if it is still ok
+      margin = wrappedAroundQueueId(nextsort - (queueInfo->front%queueSize), queueSize);
+      if(margin > 2*threads)
+      {
+        //write back
+        setBlockId(queue + in_out_id0, blockId0);
+        setBlockId(queue + in_out_id1, blockId1);
+      }
+      //remove barrier
+      queueInfo->sortingBarrier = queueSize + 1;
+      write_mem_fence(CLK_GLOBAL_MEM_FENCE);
+      queueInfo->debug++;
+    }
+    else
+    {
+      //increase sort margin
+      sortMargin += threads;
+      //restart sort at the beginning
+      nextsort = queueSize + 1;
+      queueInfo->debug+= 1000;
+    }
+
+    //reset local ids
+    l_ids[linid] = linid;
+    l_ids[threads + linid] = threads + linid;
+  }
+}
+
+__kernel void routing(read_only image2d_t costmap,
+                      global float* routecost,
+                      volatile global QueueElement* queue,
+                      volatile global float* queuePriority,
+                      volatile global QueueGlobal* queueInfo,
+                      uint queueSize,
+                      const int2 dim,
+                      const int2 numBlocks,
+                      const uint processedBlocksThreshold, 
+                      local float* l_data)
+{
+  //if(get_group_id(0) + get_group_id(1) + get_group_id(2) == 0)
+  ////sorter
+  //  sortQueue(queue, 
+  //            queueInfo,
+  //            queuePriority,
+  //            queueSize,
+  //            numBlocks,
+  //            processedBlocksThreshold,
+  //            l_data,
+  //            (local uint*)( l_data+2*get_local_size(0)*get_local_size(1) ) );
+  //else
+    //worker
+     routing_worker(costmap, 
+                    routecost,
+                    queue,
+                    queuePriority,
+                    queueInfo,
+                    queueSize,
+                    dim,
+                    numBlocks,
+                    processedBlocksThreshold, 
+                    l_data);
+}
 #if 0
   int3 blockid = {get_group_id(0), get_group_id(1), get_global_id(2)};
   route(costmap, routecost, blockid, l_costs, dim);

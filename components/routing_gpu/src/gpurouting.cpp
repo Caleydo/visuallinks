@@ -342,14 +342,7 @@ namespace LinksRouting
 
 
     //structs used in kernel
-    struct cl_QueueElement
-    {
-      cl_ushort2 block;
-      cl_ushort node;
-      cl_ushort _unused_;
-      cl_float priority;
-      cl_uint state;
-    };
+    typedef cl_int4 cl_QueueElement;
     struct cl_QueueGlobal
     {
       cl_uint front;
@@ -357,6 +350,7 @@ namespace LinksRouting
       cl_int filllevel;
       cl_uint activeBlocks;
       cl_uint processedBlocks;
+      cl_uint sortingBarrier;
       cl_int debug;
     };
 
@@ -372,7 +366,7 @@ namespace LinksRouting
     cl::Buffer buf(_cl_context, CL_MEM_READ_WRITE, num_points * numtargets * sizeof(float));
 
     cl::Buffer queue_info(_cl_context, CL_MEM_READ_WRITE, sizeof(cl_QueueGlobal));
-    cl::Buffer queue_pos(_cl_context, CL_MEM_READ_WRITE, overAllBlocks * sizeof(unsigned int));
+    cl::Buffer queue_priority(_cl_context, CL_MEM_READ_WRITE, overAllBlocks * sizeof(cl_float));
     cl::Buffer queue(_cl_context, CL_MEM_READ_WRITE, overAllBlocks *sizeof(cl_QueueElement));
     cl::Buffer targets(_cl_context, CL_MEM_READ_WRITE,numtargets*sizeof(cl_uint4));
     
@@ -384,11 +378,12 @@ namespace LinksRouting
     baseQueueInfo.filllevel = 0;
     baseQueueInfo.activeBlocks = 0;
     baseQueueInfo.processedBlocks = 0;
+    baseQueueInfo.sortingBarrier = overAllBlocks + 1;
     baseQueueInfo.debug = 0;
 
     _cl_command_queue.enqueueWriteBuffer(queue_info, true, 0, sizeof(cl_QueueGlobal), &baseQueueInfo);
 
-    _cl_clearQueueLink_kernel.setArg(0, queue_pos);
+    _cl_clearQueueLink_kernel.setArg(0, queue_priority);
     cl::Event clearQueueLink_Event;
     _cl_command_queue.enqueueNDRangeKernel
     (
@@ -403,7 +398,7 @@ namespace LinksRouting
     _cl_prepare_kernel.setArg(0, memory_gl[0]);
     _cl_prepare_kernel.setArg(1, buf);
     _cl_prepare_kernel.setArg(2, queue);
-    _cl_prepare_kernel.setArg(3, queue_pos);
+    _cl_prepare_kernel.setArg(3, queue_priority);
     _cl_prepare_kernel.setArg(4, queue_info);
     _cl_prepare_kernel.setArg(5, sizeof(unsigned int), &overAllBlocks);
     _cl_prepare_kernel.setArg(6, targets);
@@ -422,16 +417,19 @@ namespace LinksRouting
       &prepare_kernel_Event
     );
 
+
+    size_t localmem = max(sizeof(cl_float)*(_blockSize[0]+2)*(_blockSize[1]+2),
+      _blockSize[0]*_blockSize[1]*2*(sizeof(cl_float)+sizeof(cl_uint)) );
     _cl_shortestpath_kernel.setArg(0, memory_gl[0]);
     _cl_shortestpath_kernel.setArg(1, buf);
     _cl_shortestpath_kernel.setArg(2, queue);
-    _cl_shortestpath_kernel.setArg(3, queue_pos);
+    _cl_shortestpath_kernel.setArg(3, queue_priority);
     _cl_shortestpath_kernel.setArg(4, queue_info);
     _cl_shortestpath_kernel.setArg(5, sizeof(unsigned int), &overAllBlocks);
     _cl_shortestpath_kernel.setArg(6, 2 * sizeof(int), dim);
     _cl_shortestpath_kernel.setArg(7, 2 * sizeof(int), numBlocks);
     _cl_shortestpath_kernel.setArg(8, sizeof(unsigned int), &blockProcessThreshold);
-    _cl_shortestpath_kernel.setArg(9, sizeof(float)*(_blockSize[0]+2)*(_blockSize[1]+2), NULL);
+    _cl_shortestpath_kernel.setArg(9, localmem, NULL);
     
     cl::Event shortestpath_Event;
     _cl_command_queue.enqueueNDRangeKernel
@@ -444,13 +442,13 @@ namespace LinksRouting
       &shortestpath_Event
     );
 
-    //_cl_command_queue.enqueueReadBuffer(queue_info, true, 0, sizeof(cl_QueueGlobal), &baseQueueInfo);
-    //std::cout << "front: " << baseQueueInfo.front << " "
-    //          << "back: " << baseQueueInfo.back << " "
-    //          << "filllevel: " << baseQueueInfo.filllevel << " "
-    //          << "activeBlocks: " << baseQueueInfo.activeBlocks << " "
-    //          << "processedBlocks: " << baseQueueInfo.processedBlocks << " "
-    //          << "debug: " << baseQueueInfo.debug << "\n";
+    _cl_command_queue.enqueueReadBuffer(queue_info, true, 0, sizeof(cl_QueueGlobal), &baseQueueInfo);
+    std::cout << "front: " << baseQueueInfo.front << " "
+              << "back: " << baseQueueInfo.back << " "
+              << "filllevel: " << baseQueueInfo.filllevel << " "
+              << "activeBlocks: " << baseQueueInfo.activeBlocks << " "
+              << "processedBlocks: " << baseQueueInfo.processedBlocks << " "
+              << "debug: " << baseQueueInfo.debug << "\n";
     //std::vector<cl_QueueElement> test(baseQueueInfo.back-baseQueueInfo.front);
     //_cl_command_queue.enqueueReadBuffer(queue, true, sizeof(cl_QueueElement)*baseQueueInfo.front, sizeof(cl_QueueElement)*(baseQueueInfo.back-baseQueueInfo.front), &test[0]);
     //for(int i = 0; i < test.size(); ++i)

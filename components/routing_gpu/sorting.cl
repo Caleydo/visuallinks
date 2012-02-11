@@ -77,7 +77,7 @@ __kernel void sortTest(global KEY_TYPE* keys,
   l_values[linid]                     = values[get_group_id(0)*2*get_local_size(0) + linid];
   l_values[get_local_size(0) + linid] = values[get_group_id(0)*2*get_local_size(0) + get_local_size(0) + linid];
 
-  ////sort
+  //sort
   bitonicSort(linid,l_keys,l_values,2*get_local_size(0),true);
 
   //write back
