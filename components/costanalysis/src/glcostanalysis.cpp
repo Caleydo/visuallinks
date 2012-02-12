@@ -98,7 +98,7 @@ namespace LinksRouting
       glBindTexture(GL_TEXTURE_2D, inputtex);
 
       glColor3f(1,1,1);
-      _downsampled_input_fbo.draw(width, height, 0,0, -1, true, true); 
+      _downsampled_input_fbo.draw(width, height, 0,0, -1, true, true);
 
        glDisable(GL_TEXTURE_2D);
 
@@ -107,10 +107,6 @@ namespace LinksRouting
 
       inputtex = _downsampled_input_fbo.colorBuffers.at(0);
     }
-
-
-
-
 
     //---------------------------------
     // do feature map (step 1)
@@ -123,11 +119,13 @@ namespace LinksRouting
     _feature_map_shader->begin();
     _feature_map_shader->setUniform1i("input0", 0);
 
+    // glClear(GL_COLOR_BUFFER_BIT); TODO is this needed?
+
     glEnable(GL_TEXTURE_2D);
     glBindTexture(GL_TEXTURE_2D, inputtex);
 
     glColor3f(1,1,1);
-    _feature_map_fbo.draw(width, height, 0,0, -1, true, true); 
+    _feature_map_fbo.draw(width, height, 0,0, -1, true, true);
 
     glDisable(GL_TEXTURE_2D);
 
@@ -156,7 +154,7 @@ namespace LinksRouting
 
 
      glColor3f(1,1,1);
-     _feature_map_fbo.draw(width, height, 0,0, 0, true, true); 
+     _feature_map_fbo.draw(width, height, 0,0, 0, true, true);
 
     //------------
     // second pass
@@ -171,7 +169,7 @@ namespace LinksRouting
     _saliency_map_shader->setUniform1i("step", 1);
 
     glColor3f(1,1,1);
-    _feature_map_fbo.draw(width, height, 0,0, -1, true, true); 
+    _feature_map_fbo.draw(width, height, 0,0, -1, true, true);
 
     glDisable(GL_TEXTURE_2D);
 

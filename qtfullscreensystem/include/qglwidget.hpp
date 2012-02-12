@@ -1,6 +1,8 @@
 #ifndef _GLWIDGET_HPP_
 #define _GLWIDGET_HPP_
 
+#include "render_thread.hpp"
+
 #include "slots.hpp"
 #include "slotdata/image.hpp"
 
@@ -31,18 +33,31 @@ namespace qtfullscreensystem
 
       void publishSlots(LinksRouting::SlotCollector slots);
 
+      /**
+       *
+       */
+      void initGL();
+
+      /**
+       * Do actual render (To be called eg. by renderthread)
+       */
+      void render();
+
+      /**
+       * Start rendering thread
+       */
+      void startRender();
+
     protected:
 
-      // QT OpenGL callbacks
-      virtual void initializeGL();
-      virtual void paintGL();
-      virtual void resizeGL(int width, int height);
-
-      virtual void moveEvent(QMoveEvent *event);
+      void resizeEvent(QResizeEvent * event);
+      void moveEvent(QMoveEvent *event);
 
       void updateScreenShot(QPoint window_offset,  QPoint window_end);
 
     private:
+
+      RenderThread  _render_thread;
 
       std::unique_ptr<QGLFramebufferObject> _fbo_desktop;
 

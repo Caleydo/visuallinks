@@ -11,6 +11,7 @@ set( SOURCE_FILES
   src/application.cpp
   src/main.cpp
   src/qglwidget.cpp
+  src/render_thread.cpp
 )
 
 set( SHADER_FILES

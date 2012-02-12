@@ -67,7 +67,8 @@ ShaderPtr loadShader( QString vert, QString frag )
 }
 
   //----------------------------------------------------------------------------
-  GLWidget::GLWidget(int& argc, char *argv[])
+  GLWidget::GLWidget(int& argc, char *argv[]):
+    _render_thread(this)
   {
     //--------------------------------
     // Setup opengl and window
@@ -93,6 +94,7 @@ ShaderPtr loadShader( QString vert, QString frag )
                   );
     setWindowOpacity(0.5);
     setMask(QRegion(-1, -1, 1, 1));
+    setAutoBufferSwap(false);
 
     if( !isValid() )
       qFatal("Unable to create OpenGL context (not valid)");
@@ -103,6 +105,7 @@ ShaderPtr loadShader( QString vert, QString frag )
       format().majorVersion(),
       format().minorVersion()
     );
+    doneCurrent();
 
     //--------------------------------
     // Setup component system
@@ -118,7 +121,7 @@ ShaderPtr loadShader( QString vert, QString frag )
     _core.startup(argv[1]);
     _core.attachComponent(&_config);
     _core.attachComponent(&_cost_analysis);
-    _core.attachComponent(&_routing);
+    //_core.attachComponent(&_routing);
     _core.attachComponent(&_renderer);
     _core.init();
 
@@ -148,59 +151,49 @@ ShaderPtr loadShader( QString vert, QString frag )
     _slot_desktop->_data->type = LinksRouting::SlotType::Image::OpenGLTexture;
   }
 
-ShaderPtr shader;
-//------------------------------------------------------------------------------
-void GLWidget::initializeGL()
-{
-  LOG_ENTER_FUNC();
+  //----------------------------------------------------------------------------
+  ShaderPtr shader;
+  void GLWidget::initGL()
+  {
+    LOG_ENTER_FUNC();
 
 #if WIN32
-  if(glewInit() != GLEW_OK)
-    qFatal("Unable to init Glew");
+    if(glewInit() != GLEW_OK)
+      qFatal("Unable to init Glew");
 #endif
 
-  if( _fbo_desktop )
-    qDebug("FBO already initialized!");
+    if( _fbo_desktop )
+      qDebug("FBO already initialized!");
 
-  _fbo_desktop.reset
-  (
-    new QGLFramebufferObject
+    _fbo_desktop.reset
     (
-      size(),
-      QGLFramebufferObject::Depth
-    )
-  );
+      new QGLFramebufferObject
+      (
+        size(),
+        QGLFramebufferObject::Depth
+      )
+    );
 
-  if( !_fbo_desktop->isValid() )
-    qFatal("Failed to create framebufferobject!");
+    if( !_fbo_desktop->isValid() )
+      qFatal("Failed to create framebufferobject!");
 
-  _slot_desktop->_data->id = _fbo_desktop->texture();
-  _slot_desktop->_data->width = size().width();
-  _slot_desktop->_data->height = size().height();
+    _slot_desktop->_data->id = _fbo_desktop->texture();
+    _slot_desktop->_data->width = size().width();
+    _slot_desktop->_data->height = size().height();
 
-  shader = loadShader("simple.vert", "remove_links.frag");
-  if( !shader )
-    qFatal("Failed to load shader.");
+    shader = loadShader("simple.vert", "remove_links.frag");
+    if( !shader )
+      qFatal("Failed to load shader.");
 
-  glClearColor(0, 0, 0, 0);
-  glEnable(GL_BLEND);
-  glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+    glClearColor(0, 0, 0, 0);
+    glEnable(GL_BLEND);
+    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 
-  _core.initGL();
-}
-
-  //----------------------------------------------------------------------------
-  void writeOutTexture(const LinksRouting::slot_t<LinksRouting::SlotType::Image>::type& slot, const QString& name)
-  {
-    QImage image(QSize(slot->_data->width, slot->_data->height), QImage::Format_RGB888);
-    glEnable(GL_TEXTURE_2D);
-    glBindTexture(GL_TEXTURE_2D, slot->_data->id);
-    glGetTexImage(GL_TEXTURE_2D, 0, GL_RGB, GL_UNSIGNED_BYTE, image.bits());
-    glDisable(GL_TEXTURE_2D);
-    image.mirrored().save(name);
+    _core.initGL();
   }
+
   //----------------------------------------------------------------------------
-  void GLWidget::paintGL()
+  void GLWidget::render()
   {
     // X11: Window decorators add decoration after creating the window.
     // Win7: may not allow a window on top of the task bar
@@ -244,19 +237,36 @@ void GLWidget::initializeGL()
     glPushAttrib(GL_CLIENT_PIXEL_STORE_BIT);
     glPixelStorei(GL_PACK_ALIGNMENT, 1);
     glReadPixels(0, 0, width(), height(), GL_RGB, GL_UNSIGNED_BYTE, links.bits());
-    links.mirrored().save(QString("links%1.png").arg(counter));
+    //links.mirrored().save(QString("links%1.png").arg(counter));
 
-    writeOutTexture(_subscribe_costmap, QString("costmap%1.png").arg(counter));
-    writeOutTexture(_slot_desktop, QString("desktop%1.png").arg(counter));
-    writeOutTexture(_core.getSlotSubscriber().getSlot<LinksRouting::SlotType::Image>("/downsampled_desktop"), QString("downsampled_desktop%1.png").arg(counter));
-    writeOutTexture(_core.getSlotSubscriber().getSlot<LinksRouting::SlotType::Image>("/featuremap"), QString("featuremap%1.png").arg(counter));
+    //----------------------------------------------------------------------------
+    auto writeTexture = []
+    (
+      const LinksRouting::slot_t<LinksRouting::SlotType::Image>::type& slot,
+      const QString& name
+    )
+    {
+      QImage image( QSize(slot->_data->width,
+                          slot->_data->height),
+                    QImage::Format_RGB888 );
+      glEnable(GL_TEXTURE_2D);
+      glBindTexture(GL_TEXTURE_2D, slot->_data->id);
+      glGetTexImage(GL_TEXTURE_2D, 0, GL_RGB, GL_UNSIGNED_BYTE, image.bits());
+      glDisable(GL_TEXTURE_2D);
+      image.mirrored().save(name);
+    };
+
+    writeTexture(_subscribe_costmap, QString("costmap%1.png").arg(counter));
+//    writeTexture(_slot_desktop, QString("desktop%1.png").arg(counter));
+//    writeTexture(_core.getSlotSubscriber().getSlot<LinksRouting::SlotType::Image>("/downsampled_desktop"), QString("downsampled_desktop%1.png").arg(counter));
+    writeTexture(_core.getSlotSubscriber().getSlot<LinksRouting::SlotType::Image>("/featuremap"), QString("featuremap%1.png").arg(counter));
 
     glPopAttrib();
 
     //links.save("fbo.png");
     QBitmap mask = QBitmap::fromImage( links.mirrored().createMaskFromColor( qRgb(0,0,0) ) );
     //mask.save("mask.png");
-    setMask(mask);    
+    setMask(mask);
 
 
     ++counter;
@@ -265,13 +275,21 @@ void GLWidget::initializeGL()
   }
 
   //----------------------------------------------------------------------------
-  void GLWidget::resizeGL(int w, int h)
+  void GLWidget::startRender()
   {
+    _render_thread.start();
+  }
+
+  //----------------------------------------------------------------------------
+  void GLWidget::resizeEvent(QResizeEvent * event)
+  {
+    int w = event->size().width(),
+        h = event->size().height();
+
     LOG_ENTER_FUNC() << "(" << w << "|" << h << ")"
                      << static_cast<float>(w)/h << ":" << 1;
 
-    glViewport(0,0,w,h);
-    //glOrtho(0, static_cast<float>(w)/h, 0, 1, -1.0, 1.0);
+    _render_thread.resize(w, h);
   }
 
   //----------------------------------------------------------------------------
@@ -304,7 +322,6 @@ void GLWidget::initializeGL()
     glActiveTexture(GL_TEXTURE1);
     glEnable(GL_TEXTURE_2D);
     glBindTexture(GL_TEXTURE_2D, _subscribe_links->_data->id);
-
 
     float w0x = static_cast<float>(window_offset.x()) / _screenshot.width(),
           w0y = 1- static_cast<float>(window_end.y()) / _screenshot.height();

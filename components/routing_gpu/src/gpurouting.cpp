@@ -71,7 +71,7 @@ namespace LinksRouting
     //for now:
     use_platform = platforms.front();
 
-    //for (cl::Platform &tplatform : platforms) 
+    //for (cl::Platform &tplatform : platforms)
     for(size_t i = 0; i < platforms.size(); ++i)
     {
       cl::Platform &tplatform = platforms[i];
@@ -85,7 +85,7 @@ namespace LinksRouting
                 << "\n -- vendor:\t " << tplatform.getInfo<CL_PLATFORM_VENDOR>()
                 << "\n -- profile:\t " << tplatform.getInfo<CL_PLATFORM_PROFILE>()
                 << std::endl;
-    
+
       std::vector<cl::Device> devices;
       tplatform.getDevices(CL_DEVICE_TYPE_GPU, &devices);
       //for (cl::Device &tdevice : devices)
@@ -113,7 +113,7 @@ namespace LinksRouting
       }
 
     }
-    
+
 
     // -----------------------------
     // OpenCL context
@@ -247,7 +247,7 @@ namespace LinksRouting
       h_keys.push_back(v/1000.0f);
       h_values.push_back(v);
     }
-    
+
     _cl_command_queue.enqueueWriteBuffer(keys, true, 0, datasize*sizeof(cl_float), &h_keys[0]);
     _cl_command_queue.enqueueWriteBuffer(values, true, 0, datasize*sizeof(cl_uint), &h_values[0]);
 
@@ -369,7 +369,7 @@ namespace LinksRouting
     cl::Buffer queue_priority(_cl_context, CL_MEM_READ_WRITE, overAllBlocks * sizeof(cl_float));
     cl::Buffer queue(_cl_context, CL_MEM_READ_WRITE, overAllBlocks *sizeof(cl_QueueElement));
     cl::Buffer targets(_cl_context, CL_MEM_READ_WRITE,numtargets*sizeof(cl_uint4));
-    
+
     _cl_command_queue.enqueueWriteBuffer(targets, true, 0, numtargets*sizeof(cl_uint4), &h_targets[0]);
 
     cl_QueueGlobal baseQueueInfo;
@@ -418,8 +418,11 @@ namespace LinksRouting
     );
 
 
-    size_t localmem = max(sizeof(cl_float)*(_blockSize[0]+2)*(_blockSize[1]+2),
-      _blockSize[0]*_blockSize[1]*2*(sizeof(cl_float)+sizeof(cl_uint)) );
+    size_t localmem = std::max
+    (
+      sizeof(cl_float) * (_blockSize[0] + 2) * (_blockSize[1] + 2),
+      _blockSize[0] * _blockSize[1] * 2 * (sizeof(cl_float) + sizeof(cl_uint))
+    );
     _cl_shortestpath_kernel.setArg(0, memory_gl[0]);
     _cl_shortestpath_kernel.setArg(1, buf);
     _cl_shortestpath_kernel.setArg(2, queue);
@@ -430,7 +433,7 @@ namespace LinksRouting
     _cl_shortestpath_kernel.setArg(7, 2 * sizeof(int), numBlocks);
     _cl_shortestpath_kernel.setArg(8, sizeof(unsigned int), &blockProcessThreshold);
     _cl_shortestpath_kernel.setArg(9, localmem, NULL);
-    
+
     cl::Event shortestpath_Event;
     _cl_command_queue.enqueueNDRangeKernel
     (

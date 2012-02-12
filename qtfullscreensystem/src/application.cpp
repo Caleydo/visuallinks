@@ -21,9 +21,10 @@ namespace qtfullscreensystem
     _gl_widget(argc, argv)
   {
 	_gl_widget.show();
+	_gl_widget.startRender();
 
-    connect(&_timer, SIGNAL(timeout()), this, SLOT(timeOut()));
-    _timer.start(100);
+    //connect(&_timer, SIGNAL(timeout()), this, SLOT(timeOut()));
+    //_timer.start(100);
   }
 
   //----------------------------------------------------------------------------
