@@ -58,7 +58,8 @@ add_component(transparencyanalysis off)
 
 #add default applications
 add_subdirectory(${PROJROOT}/qtfullscreensystem ${BIN_DIR}/qtfullscreensystem)
-add_subdirectory(${PROJROOT}/qt-ocr ${BIN_DIR}/qt-ocr)
+add_subdirectory(${PROJROOT}/qt-ncc ${BIN_DIR}/qt-ncc EXCLUDE_FROM_ALL)
+add_subdirectory(${PROJROOT}/qt-ocr ${BIN_DIR}/qt-ocr EXCLUDE_FROM_ALL)
 #add_subdirectory(${PROJROOT}/singleimagesystem ${BIN_DIR}/singleimagesystem)
 
 
