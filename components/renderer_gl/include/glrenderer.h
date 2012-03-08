@@ -49,6 +49,8 @@ namespace LinksRouting
 
       /** Frame buffer object where links get rendered to */
       gl::FBO   _links_fbo;
+
+      bool  _enabled;
   };
 }
 

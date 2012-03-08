@@ -78,6 +78,7 @@ namespace LinksRouting
       cl::Kernel        _cl_clearQueueLink_kernel;
 
       int _blockSize[2];
+      bool _enabled;
 
   };
 }

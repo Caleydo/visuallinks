@@ -43,7 +43,6 @@ endif(WIN32)
 include(${QT_USE_FILE})
 add_definitions(${QT_DEFINITIONS})
 
-
 set(SYSTEMROOT ${CMAKE_CURRENT_SOURCE_DIR})
 include_directories(
   ${LINKS_INCLUDE_DIR}

@@ -28,6 +28,7 @@ namespace LinksRouting
   {
     registerArg("BlockSizeX", _blockSize[0] = 8);
     registerArg("BlockSizeY", _blockSize[1] = 8);
+    registerArg("enabled", _enabled = true);
   }
 
   //------------------------------------------------------------------------------
@@ -279,6 +280,9 @@ namespace LinksRouting
 
   void GPURouting::process(Type type)
   {
+    if( !_enabled )
+      return;
+
     try
     {
 

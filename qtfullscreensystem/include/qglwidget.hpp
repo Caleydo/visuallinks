@@ -8,6 +8,7 @@
 
 #include "staticcore.h"
 #include "xmlconfig.h"
+#include "ipc_server.hpp"
 #include "glcostanalysis.h"
 #include "gpurouting.h"
 #include "glrenderer.h"
@@ -71,6 +72,7 @@ namespace qtfullscreensystem
       /** And now the components */
       LinksRouting::StaticCore      _core;
       LinksRouting::XmlConfig       _config;
+      LinksRouting::IPCServer       _server;
       LinksRouting::GlCostAnalysis  _cost_analysis;
       LinksRouting::GPURouting      _routing;
       LinksRouting::GlRenderer      _renderer;

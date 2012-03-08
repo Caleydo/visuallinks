@@ -1,0 +1,3 @@
+[submodule "libs/qtwebsocket"]
+	path = libs/qtwebsocket
+	url = git@gitorious.org:~tomprogs/qtwebsocket/toms-qtwebsocket.git

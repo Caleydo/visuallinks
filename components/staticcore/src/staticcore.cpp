@@ -1,10 +1,11 @@
 #include "staticcore.h"
-
-#include <iostream>
+#include "log.hpp"
 
 namespace LinksRouting
 {
-  StaticCore::StaticCore() : _config(0), _runningComponents(0)
+  StaticCore::StaticCore():
+    _runningComponents(0),
+    _config(0)
   {
 #ifdef _DEBUG
     _requiredComponents = 0;
@@ -39,11 +40,18 @@ namespace LinksRouting
   //----------------------------------------------------------------------------
   bool StaticCore::attachComponent(Component* comp, unsigned int type)
   {
-    std::cout << "[StaticCore] Adding component (" << comp->name() << ")..."
-              << std::endl;
+    LOG_INFO("Adding component (" << comp->name() << ")...");
 
     if(!_config && (type&Component::Config) && comp->supports(Component::Config))
+    {
       _config = dynamic_cast<Config*>(comp);
+
+      if( !_config->initFrom(_startupstr) )
+      {
+        LOG_ERROR("could not load config file \"" << _startupstr << "\"");
+        _config = nullptr;
+      }
+    }
 
     unsigned int supportedTypes = getTypes(comp, type);
     unsigned int isRunningAs = supportedTypes & ~_runningComponents;
@@ -51,8 +59,8 @@ namespace LinksRouting
     if(!comp->startup(this, isRunningAs))
           isRunningAs = 0;
 
-    //update running components (ignore proxies)
-    _runningComponents |= (isRunningAs & ~Component::Proxy);
+    //update running components
+    _runningComponents |= isRunningAs;
     _components.push_back(ComponentInfo( comp, supportedTypes, isRunningAs));
 
     return isRunningAs != 0;
@@ -77,17 +85,15 @@ namespace LinksRouting
   //----------------------------------------------------------------------------
   bool StaticCore::init()
   {
-    if( (_runningComponents & _requiredComponents) != _requiredComponents)
-    {
-      std::cerr << "LinksRouting StaticCore Error: minimum of runable components not provided!" << std::endl;
-      shutdown();
-      return false;
-    }
+//    if( (_runningComponents & _requiredComponents) != _requiredComponents)
+//    {
+//      LOG_ERROR("minimum of runable components not provided!");
+//      shutdown();
+//      return false;
+//    }
 
     if(_config)
     {
-      if(!_config->initFrom(_startupstr))
-        std::cout << "LinksRouting StaticCore Warning: could not load config file \"" << _startupstr << "\"" << std::endl;
       for( auto c = _components.begin(); c != _components.end(); ++c )
           _config->attach(*c, c->is);
       _config->process(Component::Config);
@@ -135,6 +141,7 @@ namespace LinksRouting
       c->comp->process();
   }
 
+  //----------------------------------------------------------------------------
   Config* StaticCore::getConfig()
   {
     return _config;
