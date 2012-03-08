@@ -1,0 +1,21 @@
+<?xml version="1.0"?>                 
+<?xml-stylesheet href="chrome://mypl/content/vislink.css" type="text/css"?>
+
+<overlay id="Scrapper-Overlay" xmlns="http://www.mozilla.org/keymaster/gatekeeper/there.is.only.xul">
+
+<script type="application/x-javascript" src="chrome://mypl/content/myjs.js" />
+
+<menupopup id="menu_ToolsPopup"> 
+    <menuitem label="Register to VisLink Daemon" insertafter="devToolsSeparator" oncommand="startVisLinks();" />
+</menupopup> 
+
+<toolbarpalette id="BrowserToolbarPalette">
+	<toolbarbutton id="vislink"
+		label="vislink"
+  		tooltiptext="VisLink"
+		oncommand="selectVisLink()"
+		class="toolbarbutton-1 chromeclass-toolbar-additional vislink"
+  	/>
+</toolbarpalette>
+
+</overlay>
