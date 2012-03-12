@@ -51,7 +51,7 @@ namespace LinksRouting
     {
       std::vector<Node*> nodes;
       std::vector<Point> trail;
-      HyperEdgeDescriptionSegment *parent, *child;
+      HyperEdgeDescriptionForkation *parent, *child;
     };
 
   };

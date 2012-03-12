@@ -9,6 +9,8 @@
 # error "Context sharing not supported yet."
 #elif defined(_WIN32)
 //# include <GL/wgl.h>
+#define WIN32_LEAN_AND_MEAN
+#define NOMINMAX
 #include <direct.h>
 #define GetCurrentDir _getcwd
 #else
