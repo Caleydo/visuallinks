@@ -15,7 +15,7 @@
     <TestDouble type="Float" val="0.25" />
   </ComponentRenderer> -->
   <GLRenderer>
-    <enabled type="Bool" val="false" />
+    <enabled type="Bool" val="true" />
   </GLRenderer>
   
 </config>

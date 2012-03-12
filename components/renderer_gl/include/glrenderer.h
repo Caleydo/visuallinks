@@ -19,7 +19,7 @@ namespace LinksRouting
       GlRenderer();
       virtual ~GlRenderer();
 
-      virtual void publishSlots(SlotCollector& slots);
+      void publishSlots(SlotCollector& slots);
 
       bool startup(Core* core, unsigned int type);
       void init();

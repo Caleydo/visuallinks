@@ -28,7 +28,7 @@ namespace LinksRouting
 
         //C++10 not yet fully supported...
         //Slot() = default;
-        Slot() { }
+        Slot(): _valid(false) { }
 
         virtual ~Slot() = 0;
 
@@ -42,7 +42,7 @@ namespace LinksRouting
          */
         void setValid(bool val);
 
-        
+
     private:
         // No slot copying
         //C++10 not yet fully supported...
@@ -142,7 +142,13 @@ namespace LinksRouting
         if( slot == _slots.end() )
           throw std::runtime_error("No such slot: " + name);
 
-        return std::dynamic_pointer_cast<typename slot_t<DataType>::raw_type>(slot->second.lock());
+        auto casted_slot =
+          std::dynamic_pointer_cast<typename slot_t<DataType>::raw_type>(slot->second.lock());
+
+        if( !casted_slot )
+          throw std::runtime_error("Wrong slot type for slot: " + name);
+
+        return casted_slot;
       }
 
     private:

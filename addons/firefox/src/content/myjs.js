@@ -1,18 +1,30 @@
 var stopped = true;
 var socket = null;
 
+var last_id = null;
+var last_stamp = null;
+
 /** Send data via the global WebSocket
  *
  */
 function send(data)
 {
-  if( !socket )
-    throw "No socket available!";
-
-  socket.send(JSON.stringify(data));
+  try
+  {
+    if( !socket )
+      throw "No socket available!";
+  
+    socket.send(JSON.stringify(data));
+  }
+  catch(e)
+  {
+    alert(e);
+    throw e;
+  }
 }
 
 //------------------------------------------------------------------------------
+// This function is triggered by the user if he want's to get something linked
 function selectVisLink()
 {
 	var	selid =	content.getSelection().toString();
@@ -31,16 +43,27 @@ function reportWindowChanged()
 }
 
 //------------------------------------------------------------------------------
-function reportVisLinks(selectionId)
+function reportVisLinks(selectionId, found)
 {
 	var	doc	= content.document;
 	var	bbs	= searchDocument(doc, selectionId);
 //	var	xml	= generateBoundingBoxesXML(bbs,	true);
+	
+	last_id = selectionId;
+	if( !found )
+	{
+	  d = new Date();
+	  last_stamp = (d.getHours() * 60 + d.getMinutes()) * 60 + d.getSeconds();
+	}
 
-	send({ 'task':'selection',
-	       'name': window.visLinkAppName,
+	send({ 'task': (found ? 'FOUND' : 'INITIATE'),
+	       //'name': window.visLinkAppName,
 	       'id': selectionId,
-	       'bounding-boxes': bbs });
+	       'stamp': last_stamp,
+	       'regions': bbs });
+	
+//	if( found )
+//    alert('send FOUND: '+selectionId);
 }
 
 //------------------------------------------------------------------------------
@@ -106,14 +129,30 @@ function register()
 
 	try
 	{
-    socket = new MozWebSocket('ws://localhost:4487');
-    socket.onopen = function(event)
+    socket = new MozWebSocket('ws://localhost:4487', 'VLP');
+    /*socket.onopen = function(event)
     {
       send({
         'task': 'register',
         'name': window.visLinkAppName,
         'bounding-box' : {'x': x, 'y': y, 'w': w, 'h': h}
       });
+    }*/
+    socket.onmessage = function(event)
+    {
+      msg = JSON.parse(event.data);
+      if( msg.task == 'REQUEST' )
+      {
+        //alert('id='+last_id+"|"+msg.id+"\nstamp="+last_stamp+"|"+msg.stamp);
+        if( msg.id == last_id && msg.stamp == last_stamp )
+          // already handled
+          return;// alert('already handled...');
+
+        last_id = msg.id;
+        last_stamp = msg.stamp;
+
+        setTimeout('reportVisLinks("'+msg.id+'", true)',0);
+      }
     }
 	}
 	catch (err)
@@ -446,8 +485,8 @@ function findAreaBoundingBox(doc, img, areaCoords){
 
 //------------------------------------------------------------------------------
 function findBoundingBox(doc, obj) {
-	var	w =	obj.offsetWidth;
-	var	h =	obj.offsetHeight;
+	var	w =	obj.offsetWidth + 2;
+	var	h =	obj.offsetHeight + 2;
 	var	curleft	= curtop = 0;
 
 	if (obj.offsetParent) {
@@ -467,16 +506,19 @@ function findBoundingBox(doc, obj) {
 	//if (((curtop - win.pageYOffset)	> 0) &&	((curtop - win.pageYOffset)	< win.innerHeight) && 
 	//	((curleft -	win.pageXOffset) > 0) && ((curleft - win.pageXOffset) <	win.innerWidth)) {
 			
-		finaltop = curtop + win.screenY + yoffset - win.pageYOffset;
-		finalleft = curleft + win.screenX + 1 - win.pageXOffset;
-		
-		ret	= new Object();
-		ret.x =	finalleft;
-		ret.y =	finaltop;
-		ret.width =	w +	2;
-		ret.height = h + 2;
+	y = curtop + win.screenY + yoffset - win.pageYOffset;
+	x = curleft + win.screenX + 1 - win.pageXOffset;
+	
+//		ret	= new Object();
+//		ret.x =	finalleft;
+//		ret.y =	finaltop;
+//		ret.width =	w +	2;
+//		ret.height = h + 2;
 	//}
-	return ret;
+	return [ [x,     y],
+	         [x + w, y],
+	         [x + w, y + h],
+	         [x,     y + h] ];
 }
 
 //------------------------------------------------------------------------------

@@ -10,6 +10,7 @@
 #define _IPC_SERVER_HPP_
 
 #include "common/componentarguments.h"
+#include "slotdata/polygon.hpp"
 
 #include "QWsServer.h"
 #include "QWsSocket.h"
@@ -30,7 +31,7 @@ namespace LinksRouting
       IPCServer();
       virtual ~IPCServer();
 
-//      void publishSlots(SlotCollector& slots);
+      void publishSlots(SlotCollector& slot_collector);
 //      void subscribeSlots(SlotSubscriber& slot_subscriber);
 
       bool startup(Core* core, unsigned int type);
@@ -59,6 +60,19 @@ namespace LinksRouting
 
       QWsServer          *_server;
       QList<QWsSocket*>   _clients;
+
+      /* Identifier for the current search */
+      slot_t<std::string>::type _slot_search_id;
+
+      /* Timestamp of current search */
+      slot_t<uint32_t>::type    _slot_search_stamp;
+
+      /* Regions of found occurances of search string */
+      slot_t<std::vector<SlotType::Polygon>>::type  _slot_search_regions;
+
+      class JSON;
+      void parseRegions(JSON& json);
+
   };
 
 } // namespace LinksRouting

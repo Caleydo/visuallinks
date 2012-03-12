@@ -1,0 +1,82 @@
+                                                                 Thomas Geymayer
+                                                   Graz University of Technology
+                                                                      March 2012
+
+
+                           Visual Link Protocol - VLP                          
+
+1. Introduction
+
+   Protocol for communication between clients and the server for visualizing
+   links between regions of interest on the screen.
+
+2. Transmission
+
+   For transmission of messages every communication medium able to transfer
+   ascii text can be used.
+   
+2.1 qtfullscreensystem
+
+   The server included in the qtfullscreensystem uses WebSockets for
+   communication with the clients and normally listens on port 4487. The socket
+   stays open as long as the client is running and is reused for every
+   transmitted message.
+
+3. Messages
+
+   All messages are JSON encoded and are transfered as JSON objects. Every
+   message has to contain at least the following fields:
+   
+   task   Describes the purpose of the message
+   id     An common identifier for all elements of the current selection
+   stamp  Timestamp of the original request
+
+3.1 Message types
+
+   INITIATE   Initiates a new routing and linking process by sending the
+              identifier to search to the server. Optionally locations inside
+              the clients region can be added in an optional 'regions' filled.
+              
+              The following example shows a message to initiate a search for the
+              string 'test' with two occurances bounded by one rectangulare and
+              one triangular region:
+
+              {
+                'task': 'INITIATE',
+                'id': 'test',
+                'stamp': 123456789,
+                'regions': [
+                             [[12, 34], [112, 34], [112, 64], [12, 64]],
+                             [[40, 100], [100, 200], [10, 200]]
+                           ]
+              }
+
+   REQUEST    After the client has issued an INITIATE to the server the server
+              sends a REQUEST message to all clients with the new search id
+              and timestamp. Every client should send back a FOUND message
+              with all occurences of the requested id inside their region.
+              
+              The client which sent the corresponding INITIATE also gets a
+              REQUEST. If he hasn't allready sent the regions with the INITIATE
+              he should now send them back.
+              
+              The following example shows the REQUEST the server would send
+              upon receiving the example from INITIATE:
+              
+              {
+                'task': 'REQUEST',
+                'id': 'test',
+                'stamp': 123456789
+              }
+
+   FOUND      The client...
+   
+              {
+                'task': 'FOUND',
+                'id': 'test',
+                'stamp': 123456789,
+                'regions': [
+                             [[12, 34], [112, 34], [112, 64], [12, 64]],
+                             [[40, 100], [100, 200], [10, 200]]
+                           ]
+              }

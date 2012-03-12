@@ -278,7 +278,7 @@ ShaderPtr loadShader( QString vert, QString frag )
   //----------------------------------------------------------------------------
   void GLWidget::startRender()
   {
-    //_render_thread.start();
+    _render_thread.start();
   }
 
   //----------------------------------------------------------------------------
