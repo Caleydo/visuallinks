@@ -121,6 +121,7 @@ ShaderPtr loadShader( QString vert, QString frag )
 
     _core.startup(argv[1]);
     _core.attachComponent(&_config);
+    _core.attachComponent(&_server);
     _core.attachComponent(&_cost_analysis);
     _core.attachComponent(&_routing);
     _core.attachComponent(&_renderer);
@@ -259,7 +260,7 @@ ShaderPtr loadShader( QString vert, QString frag )
 
     writeTexture(_subscribe_costmap, QString("costmap%1.png").arg(counter));
 //    writeTexture(_slot_desktop, QString("desktop%1.png").arg(counter));
-//    writeTexture(_core.getSlotSubscriber().getSlot<LinksRouting::SlotType::Image>("/downsampled_desktop"), QString("downsampled_desktop%1.png").arg(counter));
+    writeTexture(_core.getSlotSubscriber().getSlot<LinksRouting::SlotType::Image>("/downsampled_desktop"), QString("downsampled_desktop%1.png").arg(counter));
     writeTexture(_core.getSlotSubscriber().getSlot<LinksRouting::SlotType::Image>("/featuremap"), QString("featuremap%1.png").arg(counter));
 
     glPopAttrib();

@@ -4,7 +4,6 @@
 #include <core.h>
 #include <config.h>
 #include <costanalysis.h>
-#include <proxy.h>
 #include <renderer.h>
 #include <routing.h>
 #include <transparencyanalysis.h>
@@ -30,10 +29,10 @@ namespace LinksRouting
           {
           }
           operator Component*() { return comp; }
-      };     
-      
+      };
+
       typedef std::vector<ComponentInfo> components_t;
-      
+
       static unsigned int getTypes(Component* component, unsigned int mask);
 
     public:

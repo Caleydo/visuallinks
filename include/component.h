@@ -11,25 +11,27 @@ namespace LinksRouting
   class Component
   {
     public:
+
       enum Type
       {
         None = 0,
         Config = 1,
-        Proxy = 2,
+        DataServer = 2,
         TransparencyAnalysis = 4,
         Costanalysis = 8,
         Routing = 16,
         Renderer = 32,
         Any = 63
       };
+
       static std::string TypeToString(Type t)
       {
         switch( t )
         {
           case Config:
             return "ComponentConfig";
-          case Proxy:
-            return "ComponentProxy";
+          case DataServer:
+            return "DataServer";
           case TransparencyAnalysis:
             return "ComponentTransparencyAnalysis";
           case Costanalysis:
@@ -46,19 +48,19 @@ namespace LinksRouting
       }
       static Type StringToType(const std::string & str)
       {
-        if( str.compare("ComponentConfig") == 0 )
+        if( str == "ComponentConfig" )
           return Config;
-        else if( str.compare("ComponentProxy") == 0 )
-          return Proxy;
-        else if( str.compare("ComponentTransparencyAnalysis") == 0 )
+        else if( str == "ComponentDataServer" )
+          return DataServer;
+        else if( str == "ComponentTransparencyAnalysis" )
           return TransparencyAnalysis;
-        else if( str.compare("ComponentCostanalysis") == 0 )
+        else if( str == "ComponentCostanalysis" )
           return Costanalysis;
-        else if( str.compare("ComponentRenderer") == 0 )
+        else if( str == "ComponentRenderer" )
           return Renderer;
-        else if( str.compare("ComponentRouting") == 0 )
+        else if( str == "ComponentRouting" )
           return Routing;
-        else if( str.compare("ComponentAny") == 0 )
+        else if( str == "ComponentAny" )
           return Any;
         return None;
       }

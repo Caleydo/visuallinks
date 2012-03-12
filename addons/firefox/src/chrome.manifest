@@ -1,0 +1,3 @@
+content mypl content/
+style chrome://global/content/customizeToolbar.xul chrome://mypl/content/vislink.css
+overlay chrome://browser/content/browser.xul chrome://mypl/content/vislink.xul

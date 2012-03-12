@@ -6,6 +6,7 @@
 
 #include "slots.hpp"
 #include "slotdata/image.hpp"
+#include "slotdata/polygon.hpp"
 
 // Use Exceptions for OpenCL C++ API
 #define __CL_ENABLE_EXCEPTIONS
@@ -72,6 +73,12 @@ namespace LinksRouting
       }
 
       slot_t<SlotType::Image>::type _subscribe_costmap;
+      slot_t<std::string>::type     _subscribe_search_id;
+      slot_t<uint32_t>::type        _subscribe_search_stamp;
+      slot_t<std::vector<SlotType::Polygon>>::type  _subscribe_search_regions;
+
+      std::string   _last_search_id;
+      uint32_t      _last_search_stamp;
 
       cl::Context       _cl_context;
       cl::Device        _cl_device;
@@ -82,6 +89,7 @@ namespace LinksRouting
       cl::Kernel        _cl_clearQueueLink_kernel;
 
       int _blockSize[2];
+      bool _enabled;
 
   };
 }

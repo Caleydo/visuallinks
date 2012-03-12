@@ -22,7 +22,6 @@ set( INTERFACE_FILES
   ${LINKS_INCLUDE_DIR}/renderer.h
   ${LINKS_INCLUDE_DIR}/routing.h
   ${LINKS_INCLUDE_DIR}/transparencyanalysis.h
-  ${LINKS_INCLUDE_DIR}/proxy.h
   ${LINKS_INCLUDE_DIR}/color.h
   ${LINKS_INCLUDE_DIR}/linkdescription.h
 )
@@ -42,17 +41,22 @@ if(CMAKE_COMPILER_IS_GNUCXX)
 endif()
 
 add_subdirectory(${COMPONENTS_DIR}/tools)
-include_directories(${COMPONENTS_DIR}/tools)
+include_directories(
+  ${COMPONENTS_DIR}/tools
+  libs/qtwebsocket/QtWebSocket
+)
+
+add_subdirectory(libs/qtwebsocket/QtWebSocket)
 
 #TODO we should do that in a better way, so we can get the include directories and libs to link out of the subdirectory..
 #add components
 add_component(staticcore)
 add_component(xmlconfig)
+add_component(ipc_server)
 add_component(costanalysis)
 add_component(renderer_gl)
 add_component(routing_cpu off)
 add_component(routing_gpu)
-add_component(routing_ice_proxy off)
 add_component(transparencyanalysis off)
 #message("comp inc:\n${COMPONENTS_INC_DIR} \ncomp libs:\n${COMPONENTS_LIBS}\ndepeping files:\n${COMPONENTS_DEPENDING_FILES}")
 

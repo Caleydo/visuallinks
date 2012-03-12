@@ -1,4 +1,5 @@
 #include "gpurouting.h"
+#include "log.hpp"
 
 #include <iostream>
 #include <fstream>
@@ -30,6 +31,7 @@ namespace LinksRouting
   {
     registerArg("BlockSizeX", _blockSize[0] = 8);
     registerArg("BlockSizeY", _blockSize[1] = 8);
+    registerArg("enabled", _enabled = true);
   }
 
   //------------------------------------------------------------------------------
@@ -43,6 +45,12 @@ namespace LinksRouting
   {
     _subscribe_costmap =
       slot_subscriber.getSlot<LinksRouting::SlotType::Image>("/costmap");
+    _subscribe_search_id =
+      slot_subscriber.getSlot<std::string>("/links[0]/id");
+    _subscribe_search_stamp =
+      slot_subscriber.getSlot<uint32_t>("/links[0]/stamp");
+    _subscribe_search_regions =
+      slot_subscriber.getSlot<std::vector<SlotType::Polygon>>("/links[0]/regions");
   }
 
   bool GPURouting::startup(Core* core, unsigned int type)
@@ -53,7 +61,8 @@ namespace LinksRouting
   //----------------------------------------------------------------------------
   void GPURouting::init()
   {
-
+    _last_search_id.clear();
+    _last_search_stamp = 0;
   }
 
   //----------------------------------------------------------------------------
@@ -279,8 +288,40 @@ namespace LinksRouting
 
   }
 
+  //----------------------------------------------------------------------------
   void GPURouting::process(Type type)
   {
+    if(    !_subscribe_search_id->isValid()
+        || !_subscribe_search_stamp->isValid()
+        || !_subscribe_search_regions->isValid() )
+    {
+      LOG_INFO("No valid routing data available.");
+      return;
+    }
+
+    if(    _last_search_id == *_subscribe_search_id->_data
+        && _last_search_stamp == *_subscribe_search_stamp->_data )
+    {
+      LOG_INFO("Nothing new to route.");
+      return;
+    }
+
+    _last_search_id = *_subscribe_search_id->_data;
+    _last_search_stamp = *_subscribe_search_stamp->_data;
+
+    LOG_INFO("New routing data: " << _last_search_id);
+
+    for(SlotType::Polygon poly: *_subscribe_search_regions->_data)
+    {
+      std::cout << "Polygon: (" << poly.points.size() << " points)\n";
+      for(auto p: poly.points)
+        std::cout << " (" << p.x << "|" << p.y << ")\n";
+      std::cout << std::endl;
+    }
+
+    if( !_enabled ) // This can be set from the config file...
+      return;
+
     try
     {
 

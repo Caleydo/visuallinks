@@ -19,7 +19,7 @@ namespace LinksRouting
       GlRenderer();
       virtual ~GlRenderer();
 
-      virtual void publishSlots(SlotCollector& slots);
+      void publishSlots(SlotCollector& slots);
 
       bool startup(Core* core, unsigned int type);
       void init();
@@ -49,6 +49,8 @@ namespace LinksRouting
 
       /** Frame buffer object where links get rendered to */
       gl::FBO   _links_fbo;
+
+      bool  _enabled;
   };
 }
 

@@ -115,8 +115,9 @@ namespace LinksRouting
   }
 
   //----------------------------------------------------------------------------
-  GlRenderer::GlRenderer() : myname("GlRenderer")
+  GlRenderer::GlRenderer() : myname("GLRenderer")
   {
+    registerArg("enabled", _enabled = true);
   }
 
   //----------------------------------------------------------------------------
@@ -163,6 +164,8 @@ namespace LinksRouting
   //----------------------------------------------------------------------------
   void GlRenderer::process(Type type)
   {
+    if( !_enabled )
+      return;
 
     _slot_links->setValid(false);
     _links_fbo.bind();
