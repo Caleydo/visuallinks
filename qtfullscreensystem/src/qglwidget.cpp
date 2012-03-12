@@ -1,5 +1,6 @@
 #ifdef WIN32
 #define WIN32_LEAN_AND_MEAN
+#define NOMINMAX
 #include <Windows.h>
 #include <gl/glew.h>
 #include <gl/gl.h>
@@ -121,7 +122,7 @@ ShaderPtr loadShader( QString vert, QString frag )
     _core.startup(argv[1]);
     _core.attachComponent(&_config);
     _core.attachComponent(&_cost_analysis);
-    //_core.attachComponent(&_routing);
+    _core.attachComponent(&_routing);
     _core.attachComponent(&_renderer);
     _core.init();
 
