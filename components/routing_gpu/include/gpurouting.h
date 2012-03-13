@@ -74,11 +74,11 @@ namespace LinksRouting
 
       slot_t<SlotType::Image>::type _subscribe_costmap;
       slot_t<std::string>::type     _subscribe_search_id;
-      slot_t<uint32_t>::type        _subscribe_search_stamp;
+      slot_t<unsigned int>::type        _subscribe_search_stamp;
       slot_t<std::vector<SlotType::Polygon>>::type  _subscribe_search_regions;
 
       std::string   _last_search_id;
-      uint32_t      _last_search_stamp;
+      unsigned int      _last_search_stamp;
 
       cl::Context       _cl_context;
       cl::Device        _cl_device;

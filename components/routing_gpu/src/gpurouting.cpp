@@ -48,7 +48,7 @@ namespace LinksRouting
     _subscribe_search_id =
       slot_subscriber.getSlot<std::string>("/links[0]/id");
     _subscribe_search_stamp =
-      slot_subscriber.getSlot<uint32_t>("/links[0]/stamp");
+      slot_subscriber.getSlot<unsigned int>("/links[0]/stamp");
     _subscribe_search_regions =
       slot_subscriber.getSlot<std::vector<SlotType::Polygon>>("/links[0]/regions");
   }
@@ -311,11 +311,11 @@ namespace LinksRouting
 
     LOG_INFO("New routing data: " << _last_search_id);
 
-    for(SlotType::Polygon poly: *_subscribe_search_regions->_data)
+    for(auto poly = _subscribe_search_regions->_data->begin(); poly != _subscribe_search_regions->_data->end(); ++poly)
     {
-      std::cout << "Polygon: (" << poly.points.size() << " points)\n";
-      for(auto p: poly.points)
-        std::cout << " (" << p.x << "|" << p.y << ")\n";
+      std::cout << "Polygon: (" << poly->points.size() << " points)\n";
+      for(auto p = poly->points.begin(); p != poly->points.end(); ++p)
+        std::cout << " (" << p->x << "|" << p->y << ")\n";
       std::cout << std::endl;
     }
 

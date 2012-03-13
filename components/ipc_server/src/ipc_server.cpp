@@ -220,8 +220,8 @@ namespace LinksRouting
           "}"
         );
 
-        for(QWsSocket* socket: _clients)
-          socket->write(request);
+        for(auto socket = _clients.begin(); socket != _clients.end(); ++socket)
+          (*socket)->write(request);
 
         _slot_search_regions->_data->clear();
         _slot_search_regions->setValid(true);
@@ -285,22 +285,26 @@ namespace LinksRouting
     if( !json.isSet("regions") )
       return;
 
-    for(QVariant region: json.getValue<QVariantList>("regions"))
+    QVariantList regions = json.getValue<QVariantList>("regions");
+    for(auto region = regions.begin(); region != regions.end(); ++region)
     {
       SlotType::Polygon polygon;
-      for(QVariant point: region.toList())
+      auto regionlist = region->toList();
+      for(auto point = regionlist.begin(); point != regionlist.end(); ++point)
       {
-        QVariantList coords = point.toList();
+        QVariantList coords = point->toList();
         if( coords.size() != 2 )
         {
           LOG_WARN("Wrong coord count for point.");
           continue;
         }
 
-        polygon.points.push_back({
-          coords.at(0).toInt(),
-          coords.at(1).toInt()
-        });
+        polygon.points.push_back(
+          SlotType::Polygon::Point(
+            coords.at(0).toInt(),
+            coords.at(1).toInt()
+            )
+          );
       }
 
       if( !polygon.points.empty() )

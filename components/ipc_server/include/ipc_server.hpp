@@ -17,6 +17,8 @@
 
 #include <QtCore>
 
+#include "datatypes.h"
+
 namespace LinksRouting
 {
   class IPCServer:
