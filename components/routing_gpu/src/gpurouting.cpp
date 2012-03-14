@@ -45,12 +45,8 @@ namespace LinksRouting
   {
     _subscribe_costmap =
       slot_subscriber.getSlot<LinksRouting::SlotType::Image>("/costmap");
-    _subscribe_search_id =
-      slot_subscriber.getSlot<std::string>("/links[0]/id");
-    _subscribe_search_stamp =
-      slot_subscriber.getSlot<unsigned int>("/links[0]/stamp");
-    _subscribe_search_regions =
-      slot_subscriber.getSlot<std::vector<SlotType::Polygon>>("/links[0]/regions");
+    _subscribe_links =
+      slot_subscriber.getSlot<LinkDescription::LinkList>("/links");
   }
 
   bool GPURouting::startup(Core* core, unsigned int type)
@@ -61,8 +57,7 @@ namespace LinksRouting
   //----------------------------------------------------------------------------
   void GPURouting::init()
   {
-    _last_search_id.clear();
-    _last_search_stamp = 0;
+    _link_infos.clear();
   }
 
   //----------------------------------------------------------------------------
@@ -291,39 +286,8 @@ namespace LinksRouting
   //----------------------------------------------------------------------------
   void GPURouting::process(Type type)
   {
-    if(    !_subscribe_search_id->isValid()
-        || !_subscribe_search_stamp->isValid()
-        || !_subscribe_search_regions->isValid() )
-    {
-      LOG_INFO("No valid routing data available.");
-      return;
-    }
-
-    if(    _last_search_id == *_subscribe_search_id->_data
-        && _last_search_stamp == *_subscribe_search_stamp->_data )
-    {
-      LOG_INFO("Nothing new to route.");
-      return;
-    }
-
-    _last_search_id = *_subscribe_search_id->_data;
-    _last_search_stamp = *_subscribe_search_stamp->_data;
-
-    LOG_INFO("New routing data: " << _last_search_id);
-
-    for(auto poly = _subscribe_search_regions->_data->begin(); poly != _subscribe_search_regions->_data->end(); ++poly)
-    {
-      std::cout << "Polygon: (" << poly->points.size() << " points)\n";
-      for(auto p = poly->points.begin(); p != poly->points.end(); ++p)
-        std::cout << " (" << p->x << "|" << p->y << ")\n";
-      std::cout << std::endl;
-    }
-
-    if( !_enabled ) // This can be set from the config file...
-      return;
-
-    try
-    {
+    //----------------------
+    // Many sanity checks :)
 
     if( !_subscribe_costmap->isValid() )
     {
@@ -344,6 +308,60 @@ namespace LinksRouting
       return;
     }
 
+    if( !_subscribe_links->isValid() )
+    {
+      LOG_INFO("No valid routing data available.");
+      return;
+    }
+
+    //------------------------------
+    // now start analyzing the links
+
+    const LinkDescription::LinkList& links = *_subscribe_links->_data;
+
+    for( auto it = links.begin(); it != links.end(); ++it )
+    {
+      auto info = _link_infos.find(it->_id);
+
+      if(    info != _link_infos.end()
+          && info->second._stamp == it->_stamp
+          && info->second._revision == it->_link.getRevision() )
+        continue;
+
+      LOG_INFO("NEW DATA to route: " << it->_id);
+
+      // --------------------------------------------------------
+      // TODO implement routing here
+
+      for( auto node = it->_link.getNodes().begin();
+           node != it->_link.getNodes().end();
+           ++node )
+      {
+        std::cout << "Polygon: (" << node->getVertices().size() << " points)\n";
+        for( auto p = node->getVertices().begin();
+             p != node->getVertices().end();
+             ++p )
+          std::cout << " (" << p->x << "|" << p->y << ")\n";
+        std::cout << std::endl;
+      }
+
+      // --------------------------------------------------------
+
+      // set as handled
+      if( info == _link_infos.end() )
+        _link_infos[it->_id] = {it->_stamp, it->_link.getRevision()};
+      else
+      {
+        info->second._stamp = it->_stamp;
+        info->second._revision = it->_link.getRevision();
+      }
+    }
+
+    if( !_enabled ) // This can be set from the config file...
+      return;
+
+    try
+    {
     std::vector<cl::Memory> memory_gl;
     memory_gl.push_back
     (

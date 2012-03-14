@@ -12,6 +12,7 @@
 #include <QScriptEngine>
 #include <QScriptValueIterator>
 
+#include <algorithm>
 #include <map>
 #include <tuple>
 
@@ -134,10 +135,7 @@ namespace LinksRouting
   //----------------------------------------------------------------------------
   void IPCServer::publishSlots(SlotCollector& slot_collector)
   {
-    _slot_search_id = slot_collector.create<std::string>("/links[0]/id");
-    _slot_search_stamp = slot_collector.create<uint32_t>("/links[0]/stamp");
-    _slot_search_regions = slot_collector.create<std::vector<SlotType::Polygon>>
-                                                        ("/links[0]/regions");
+    _slot_links = slot_collector.create<LinkDescription::LinkList>("/links");
   }
 
   //----------------------------------------------------------------------------
@@ -206,12 +204,32 @@ namespace LinksRouting
         QString id = msg.getValue<QString>("id");
         uint32_t stamp = msg.getValue<uint32_t>("stamp");
 
-        *_slot_search_id->_data = id.toStdString();
-        *_slot_search_stamp->_data = stamp;
+        LOG_INFO("Received INITIATE: " << id.toStdString());
 
-        _slot_search_id->setValid(true);
-        _slot_search_stamp->setValid(true);
+        // Remove eventually existing search for same id
+        for( auto it = _slot_links->_data->begin();
+             it != _slot_links->_data->end();
+             ++it )
+        {
+          if( id.toStdString() != it->_id )
+            continue;
 
+          LOG_INFO("Replacing search for " << it->_id);
+          _slot_links->_data->erase(it);
+          break;
+        }
+
+        _slot_links->_data->push_back(
+          LinkDescription::LinkDescription
+          (
+            id.toStdString(),
+            stamp,
+            LinkDescription::HyperEdge( parseRegions(msg) ) // TODO add props?
+          )
+        );
+        _slot_links->setValid(true);
+
+        // Send request to all clients
         QString request(
           "{"
             "\"task\": \"REQUEST\","
@@ -220,31 +238,41 @@ namespace LinksRouting
           "}"
         );
 
+//        for(QWsSocket* socket: _clients)
+//          socket->write(request);
         for(auto socket = _clients.begin(); socket != _clients.end(); ++socket)
           (*socket)->write(request);
-
-        _slot_search_regions->_data->clear();
-        _slot_search_regions->setValid(true);
-
-        parseRegions(msg);
-
-        LOG_INFO("Received INITIATE: " << id.toStdString());
       }
       else if( task == "FOUND" )
       {
-        QString id = msg.getValue<QString>("id");
+        std::string id = msg.getValue<QString>("id").toStdString();
         uint32_t stamp = msg.getValue<uint32_t>("stamp");
 
-        if(    !_slot_search_id->isValid()
-            || !_slot_search_stamp->isValid()
-            || *_slot_search_id->_data != id.toStdString()
-            || *_slot_search_stamp->_data != stamp )
+        auto link = std::find_if
+        (
+          _slot_links->_data->begin(),
+          _slot_links->_data->end(),
+          [&id](const LinkDescription::LinkDescription& desc)
+          {
+            return desc._id == id;
+          }
+        );
+
+        if( link == _slot_links->_data->end() )
         {
-          LOG_WARN("Received FOUND for not wrong REQUEST");
+          LOG_WARN("Received FOUND for none existing REQUEST");
           return;
         }
 
-        LOG_INFO("Received FOUND: " << id.toStdString());
+        if( link->_stamp != stamp )
+        {
+          LOG_WARN("Received FOUND for wrong REQUEST (different stamp)");
+          return;
+        }
+
+        LOG_INFO("Received FOUND: " << id);
+
+        link->_link.addNodes( parseRegions(msg) );
       }
     }
     catch(std::runtime_error& ex)
@@ -280,36 +308,53 @@ namespace LinksRouting
   }
 
   //----------------------------------------------------------------------------
-  void IPCServer::parseRegions(IPCServer::JSON& json)
+  std::vector<LinkDescription::Node>
+  IPCServer::parseRegions(IPCServer::JSON& json)
   {
+    std::vector<LinkDescription::Node> nodes;
+
     if( !json.isSet("regions") )
-      return;
+      return nodes;
 
     QVariantList regions = json.getValue<QVariantList>("regions");
     for(auto region = regions.begin(); region != regions.end(); ++region)
     {
-      SlotType::Polygon polygon;
+      std::vector<LinkDescription::Point> points;
+      LinkDescription::props_t props;
+
+      //for(QVariant point: region.toList())
       auto regionlist = region->toList();
       for(auto point = regionlist.begin(); point != regionlist.end(); ++point)
       {
-        QVariantList coords = point->toList();
-        if( coords.size() != 2 )
+        if( point->type() == QVariant::List )
         {
-          LOG_WARN("Wrong coord count for point.");
-          continue;
-        }
+          QVariantList coords = point->toList();
+          if( coords.size() != 2 )
+          {
+            LOG_WARN("Wrong coord count for point.");
+            continue;
+          }
 
-        polygon.points.push_back(
-          SlotType::Polygon::Point(
+          points.push_back(LinkDescription::Point(
             coords.at(0).toInt(),
             coords.at(1).toInt()
-            )
-          );
+          ));
+        }
+        else if( point->type() == QVariant::Map )
+        {
+          auto map = point->toMap();
+          for( auto it = map.constBegin(); it != map.constEnd(); ++it )
+            props[ it.key().toStdString() ] = it->toString().toStdString();
+        }
+        else
+          LOG_WARN("Wrong data type: " << point->typeName());
       }
 
-      if( !polygon.points.empty() )
-        _slot_search_regions->_data->push_back(polygon);
+      if( !points.empty() )
+        nodes.push_back( LinkDescription::Node(points, props) );
     }
+
+    return nodes;
   }
 
 } // namespace LinksRouting

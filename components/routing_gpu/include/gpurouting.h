@@ -73,12 +73,15 @@ namespace LinksRouting
       }
 
       slot_t<SlotType::Image>::type _subscribe_costmap;
-      slot_t<std::string>::type     _subscribe_search_id;
-      slot_t<unsigned int>::type        _subscribe_search_stamp;
-      slot_t<std::vector<SlotType::Polygon>>::type  _subscribe_search_regions;
+      slot_t<LinkDescription::LinkList>::type _subscribe_links;
 
-      std::string   _last_search_id;
-      unsigned int      _last_search_stamp;
+      struct LinkInfo
+      {
+        uint32_t    _stamp;
+        uint32_t    _revision;
+      };
+
+      std::map<std::string, LinkInfo>   _link_infos;
 
       cl::Context       _cl_context;
       cl::Device        _cl_device;
@@ -92,6 +95,6 @@ namespace LinksRouting
       bool _enabled;
 
   };
-}
-;
+} // namespace LinksRouting
+
 #endif //LR_GPUROUTING
