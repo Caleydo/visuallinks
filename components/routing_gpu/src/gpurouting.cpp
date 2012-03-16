@@ -4,6 +4,8 @@
 #include <iostream>
 #include <fstream>
 #include <cmath>
+#include <algorithm>
+#include "datatypes.h"
 
 
 #if defined(__APPLE__) || defined(__MACOSX)
@@ -45,6 +47,8 @@ namespace LinksRouting
   {
     _subscribe_costmap =
       slot_subscriber.getSlot<LinksRouting::SlotType::Image>("/costmap");
+    _subscribe_desktop =
+      slot_subscriber.getSlot<LinksRouting::SlotType::Image>("/desktop");
     _subscribe_links =
       slot_subscriber.getSlot<LinkDescription::LinkList>("/links");
   }
@@ -237,46 +241,46 @@ namespace LinksRouting
     _cl_prepare_kernel = cl::Kernel(_cl_program, "prepareRouting");
     _cl_shortestpath_kernel = cl::Kernel(_cl_program, "routing");
 
-    //test
-    int blocksize = 64;
-    int datasize = 4*blocksize;
-    cl::Kernel sorting_test = cl::Kernel(_cl_program, "sortTest");
-    cl::Buffer keys(_cl_context, CL_MEM_READ_WRITE, datasize*sizeof(cl_float));
-    cl::Buffer values(_cl_context, CL_MEM_READ_WRITE, datasize*sizeof(cl_uint));
-    std::vector<float> h_keys;
-    std::vector<int> h_values;
-    h_keys.reserve(datasize);
-    h_values.reserve(datasize);
-    for(int i = 0; i < datasize; ++i)
-    {
-      int v = rand();
-      h_keys.push_back(v/1000.0f);
-      h_values.push_back(v);
-    }
+   // //test
+   // int blocksize = 64;
+   // int datasize = 4*blocksize;
+   // cl::Kernel sorting_test = cl::Kernel(_cl_program, "sortTest");
+   // cl::Buffer keys(_cl_context, CL_MEM_READ_WRITE, datasize*sizeof(cl_float));
+   // cl::Buffer values(_cl_context, CL_MEM_READ_WRITE, datasize*sizeof(cl_uint));
+   // std::vector<float> h_keys;
+   // std::vector<int> h_values;
+   // h_keys.reserve(datasize);
+   // h_values.reserve(datasize);
+   // for(int i = 0; i < datasize; ++i)
+   // {
+   //   int v = rand();
+   //   h_keys.push_back(v/1000.0f);
+   //   h_values.push_back(v);
+   // }
 
-    _cl_command_queue.enqueueWriteBuffer(keys, true, 0, datasize*sizeof(cl_float), &h_keys[0]);
-    _cl_command_queue.enqueueWriteBuffer(values, true, 0, datasize*sizeof(cl_uint), &h_values[0]);
+   // _cl_command_queue.enqueueWriteBuffer(keys, true, 0, datasize*sizeof(cl_float), &h_keys[0]);
+   // _cl_command_queue.enqueueWriteBuffer(values, true, 0, datasize*sizeof(cl_uint), &h_values[0]);
 
-    sorting_test.setArg(0, keys);
-    sorting_test.setArg(1, values);
-    sorting_test.setArg(2, 2*blocksize*sizeof(cl_float), NULL);
-    sorting_test.setArg(3, 2*blocksize*sizeof(cl_uint), NULL);
+   // sorting_test.setArg(0, keys);
+   // sorting_test.setArg(1, values);
+   // sorting_test.setArg(2, 2*blocksize*sizeof(cl_float), NULL);
+   // sorting_test.setArg(3, 2*blocksize*sizeof(cl_uint), NULL);
 
-   _cl_command_queue.enqueueNDRangeKernel
-    (
-      sorting_test,
-      cl::NullRange,
-      cl::NDRange(datasize/2),
-      cl::NDRange(blocksize)
-    );
+   //_cl_command_queue.enqueueNDRangeKernel
+   // (
+   //   sorting_test,
+   //   cl::NullRange,
+   //   cl::NDRange(datasize/2),
+   //   cl::NDRange(blocksize)
+   // );
 
-    _cl_command_queue.finish();
-    _cl_command_queue.enqueueReadBuffer(keys, true, 0, datasize*sizeof(cl_float), &h_keys[0]);
-    _cl_command_queue.enqueueReadBuffer(values, true, 0, datasize*sizeof(cl_uint), &h_values[0]);
+   // _cl_command_queue.finish();
+   // _cl_command_queue.enqueueReadBuffer(keys, true, 0, datasize*sizeof(cl_float), &h_keys[0]);
+   // _cl_command_queue.enqueueReadBuffer(values, true, 0, datasize*sizeof(cl_uint), &h_values[0]);
 
-    for(int i = 0; i < datasize; ++i)
-      std::cout <<  "<" << h_keys[i] << "," << h_values[i] << ">,\n";
-    std::cout << std::endl;
+   // for(int i = 0; i < datasize; ++i)
+   //   std::cout <<  "<" << h_keys[i] << "," << h_values[i] << ">,\n";
+   // std::cout << std::endl;
   }
   void GPURouting::shutdown()
   {
@@ -292,6 +296,12 @@ namespace LinksRouting
     if( !_subscribe_costmap->isValid() )
     {
       std::cerr << "GPURouting: No valid costmap received." << std::endl;
+      return;
+    }
+
+    if( !_subscribe_desktop->isValid() )
+    {
+      std::cerr << "GPURouting: No valid desktop image received." << std::endl;
       return;
     }
 
@@ -314,54 +324,11 @@ namespace LinksRouting
       return;
     }
 
-    //------------------------------
-    // now start analyzing the links
-
-    const LinkDescription::LinkList& links = *_subscribe_links->_data;
-
-    for( auto it = links.begin(); it != links.end(); ++it )
-    {
-      auto info = _link_infos.find(it->_id);
-
-      if(    info != _link_infos.end()
-          && info->second._stamp == it->_stamp
-          && info->second._revision == it->_link.getRevision() )
-        continue;
-
-      LOG_INFO("NEW DATA to route: " << it->_id);
-
-      // --------------------------------------------------------
-      // TODO implement routing here
-
-      for( auto node = it->_link.getNodes().begin();
-           node != it->_link.getNodes().end();
-           ++node )
-      {
-        std::cout << "Polygon: (" << node->getVertices().size() << " points)\n";
-        for( auto p = node->getVertices().begin();
-             p != node->getVertices().end();
-             ++p )
-          std::cout << " (" << p->x << "|" << p->y << ")\n";
-        std::cout << std::endl;
-      }
-
-      // --------------------------------------------------------
-
-      // set as handled
-      if( info == _link_infos.end() )
-        _link_infos[it->_id] = {it->_stamp, it->_link.getRevision()};
-      else
-      {
-        info->second._stamp = it->_stamp;
-        info->second._revision = it->_link.getRevision();
-      }
-    }
-
-    if( !_enabled ) // This can be set from the config file...
-      return;
-
     try
     {
+
+    //------------------------------
+    // get buffer from opengl
     std::vector<cl::Memory> memory_gl;
     memory_gl.push_back
     (
@@ -378,190 +345,209 @@ namespace LinksRouting
     glFinish();
     _cl_command_queue.enqueueAcquireGLObjects(&memory_gl);
 
+    // now start analyzing the links
+
+    const LinkDescription::LinkList& links = *_subscribe_links->_data;
     unsigned int width = _subscribe_costmap->_data->width,
-                 height = _subscribe_costmap->_data->height,
-                 num_points = width * height;
-
-    //testdata:
-    struct uint4
-    {
-      union
-      {
-        unsigned int v[4];
-        struct
-        {
-          unsigned int x,y,z,w;
-        };
-      };
-      uint4(unsigned int _x, unsigned int _y, unsigned int _z, unsigned int _w) : x(_x), y(_y), z(_z), w(_w) { }
-    };
-    std::vector<uint4> h_targets;
-    h_targets.push_back(uint4(10*width/100, 11*height/100, 10*width/100+10, 11*height/100+10));
-    h_targets.push_back(uint4(90*width/100, 90*height/100, 90*width/100+10, 90*height/100+10));
-    h_targets.push_back(uint4(91*width/100, 10*height/100, 91*width/100+10, 10*height/100+10));
-    //
-
-
-    //structs used in kernel
-    typedef cl_int4 cl_QueueElement;
-    struct cl_QueueGlobal
-    {
-      cl_uint front;
-      cl_uint back;
-      cl_int filllevel;
-      cl_uint activeBlocks;
-      cl_uint processedBlocks;
-      cl_uint sortingBarrier;
-      cl_int debug;
-    };
-
-    //std::cout << sizeof(cl_QueueElement) << " " << sizeof(cl_QueueGlobal) << std::endl;
-
-    //setup queue
-    int numtargets = h_targets.size();
+              height = _subscribe_costmap->_data->height,
+              num_points = width * height;
     int dim[] = {width, height};
+    int downsample = _subscribe_desktop->_data->width / _subscribe_costmap->_data->width;
     unsigned int numBlocks[2] = {divup<unsigned>(width,_blockSize[0]),divup<unsigned>(height,_blockSize[1])};
     unsigned int sumBlocks = numBlocks[0]*numBlocks[1];
-    unsigned int overAllBlocks = sumBlocks * numtargets;
-    unsigned int blockProcessThreshold = overAllBlocks*40;
-    cl::Buffer buf(_cl_context, CL_MEM_READ_WRITE, num_points * numtargets * sizeof(float));
 
-    cl::Buffer queue_info(_cl_context, CL_MEM_READ_WRITE, sizeof(cl_QueueGlobal));
-    cl::Buffer queue_priority(_cl_context, CL_MEM_READ_WRITE, overAllBlocks * sizeof(cl_float));
-    cl::Buffer queue(_cl_context, CL_MEM_READ_WRITE, overAllBlocks *sizeof(cl_QueueElement));
-    cl::Buffer targets(_cl_context, CL_MEM_READ_WRITE,numtargets*sizeof(cl_uint4));
-
-    _cl_command_queue.enqueueWriteBuffer(targets, true, 0, numtargets*sizeof(cl_uint4), &h_targets[0]);
-
-    cl_QueueGlobal baseQueueInfo;
-    baseQueueInfo.front = 0;
-    baseQueueInfo.back = 0;
-    baseQueueInfo.filllevel = 0;
-    baseQueueInfo.activeBlocks = 0;
-    baseQueueInfo.processedBlocks = 0;
-    baseQueueInfo.sortingBarrier = overAllBlocks + 1;
-    baseQueueInfo.debug = 0;
-
-    _cl_command_queue.enqueueWriteBuffer(queue_info, true, 0, sizeof(cl_QueueGlobal), &baseQueueInfo);
-
-    _cl_clearQueueLink_kernel.setArg(0, queue_priority);
-    cl::Event clearQueueLink_Event;
-    _cl_command_queue.enqueueNDRangeKernel
-    (
-      _cl_clearQueueLink_kernel,
-      cl::NullRange,
-      cl::NDRange(numBlocks[0]*numBlocks[1]*numtargets),
-      cl::NullRange,
-      0,
-      &clearQueueLink_Event
-    );
-
-    _cl_prepare_kernel.setArg(0, memory_gl[0]);
-    _cl_prepare_kernel.setArg(1, buf);
-    _cl_prepare_kernel.setArg(2, queue);
-    _cl_prepare_kernel.setArg(3, queue_priority);
-    _cl_prepare_kernel.setArg(4, queue_info);
-    _cl_prepare_kernel.setArg(5, sizeof(unsigned int), &overAllBlocks);
-    _cl_prepare_kernel.setArg(6, targets);
-    _cl_prepare_kernel.setArg(7, sizeof(int), &numtargets);
-    _cl_prepare_kernel.setArg(8, 2 * sizeof(int), dim);
-    _cl_prepare_kernel.setArg(9, 2 * sizeof(int), numBlocks);
-
-    cl::Event prepare_kernel_Event;
-    _cl_command_queue.enqueueNDRangeKernel
-    (
-      _cl_prepare_kernel,
-      cl::NullRange,
-      cl::NDRange(_blockSize[0]*numBlocks[0],_blockSize[1]*numBlocks[1],numtargets),
-      cl::NDRange(_blockSize[0], _blockSize[1], 1),
-      0,
-      &prepare_kernel_Event
-    );
-
-
-    size_t localmem = std::max
-    (
-      sizeof(cl_float) * (_blockSize[0] + 2) * (_blockSize[1] + 2),
-      _blockSize[0] * _blockSize[1] * 2 * (sizeof(cl_float) + sizeof(cl_uint))
-    );
-    _cl_shortestpath_kernel.setArg(0, memory_gl[0]);
-    _cl_shortestpath_kernel.setArg(1, buf);
-    _cl_shortestpath_kernel.setArg(2, queue);
-    _cl_shortestpath_kernel.setArg(3, queue_priority);
-    _cl_shortestpath_kernel.setArg(4, queue_info);
-    _cl_shortestpath_kernel.setArg(5, sizeof(unsigned int), &overAllBlocks);
-    _cl_shortestpath_kernel.setArg(6, 2 * sizeof(int), dim);
-    _cl_shortestpath_kernel.setArg(7, 2 * sizeof(int), numBlocks);
-    _cl_shortestpath_kernel.setArg(8, sizeof(unsigned int), &blockProcessThreshold);
-    _cl_shortestpath_kernel.setArg(9, localmem, NULL);
-
-    cl::Event shortestpath_Event;
-    _cl_command_queue.enqueueNDRangeKernel
-    (
-      _cl_shortestpath_kernel,
-      cl::NullRange,
-      cl::NDRange(_blockSize[0]*numBlocks[0],_blockSize[1]*numBlocks[1],numtargets),
-      cl::NDRange(_blockSize[0], _blockSize[1], 1),
-      0,
-      &shortestpath_Event
-    );
-
-    _cl_command_queue.enqueueReadBuffer(queue_info, true, 0, sizeof(cl_QueueGlobal), &baseQueueInfo);
-    std::cout << "front: " << baseQueueInfo.front << " "
-              << "back: " << baseQueueInfo.back << " "
-              << "filllevel: " << baseQueueInfo.filllevel << " "
-              << "activeBlocks: " << baseQueueInfo.activeBlocks << " "
-              << "processedBlocks: " << baseQueueInfo.processedBlocks << " "
-              << "debug: " << baseQueueInfo.debug << "\n";
-    //std::vector<cl_QueueElement> test(baseQueueInfo.back-baseQueueInfo.front);
-    //_cl_command_queue.enqueueReadBuffer(queue, true, sizeof(cl_QueueElement)*baseQueueInfo.front, sizeof(cl_QueueElement)*(baseQueueInfo.back-baseQueueInfo.front), &test[0]);
-    //for(int i = 0; i < test.size(); ++i)
-    //{
-    //  std::cout << test[i].block.s[0] << " "
-    //            << test[i].block.s[1] << " "
-    //            << test[i].node << " "
-    //            << test[i].priority << "\n";
-    //}
-    //_cl_command_queue.finish();
-
-    _cl_command_queue.enqueueReleaseGLObjects(&memory_gl);
-    _cl_command_queue.finish();
-
-    cl_ulong start, end;
-    std::cout << "CLInfo:\n";
-    clearQueueLink_Event.getProfilingInfo(CL_PROFILING_COMMAND_END, &end);
-    clearQueueLink_Event.getProfilingInfo(CL_PROFILING_COMMAND_START, &start);
-    std::cout << " - clearing data: " << (end-start)/1000000.0 << "ms\n";
-    prepare_kernel_Event.getProfilingInfo(CL_PROFILING_COMMAND_END, &end);
-    prepare_kernel_Event.getProfilingInfo(CL_PROFILING_COMMAND_START, &start);
-    std::cout << " - preparing data: " << (end-start)/1000000.0  << "ms\n";
-    shortestpath_Event.getProfilingInfo(CL_PROFILING_COMMAND_END, &end);
-    shortestpath_Event.getProfilingInfo(CL_PROFILING_COMMAND_START, &start);
-    std::cout << " - routing: " << (end-start)/1000000.0  << "ms\n";
-
-    static int c = 8;
-    if( !--c )
+    for( auto it = links.begin(); it != links.end(); ++it )
     {
-      std::vector<float> host_mem(num_points*numtargets);
-      _cl_command_queue.enqueueReadBuffer(buf, true, 0, num_points * numtargets * sizeof(float), &host_mem[0]);
+      auto info = _link_infos.find(it->_id);
 
-      std::ofstream fimg("test.pfm", std::ios_base::out | std::ios_base::binary | std::ios_base::trunc );
-      fimg << "PF\n";
-      fimg << width << " " << height*numtargets << '\n';
-      fimg << -1.0f << '\n';
+      
+      if(    info != _link_infos.end()
+          && info->second._stamp == it->_stamp
+          && info->second._revision == it->_link.getRevision() )
+        //TODO: check if screen has changed -> update
+        continue;
 
-      //std::ofstream img("test.pgm", std::ios_base::trunc);
-      //img << "P2\n"
-      //    << width << " " << height*numtargets << "\n"
-      //    << "255\n";
+      LOG_INFO("NEW DATA to route: " << it->_id);
 
-      for( unsigned int i = 0; i < num_points*numtargets; ++i )
+      // --------------------------------------------------------
+    
+      if( !_enabled ) // This can be set from the config file...
+        return;
+
+      //ROUTING
+
+      std::vector<int4> h_targets;
+      h_targets.reserve(it->_link.getNodes().size());
+      for( auto node = it->_link.getNodes().begin();
+           node != it->_link.getNodes().end();
+           ++node )
       {
-        //img << host_mem[i] << "\n";
-        for(int j = 0; j < 3; ++j)
-          fimg.write(reinterpret_cast<char*>(&host_mem[i]),sizeof(float));
+        //std::cout << "Polygon: (" << node->getVertices().size() << " points)\n";
+        //compute min max for poly
+        int4 target(width-1, height-1,0,0);
+
+        for( auto p = node->getVertices().begin();
+             p != node->getVertices().end();
+             ++p )
+        {
+          target.x = std::min(target.x, p->x/downsample);
+          target.y = std::min(target.y, p->y/downsample);
+          target.z = std::max(target.z, p->x/downsample);
+          target.w = std::max(target.w, p->y/downsample);
+        }
+ 
+        if(target.z - target.x <= 0 || target.w - target.y <= 0)
+          continue;
+        h_targets.push_back(target);
       }
-      throw std::runtime_error("stop");
+
+      if(h_targets.size() > 0)
+      {
+        // there is something on screen -> call routing
+            
+        // setup queue
+        int numtargets = h_targets.size();
+
+        unsigned int overAllBlocks = sumBlocks * numtargets;
+        unsigned int blockProcessThreshold = overAllBlocks*40;
+        cl::Buffer buf(_cl_context, CL_MEM_READ_WRITE, num_points * numtargets * sizeof(float));
+
+        cl::Buffer queue_info(_cl_context, CL_MEM_READ_WRITE, sizeof(cl_QueueGlobal));
+        cl::Buffer queue_priority(_cl_context, CL_MEM_READ_WRITE, overAllBlocks * sizeof(cl_float));
+        cl::Buffer queue(_cl_context, CL_MEM_READ_WRITE, overAllBlocks *sizeof(cl_QueueElement));
+        cl::Buffer targets(_cl_context, CL_MEM_READ_WRITE,numtargets*sizeof(cl_uint4));
+
+        _cl_command_queue.enqueueWriteBuffer(targets, true, 0, numtargets*sizeof(cl_uint4), &h_targets[0]);
+
+        cl_QueueGlobal baseQueueInfo(overAllBlocks + 1);
+        _cl_command_queue.enqueueWriteBuffer(queue_info, true, 0, sizeof(cl_QueueGlobal), &baseQueueInfo);
+
+        _cl_clearQueueLink_kernel.setArg(0, queue_priority);
+        cl::Event clearQueueLink_Event;
+        _cl_command_queue.enqueueNDRangeKernel
+        (
+          _cl_clearQueueLink_kernel,
+          cl::NullRange,
+          cl::NDRange(numBlocks[0]*numBlocks[1]*numtargets),
+          cl::NullRange,
+          0,
+          &clearQueueLink_Event
+        );
+
+        _cl_prepare_kernel.setArg(0, memory_gl[0]);
+        _cl_prepare_kernel.setArg(1, buf);
+        _cl_prepare_kernel.setArg(2, queue);
+        _cl_prepare_kernel.setArg(3, queue_priority);
+        _cl_prepare_kernel.setArg(4, queue_info);
+        _cl_prepare_kernel.setArg(5, sizeof(unsigned int), &overAllBlocks);
+        _cl_prepare_kernel.setArg(6, targets);
+        _cl_prepare_kernel.setArg(7, sizeof(int), &numtargets);
+        _cl_prepare_kernel.setArg(8, 2 * sizeof(int), dim);
+        _cl_prepare_kernel.setArg(9, 2 * sizeof(int), numBlocks);
+
+        cl::Event prepare_kernel_Event;
+        _cl_command_queue.enqueueNDRangeKernel
+        (
+          _cl_prepare_kernel,
+          cl::NullRange,
+          cl::NDRange(_blockSize[0]*numBlocks[0],_blockSize[1]*numBlocks[1],numtargets),
+          cl::NDRange(_blockSize[0], _blockSize[1], 1),
+          0,
+          &prepare_kernel_Event
+        );
+
+
+        size_t localmem = std::max
+        (
+          sizeof(cl_float) * (_blockSize[0] + 2) * (_blockSize[1] + 2),
+          _blockSize[0] * _blockSize[1] * 2 * (sizeof(cl_float) + sizeof(cl_uint))
+        );
+        _cl_shortestpath_kernel.setArg(0, memory_gl[0]);
+        _cl_shortestpath_kernel.setArg(1, buf);
+        _cl_shortestpath_kernel.setArg(2, queue);
+        _cl_shortestpath_kernel.setArg(3, queue_priority);
+        _cl_shortestpath_kernel.setArg(4, queue_info);
+        _cl_shortestpath_kernel.setArg(5, sizeof(unsigned int), &overAllBlocks);
+        _cl_shortestpath_kernel.setArg(6, 2 * sizeof(int), dim);
+        _cl_shortestpath_kernel.setArg(7, 2 * sizeof(int), numBlocks);
+        _cl_shortestpath_kernel.setArg(8, sizeof(unsigned int), &blockProcessThreshold);
+        _cl_shortestpath_kernel.setArg(9, localmem, NULL);
+
+        cl::Event shortestpath_Event;
+        _cl_command_queue.enqueueNDRangeKernel
+        (
+          _cl_shortestpath_kernel,
+          cl::NullRange,
+          cl::NDRange(_blockSize[0]*numBlocks[0],_blockSize[1]*numBlocks[1],numtargets),
+          cl::NDRange(_blockSize[0], _blockSize[1], 1),
+          0,
+          &shortestpath_Event
+        );
+
+        _cl_command_queue.enqueueReadBuffer(queue_info, true, 0, sizeof(cl_QueueGlobal), &baseQueueInfo);
+        std::cout << "front: " << baseQueueInfo.front << " "
+                  << "back: " << baseQueueInfo.back << " "
+                  << "filllevel: " << baseQueueInfo.filllevel << " "
+                  << "activeBlocks: " << baseQueueInfo.activeBlocks << " "
+                  << "processedBlocks: " << baseQueueInfo.processedBlocks << " "
+                  << "debug: " << baseQueueInfo.debug << "\n";
+        //std::vector<cl_QueueElement> test(baseQueueInfo.back-baseQueueInfo.front);
+        //_cl_command_queue.enqueueReadBuffer(queue, true, sizeof(cl_QueueElement)*baseQueueInfo.front, sizeof(cl_QueueElement)*(baseQueueInfo.back-baseQueueInfo.front), &test[0]);
+        //for(int i = 0; i < test.size(); ++i)
+        //{
+        //  std::cout << test[i].block.s[0] << " "
+        //            << test[i].block.s[1] << " "
+        //            << test[i].node << " "
+        //            << test[i].priority << "\n";
+        //}
+        //_cl_command_queue.finish();
+
+        _cl_command_queue.enqueueReleaseGLObjects(&memory_gl);
+        _cl_command_queue.finish();
+
+        cl_ulong start, end;
+        std::cout << "CLInfo:\n";
+        clearQueueLink_Event.getProfilingInfo(CL_PROFILING_COMMAND_END, &end);
+        clearQueueLink_Event.getProfilingInfo(CL_PROFILING_COMMAND_START, &start);
+        std::cout << " - clearing data: " << (end-start)/1000000.0 << "ms\n";
+        prepare_kernel_Event.getProfilingInfo(CL_PROFILING_COMMAND_END, &end);
+        prepare_kernel_Event.getProfilingInfo(CL_PROFILING_COMMAND_START, &start);
+        std::cout << " - preparing data: " << (end-start)/1000000.0  << "ms\n";
+        shortestpath_Event.getProfilingInfo(CL_PROFILING_COMMAND_END, &end);
+        shortestpath_Event.getProfilingInfo(CL_PROFILING_COMMAND_START, &start);
+        std::cout << " - routing: " << (end-start)/1000000.0  << "ms\n";
+
+        //std::vector<float> host_mem(num_points*numtargets);
+        //_cl_command_queue.enqueueReadBuffer(buf, true, 0, num_points * numtargets * sizeof(float), &host_mem[0]);
+
+        //std::ofstream fimg("test.pfm", std::ios_base::out | std::ios_base::binary | std::ios_base::trunc );
+        //fimg << "PF\n";
+        //fimg << width << " " << height*numtargets << '\n';
+        //fimg << -1.0f << '\n';
+
+        ////std::ofstream img("test.pgm", std::ios_base::trunc);
+        ////img << "P2\n"
+        ////    << width << " " << height*numtargets << "\n"
+        ////    << "255\n";
+
+        //for( unsigned int i = 0; i < num_points*numtargets; ++i )
+        //{
+        //  //img << host_mem[i] << "\n";
+        //  for(int j = 0; j < 3; ++j)
+        //    fimg.write(reinterpret_cast<char*>(&host_mem[i]),sizeof(float));
+        //}
+      }
+
+      // --------------------------------------------------------
+
+      // set as handled
+      if( info == _link_infos.end() )
+        _link_infos[it->_id] = LinkInfo(it->_stamp, it->_link.getRevision());
+      else
+      {
+        info->second._stamp = it->_stamp;
+        info->second._revision = it->_link.getRevision();
+      }
     }
     }
     catch(cl::Error& err)

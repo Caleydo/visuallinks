@@ -73,12 +73,44 @@ namespace LinksRouting
       }
 
       slot_t<SlotType::Image>::type _subscribe_costmap;
+      slot_t<SlotType::Image>::type _subscribe_desktop;
       slot_t<LinkDescription::LinkList>::type _subscribe_links;
 
       struct LinkInfo
       {
         uint32_t    _stamp;
         uint32_t    _revision;
+        LinkInfo()
+        {
+        }
+        LinkInfo(uint32_t  stamp, uint32_t revision) : _stamp(stamp), _revision(revision)
+        {     
+        }
+      };
+
+      //structs used in kernel
+      typedef cl_int4 cl_QueueElement;
+      struct cl_QueueGlobal
+      {
+        cl_uint front;
+        cl_uint back;
+        cl_int filllevel;
+        cl_uint activeBlocks;
+        cl_uint processedBlocks;
+        cl_uint sortingBarrier;
+        cl_int debug;
+
+        cl_QueueGlobal() { }
+        cl_QueueGlobal(cl_uint _sortingBarrier) : 
+          front(0),
+          back(0),
+          filllevel(0),
+          activeBlocks(0),
+          processedBlocks(0),
+          sortingBarrier(_sortingBarrier),
+          debug(0)
+        {
+        }
       };
 
       std::map<std::string, LinkInfo>   _link_infos;

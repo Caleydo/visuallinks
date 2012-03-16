@@ -5,7 +5,7 @@
   </ComponentCostanalysis>
   
   <GPURouting>
-    <enabled type="Bool" val="false" />
+    <enabled type="Bool" val="true" />
     <BlockSizeX type="Integer" val="8" />
     <BlockSizeY type="Integer" val="8" />
   </GPURouting>

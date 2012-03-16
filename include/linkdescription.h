@@ -2,6 +2,7 @@
 #define LR_LINKDESCRIPTION
 
 #include "color.h"
+#include "datatypes.h"
 
 #include <list>
 #include <vector>
