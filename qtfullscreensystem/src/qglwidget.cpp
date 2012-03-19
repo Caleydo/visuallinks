@@ -202,7 +202,18 @@ ShaderPtr loadShader( QString vert, QString frag )
     //So we need to get the new frame of the window before drawing...
     QPoint window_offset = mapToGlobal(QPoint());
     QPoint window_end = mapToGlobal(QPoint(width(), height()));
-    LOG_ENTER_FUNC() << "window frame=" << window_offset <<" <-> " <<  window_end;
+
+    if(    window_offset != _window_offset
+        || window_end != _window_end )
+    {
+      LOG_ENTER_FUNC() << "window frame="
+                       << window_offset
+                       <<" <-> "
+                       <<  window_end;
+
+      _window_offset = window_offset;
+      _window_end = window_end;
+    }
 
     _core.process();
     updateScreenShot(window_offset, window_end);
@@ -305,10 +316,7 @@ ShaderPtr loadShader( QString vert, QString frag )
   void GLWidget::updateScreenShot(QPoint window_offset, QPoint window_end)
   {
     if( _screenshot.isNull() )
-    {
-      qWarning("No screenshot available...");
       return;
-    }
 
     qDebug("Update screenshot...");
     _slot_desktop->setValid(false);

@@ -365,7 +365,7 @@ namespace LinksRouting
     {
       auto info = _link_infos.find(it->_id);
 
-      
+
       if(    info != _link_infos.end()
           && info->second._stamp == it->_stamp
           && info->second._revision == it->_link.getRevision() )
@@ -375,7 +375,7 @@ namespace LinksRouting
       LOG_INFO("NEW DATA to route: " << it->_id);
 
       // --------------------------------------------------------
-    
+
       if( !_enabled ) // This can be set from the config file...
         return;
 
@@ -402,7 +402,7 @@ namespace LinksRouting
           target.z = std::max(target.z, p->x/downsample);
           target.w = std::max(target.w, p->y/downsample);
         }
- 
+
         target.x = std::max(target.x, 0);
         target.y = std::max(target.y, 0);
         target.z = std::min(target.z, ((int)width-1));
@@ -415,12 +415,12 @@ namespace LinksRouting
 
       //remove duplicates
       std::set<int4> dups(h_targets.begin(), h_targets.end());
-      h_targets.swap(std::vector<int4>(dups.begin(), dups.end()));
+      h_targets = std::vector<int4>(dups.begin(), dups.end());
 
       if(h_targets.size() > 1)
       {
         // there is something on screen -> call routing
-            
+
         // setup queue
         int numtargets = h_targets.size();
 
@@ -505,7 +505,7 @@ namespace LinksRouting
           &shortestpath_Event
         );
 
- 
+
 
         //_cl_command_queue.enqueueReadBuffer(queue_info, true, 0, sizeof(cl_QueueGlobal), &baseQueueInfo);
         //std::cout << "front: " << baseQueueInfo.front << " "
@@ -589,7 +589,7 @@ namespace LinksRouting
         _cl_command_queue.finish();
 
         //inter block route reconstruction
-        
+
         _cl_routeInterBlock_kernel.setArg(0, routing_block_inout);
         _cl_routeInterBlock_kernel.setArg(1, routing_inter_block);
         _cl_routeInterBlock_kernel.setArg(2, 2 * sizeof(cl_int), startingpoint);
@@ -667,7 +667,7 @@ namespace LinksRouting
         routeConstruct_Event.getProfilingInfo(CL_PROFILING_COMMAND_END, &end);
         routeConstruct_Event.getProfilingInfo(CL_PROFILING_COMMAND_START, &start);
         std::cout << " - route construction: " << (end-start)/1000000.0  << "ms\n";
-        
+
 
         //std::vector<float> host_mem(num_points*numtargets);
         //_cl_command_queue.enqueueReadBuffer(buf, true, 0, num_points * numtargets * sizeof(float), &host_mem[0]);
