@@ -5,17 +5,18 @@
 
 <script type="application/x-javascript" src="chrome://mypl/content/myjs.js" />
 
-<menupopup id="menu_ToolsPopup"> 
-    <menuitem label="Register to VisLink Daemon" insertafter="devToolsSeparator" oncommand="startVisLinks();" />
-</menupopup> 
-
 <toolbarpalette id="BrowserToolbarPalette">
-	<toolbarbutton id="vislink"
-		label="vislink"
-  		tooltiptext="VisLink"
-		oncommand="selectVisLink()"
-		class="toolbarbutton-1 chromeclass-toolbar-additional vislink"
-  	/>
+	<toolbarbutton type="menu-button"
+		             id="vislink"
+		             label="vislink"
+		             tooltiptext="VisLink"
+		             oncommand="onVisLinkButton()"
+		             class="toolbarbutton-1 chromeclass-toolbar-additional vislink">
+		<menupopup>
+      <menuitem label="New Document"/>
+      <menuitem label="New Image" oncommand="alert('test');"/>
+    </menupopup>
+	</toolbarbutton>
 </toolbarpalette>
 
 </overlay>

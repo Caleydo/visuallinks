@@ -1,3 +1,14 @@
 #vislink
-  {list-style-image: url("chrome://mypl/content/vislink.png");}
+{
+  list-style-image: url("chrome://mypl/content/icon.png");
+}
 
+#vislink.active
+{
+  list-style-image: url("chrome://mypl/content/icon-active.png");
+}
+
+#vislink.error
+{
+  list-style-image: url("chrome://mypl/content/icon-error.png");
+}

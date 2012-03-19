@@ -1,8 +1,18 @@
 var stopped = true;
 var socket = null;
+var status = '';
 
 var last_id = null;
 var last_stamp = null;
+
+/**
+ * Set status icon
+ */
+function setStatus(stat)
+{
+  document.getElementById('vislink').setAttribute('class', stat);
+  status = stat;
+}
 
 /** Send data via the global WebSocket
  *
@@ -20,6 +30,26 @@ function send(data)
   {
     alert(e);
     throw e;
+  }
+}
+
+//------------------------------------------------------------------------------
+function onVisLinkButton()
+{
+  if( status == 'active')
+    selectVisLink();
+  else
+  {
+    // start client
+    stopped = false;
+    if( register() )
+    {
+      window.addEventListener('unload', stopVisLinks, false);
+  //    window.addEventListener('scroll', windowChanged, false);
+  //    window.addEventListener('resize', resize, false);
+      window.addEventListener("DOMContentLoaded", windowChanged, false); 
+      //setTimeout("triggerSearch()", 500);
+    }
   }
 }
 
@@ -67,21 +97,6 @@ function reportVisLinks(selectionId, found)
 }
 
 //------------------------------------------------------------------------------
-function startVisLinks()
-{
-	// alert("startVisLinks");
-	stopped = false;
-	if( register() )
-	{
-		window.addEventListener('unload', stopVisLinks, false);
-//		window.addEventListener('scroll', windowChanged, false);
-//		window.addEventListener('resize', resize, false);
-		window.addEventListener("DOMContentLoaded", windowChanged, false); 
-		//setTimeout("triggerSearch()", 500);
-	}
-}
-
-//------------------------------------------------------------------------------
 function pageLoaded()
 {
 	windowChanged(); 
@@ -107,6 +122,7 @@ function windowChanged()
 function stopVisLinks()
 {
 	stopped = true;
+	setStatus('');
 	window.removeEventListener('unload', stopVisLinks, false);
 	window.removeEventListener('scroll', clearVisualLinks, false);
 	unregister();
@@ -129,15 +145,24 @@ function register()
 
 	try
 	{
-    socket = new MozWebSocket('ws://localhost:4487', 'VLP');
-    /*socket.onopen = function(event)
+    socket = new WebSocket('ws://localhost:4487', 'VLP');
+    socket.onopen = function(event)
     {
-      send({
-        'task': 'register',
-        'name': window.visLinkAppName,
-        'bounding-box' : {'x': x, 'y': y, 'w': w, 'h': h}
-      });
-    }*/
+      setStatus('active');
+//      send({
+//        'task': 'register',
+//        'name': window.visLinkAppName,
+//        'bounding-box' : {'x': x, 'y': y, 'w': w, 'h': h}
+//      });
+    };
+    socket.onclose = function(event)
+    {
+      setStatus(event.wasClean ? '' : 'error');
+    };
+    socket.onerror = function(event)
+    {
+      setStatus('error');
+    };
     socket.onmessage = function(event)
     {
       msg = JSON.parse(event.data);
