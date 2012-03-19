@@ -4,6 +4,7 @@
 #include <iostream>
 #include <fstream>
 #include <cmath>
+#include <set>
 #include <algorithm>
 #include "datatypes.h"
 
@@ -240,6 +241,9 @@ namespace LinksRouting
     _cl_clearQueueLink_kernel = cl::Kernel(_cl_program, "clearQueueLink");
     _cl_prepare_kernel = cl::Kernel(_cl_program, "prepareRouting");
     _cl_shortestpath_kernel = cl::Kernel(_cl_program, "routing");
+    _cl_getMinimum_kernel = cl::Kernel(_cl_program, "getMinimum");
+    _cl_routeInOut_kernel = cl::Kernel(_cl_program, "calcInOut");
+    _cl_routeInterBlock_kernel = cl::Kernel(_cl_program, "calcInterBlockRoute");
 
    // //test
    // int blocksize = 64;
@@ -351,7 +355,7 @@ namespace LinksRouting
     unsigned int width = _subscribe_costmap->_data->width,
               height = _subscribe_costmap->_data->height,
               num_points = width * height;
-    int dim[] = {width, height};
+    int dim[] = {width, height, num_points};
     int downsample = _subscribe_desktop->_data->width / _subscribe_costmap->_data->width;
     unsigned int numBlocks[2] = {divup<unsigned>(width,_blockSize[0]),divup<unsigned>(height,_blockSize[1])};
     unsigned int sumBlocks = numBlocks[0]*numBlocks[1];
@@ -375,6 +379,8 @@ namespace LinksRouting
         return;
 
       //ROUTING
+      cl::Buffer queue_info(_cl_context, CL_MEM_READ_WRITE, sizeof(cl_QueueGlobal));
+      cl::Buffer idbuffer(_cl_context, CL_MEM_READ_WRITE, sizeof(cl_ushort2)*256);
 
       std::vector<int4> h_targets;
       h_targets.reserve(it->_link.getNodes().size());
@@ -396,12 +402,21 @@ namespace LinksRouting
           target.w = std::max(target.w, p->y/downsample);
         }
  
+        target.x = std::max(target.x, 0);
+        target.y = std::max(target.y, 0);
+        target.z = std::min(target.z, ((int)width-1));
+        target.w = std::min(target.w, ((int)height-1));
+
         if(target.z - target.x <= 0 || target.w - target.y <= 0)
           continue;
         h_targets.push_back(target);
       }
 
-      if(h_targets.size() > 0)
+      //remove duplicates
+      std::set<int4> dups(h_targets.begin(), h_targets.end());
+      h_targets.swap(std::vector<int4>(dups.begin(), dups.end()));
+
+      if(h_targets.size() > 1)
       {
         // there is something on screen -> call routing
             
@@ -412,16 +427,18 @@ namespace LinksRouting
         unsigned int blockProcessThreshold = overAllBlocks*40;
         cl::Buffer buf(_cl_context, CL_MEM_READ_WRITE, num_points * numtargets * sizeof(float));
 
-        cl::Buffer queue_info(_cl_context, CL_MEM_READ_WRITE, sizeof(cl_QueueGlobal));
         cl::Buffer queue_priority(_cl_context, CL_MEM_READ_WRITE, overAllBlocks * sizeof(cl_float));
         cl::Buffer queue(_cl_context, CL_MEM_READ_WRITE, overAllBlocks *sizeof(cl_QueueElement));
         cl::Buffer targets(_cl_context, CL_MEM_READ_WRITE,numtargets*sizeof(cl_uint4));
+        unsigned int blockborder =  2*(_blockSize[0] + _blockSize[1] - 2);
+        cl::Buffer routing_block_inout(_cl_context, CL_MEM_READ_WRITE, numtargets*(1 + sumBlocks * blockborder ) * sizeof(cl_uint));
 
         _cl_command_queue.enqueueWriteBuffer(targets, true, 0, numtargets*sizeof(cl_uint4), &h_targets[0]);
 
-        cl_QueueGlobal baseQueueInfo(overAllBlocks + 1);
+        cl_QueueGlobal baseQueueInfo(std::min<int>(overAllBlocks + 1, 128*1024));
         _cl_command_queue.enqueueWriteBuffer(queue_info, true, 0, sizeof(cl_QueueGlobal), &baseQueueInfo);
 
+        //clear data
         _cl_clearQueueLink_kernel.setArg(0, queue_priority);
         cl::Event clearQueueLink_Event;
         _cl_command_queue.enqueueNDRangeKernel
@@ -434,6 +451,8 @@ namespace LinksRouting
           &clearQueueLink_Event
         );
 
+
+        //insert nodes and prepare data
         _cl_prepare_kernel.setArg(0, memory_gl[0]);
         _cl_prepare_kernel.setArg(1, buf);
         _cl_prepare_kernel.setArg(2, queue);
@@ -456,7 +475,7 @@ namespace LinksRouting
           &prepare_kernel_Event
         );
 
-
+        //compute shortest paths
         size_t localmem = std::max
         (
           sizeof(cl_float) * (_blockSize[0] + 2) * (_blockSize[1] + 2),
@@ -484,13 +503,15 @@ namespace LinksRouting
           &shortestpath_Event
         );
 
-        _cl_command_queue.enqueueReadBuffer(queue_info, true, 0, sizeof(cl_QueueGlobal), &baseQueueInfo);
-        std::cout << "front: " << baseQueueInfo.front << " "
-                  << "back: " << baseQueueInfo.back << " "
-                  << "filllevel: " << baseQueueInfo.filllevel << " "
-                  << "activeBlocks: " << baseQueueInfo.activeBlocks << " "
-                  << "processedBlocks: " << baseQueueInfo.processedBlocks << " "
-                  << "debug: " << baseQueueInfo.debug << "\n";
+ 
+
+        //_cl_command_queue.enqueueReadBuffer(queue_info, true, 0, sizeof(cl_QueueGlobal), &baseQueueInfo);
+        //std::cout << "front: " << baseQueueInfo.front << " "
+        //          << "back: " << baseQueueInfo.back << " "
+        //          << "filllevel: " << baseQueueInfo.filllevel << " "
+        //          << "activeBlocks: " << baseQueueInfo.activeBlocks << " "
+        //          << "processedBlocks: " << baseQueueInfo.processedBlocks << " "
+        //          << "debug: " << baseQueueInfo.debug << "\n";
         //std::vector<cl_QueueElement> test(baseQueueInfo.back-baseQueueInfo.front);
         //_cl_command_queue.enqueueReadBuffer(queue, true, sizeof(cl_QueueElement)*baseQueueInfo.front, sizeof(cl_QueueElement)*(baseQueueInfo.back-baseQueueInfo.front), &test[0]);
         //for(int i = 0; i < test.size(); ++i)
@@ -501,6 +522,72 @@ namespace LinksRouting
         //            << test[i].priority << "\n";
         //}
         //_cl_command_queue.finish();
+
+
+        //search for minimum
+
+        _cl_command_queue.finish();
+
+        _cl_getMinimum_kernel.setArg(0, buf);
+        _cl_getMinimum_kernel.setArg(1, queue_info);
+        _cl_getMinimum_kernel.setArg(2, idbuffer);
+        _cl_getMinimum_kernel.setArg(3, 2 * sizeof(cl_int), dim);
+        _cl_getMinimum_kernel.setArg(4, numtargets);
+
+        cl::Event getmin_Event;
+        _cl_command_queue.enqueueNDRangeKernel
+        (
+          _cl_getMinimum_kernel,
+          cl::NullRange,
+          cl::NDRange(dim[0],dim[1]),
+          cl::NullRange,
+          0,
+          &getmin_Event
+        );
+
+        _cl_command_queue.finish();
+
+        cl_ushort2 us2_dummy;
+        std::vector<cl_ushort2> h_idbuffer(256, us2_dummy);
+        _cl_command_queue.enqueueReadBuffer(idbuffer, true, 0, sizeof(cl_ushort2)*256, &h_idbuffer[0]);
+        _cl_command_queue.enqueueReadBuffer(queue_info, true, 0, sizeof(cl_QueueGlobal), &baseQueueInfo);
+        cl_uint cleanedcost = (baseQueueInfo.mincost & 0xFFFFFF00) >> 1;
+        cl_uint idbufferoffset = baseQueueInfo.mincost&0xFF;
+        int startingpoint[2] = {h_idbuffer[idbufferoffset].s[0],
+                                h_idbuffer[idbufferoffset].s[1]};
+        //debug
+        std::cout << "front: " << baseQueueInfo.front << "\n"
+                  << "back: " << baseQueueInfo.back << "\n"
+                  << "filllevel: " << baseQueueInfo.filllevel << "\n"
+                  << "activeBlocks: " << baseQueueInfo.activeBlocks << "\n"
+                  << "processedBlocks: " << baseQueueInfo.processedBlocks << "\n"
+                  << "min: " <<  *(float*)&cleanedcost << " @ " <<  startingpoint[0] << "," << startingpoint[1] << "\n"
+                  << "debug: " << baseQueueInfo.debug << "\n\n";
+        //-----
+
+        //local route reconstruction
+        _cl_routeInOut_kernel.setArg(0, buf);
+        _cl_routeInOut_kernel.setArg(1, routing_block_inout);
+        _cl_routeInOut_kernel.setArg(2, _blockSize[0]*_blockSize[1]*sizeof(cl_int), NULL);
+        _cl_routeInOut_kernel.setArg(3, _blockSize[0]*_blockSize[1]*sizeof(cl_int), NULL);
+        _cl_routeInOut_kernel.setArg(4, 2 * sizeof(cl_int), startingpoint);
+        _cl_routeInOut_kernel.setArg(5, 2 * sizeof(cl_int), dim);
+
+        cl::Event routeInOut_Event;
+        _cl_command_queue.enqueueNDRangeKernel
+        (
+          _cl_routeInOut_kernel,
+          cl::NullRange,
+          cl::NDRange(_blockSize[0]*numBlocks[0],_blockSize[1]*numBlocks[1],numtargets),
+          cl::NDRange(_blockSize[0], _blockSize[1], 1),
+          0,
+          &routeInOut_Event
+        );
+
+        _cl_command_queue.finish();
+
+        //inter block route reconstruction
+        
 
         _cl_command_queue.enqueueReleaseGLObjects(&memory_gl);
         _cl_command_queue.finish();
@@ -516,6 +603,12 @@ namespace LinksRouting
         shortestpath_Event.getProfilingInfo(CL_PROFILING_COMMAND_END, &end);
         shortestpath_Event.getProfilingInfo(CL_PROFILING_COMMAND_START, &start);
         std::cout << " - routing: " << (end-start)/1000000.0  << "ms\n";
+        getmin_Event.getProfilingInfo(CL_PROFILING_COMMAND_END, &end);
+        getmin_Event.getProfilingInfo(CL_PROFILING_COMMAND_START, &start);
+        std::cout << " - get minimum: " << (end-start)/1000000.0  << "ms\n";
+        routeInOut_Event.getProfilingInfo(CL_PROFILING_COMMAND_END, &end);
+        routeInOut_Event.getProfilingInfo(CL_PROFILING_COMMAND_START, &start);
+        std::cout << " - local route reconstruction: " << (end-start)/1000000.0  << "ms\n";
 
         //std::vector<float> host_mem(num_points*numtargets);
         //_cl_command_queue.enqueueReadBuffer(buf, true, 0, num_points * numtargets * sizeof(float), &host_mem[0]);

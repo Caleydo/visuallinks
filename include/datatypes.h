@@ -30,6 +30,21 @@ struct int4
     };
   };
   int4( int _x, int _y, int _z, int _w) : x(_x), y(_y), z(_z), w(_w) { }
+  bool operator < (const int4& other) const
+  {
+    if(x < other.x) return true;
+    else if(x == other.x)
+    {
+      if(z < other.z) return true;
+      else if(z == other.z)
+      {
+        if(y < other.y) return true;
+        else if(y == other.y && w < other.w)
+          return true;
+      }
+    }
+    return false;
+  }
 };
 
 #endif //DATATYPES_H

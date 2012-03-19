@@ -99,6 +99,7 @@ namespace LinksRouting
         cl_uint processedBlocks;
         cl_uint sortingBarrier;
         cl_int debug;
+        cl_uint mincost;
 
         cl_QueueGlobal() { }
         cl_QueueGlobal(cl_uint _sortingBarrier) : 
@@ -108,7 +109,8 @@ namespace LinksRouting
           activeBlocks(0),
           processedBlocks(0),
           sortingBarrier(_sortingBarrier),
-          debug(0)
+          debug(0),
+          mincost(0xFFFFFFFF)
         {
         }
       };
@@ -122,6 +124,9 @@ namespace LinksRouting
       cl::Kernel        _cl_prepare_kernel;
       cl::Kernel        _cl_shortestpath_kernel;
       cl::Kernel        _cl_clearQueueLink_kernel;
+      cl::Kernel        _cl_getMinimum_kernel;
+      cl::Kernel        _cl_routeInOut_kernel;
+      cl::Kernel        _cl_routeInterBlock_kernel;
 
       int _blockSize[2];
       bool _enabled;

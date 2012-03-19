@@ -1,7 +1,7 @@
 <?xml version="1.0" ?>
 <config>
   <ComponentCostanalysis>
-	<DownsampleCost type="Integer" val="2" />
+	<DownsampleCost type="Integer" val="4" />
   </ComponentCostanalysis>
   
   <GPURouting>
