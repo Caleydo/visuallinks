@@ -49,6 +49,7 @@ struct _QueueGlobal
   uint processedBlocks;
   uint sortingBarrier;
   int debug;
+  uint mincost;
 };
 typedef struct _QueueGlobal QueueGlobal;
 
@@ -549,6 +550,249 @@ __kernel void routing(read_only image2d_t costmap,
                     processedBlocksThreshold, 
                     l_data);
 }
+
+__kernel void getMinimum(global const float* routecost,
+                         volatile global QueueGlobal* queueInfo,
+                         volatile global ushort2* coordinates,
+                         const int2 dim,
+                         int targets)
+{
+  float cost = 0;
+  for(int i = 0; i < targets; ++i)
+    cost += routecost[dim.x*get_global_id(1) + get_global_id(0) + dim.x*dim.y*i];
+
+  __local uint localmin;
+  __local uint2 coords;
+  localmin = as_uint(MAXFLOAT);
+
+  barrier(CLK_LOCAL_MEM_FENCE);
+
+  atomic_min(&localmin, as_uint(cost));
+
+  barrier(CLK_LOCAL_MEM_FENCE);
+
+  if(localmin == as_uint(cost))
+    coords = (uint2)(get_global_id(0), get_global_id(1));
+
+  barrier(CLK_LOCAL_MEM_FENCE);
+
+  if( (get_local_id(0) + get_local_id(1)) == 0 )
+  {
+    uint minv = as_uint(localmin);
+    //compress it
+    minv = (minv << 1) & 0xFFFFFF00;
+    //combine with block id
+    uint groupv = (get_group_id(0) + get_group_id(1)*get_num_groups(0)) & 0xFF;
+    uint combined = minv | groupv;
+    uint old = atomic_min(&queueInfo->mincost, combined);
+    if(old > combined)
+    {
+      //write coords to array entry
+      coordinates[groupv] = (ushort2)(coords.x,coords.y);
+    }
+  }
+}
+
+uint borderId(int2 lid, int2 lsize)
+{
+  uint id = lid.x + (lid.x==lsize.x-1)*lid.y;
+  if(lid.y==lsize.y-1)
+    id = lsize.x*2 + lsize.y - 3 - lid.x;
+  else if(lid.x == 0 && lid.y > 0)
+    id = 2*(lsize.x + lsize.y - 2) - lid.y;
+  return id;
+}
+
+__kernel void calcInOut(global const float* routecost,
+                        global uint* blockroutes,
+                        local int* l_cost,
+                        local int* l_origin,
+                        const int2 start,
+                        const int2 dim)
+{
+  int3 coord = (int3)(get_global_id(0), get_global_id(1), get_global_id(2));
+  float mincost = MAXFLOAT;
+  if(coord.x >= 0 && coord.x < dim.x && 
+     coord.y >= 0 && coord.y < dim.y)
+    mincost =  routecost[coord.x + dim.x*coord.y + dim.x*dim.y*coord.z];
+
+  int2 dir = (int2)(0,0);
+  for(int y = -1; y <= 1; ++y)
+    for(int x = -1; x <= 1; ++x)
+    {
+      coord = (int3)(get_global_id(0)+x, get_global_id(1)+y, get_global_id(2));
+      if(coord.x >= 0 && coord.x < dim.x && 
+         coord.y >= 0 && coord.y < dim.y)
+      {
+        float tcost =  routecost[coord.x + dim.x*coord.y + dim.x*dim.y*coord.z];
+        if(mincost > tcost)
+        {
+          mincost = tcost;
+          dir = (int2)(x,y);
+        }
+      }
+    }
+  //store dir and cost
+  int cost = (dir.x == 0 && dir.y == 0) ? 0 : 1;
+  bool border = get_local_id(0) + dir.x < 0 ||
+                get_local_id(1) + dir.y < 0 ||
+                get_local_id(0) + dir.x >= get_local_size(0) ||
+                get_local_id(1) + dir.y >= get_local_size(1);
+
+  int origin = (dir.x == 0 && dir.y == 0) ? (get_local_id(0) << 8 | get_local_id(1)) :
+               border ? ( ( (1 + get_local_id(1) + dir.y) << 8 ) | (1 + get_local_id(0) + dir.x ) ) : 0;
+
+  
+  int loffset = get_local_id(0) + get_local_id(1)*get_local_size(0);
+  int lfrom = get_local_id(0) + dir.x + (get_local_id(1)+dir.y)*get_local_size(0);
+  l_cost[loffset] = cost;
+  l_origin[loffset] = origin;
+  
+  __local bool changed;
+  do
+  {
+    changed = false;
+    barrier(CLK_LOCAL_MEM_FENCE);
+    if(origin == 0)
+    {
+      if(l_cost[loffset] != l_cost[lfrom]+1)
+      {
+        l_cost[loffset] = l_cost[lfrom]+1;
+        l_origin[loffset] = l_origin[lfrom];
+        changed = true;
+      }
+    }      
+    barrier(CLK_LOCAL_MEM_FENCE);
+  }
+  while(changed);
+
+
+  border = get_local_id(0) == 0 ||
+           get_local_id(1) == 0 ||
+           get_local_id(0) == get_local_size(0)-1 ||
+           get_local_id(1) == get_local_size(1)-1;
+  
+  uint info = (l_cost[loffset] << 16) | l_origin[loffset];
+
+  if(border)
+  {
+    //store the info
+    uint localoffset = borderId((int2)(get_local_id(0),get_local_id(1)), (int2)(get_local_size(0),get_local_size(1)));    
+    uint groupid = get_group_id(0)+get_group_id(1)*get_num_groups(0) + get_group_id(2)*get_num_groups(0)*get_num_groups(1);
+    uint elements_per_group = 2*(get_local_size(0) + get_local_size(1) - 2);
+    blockroutes[ get_global_size(2) + groupid * elements_per_group + localoffset] =  info;
+  }
+
+  if( start.x == get_global_id(0) && start.y == get_global_id(1) )
+  {
+    //this is the starting point, we also need to save this info
+    blockroutes[ get_global_id(2) ] =  info;
+  }
+  
+}
+
+
+uint blockInOutCost(uint data)
+{
+  return data >> 16;
+}
+int2 blockInOutOrigin(uint data)
+{
+  int x = data & 0xFF;
+  int y = (data >> 8) & 0xFF;
+  return (int2)(x-1,y-1);
+}
+uint pack(int2 d)
+{
+  return (d.x << 16) | d.y;
+}
+int2 unpack(uint d)
+{
+  return (int2)(d >> 16, d & 0xFFFF); 
+}
+
+__kernel void calcInterBlockRoute(global const uint* blockroutes,
+                                  global uint2* interblockroutes,
+                                  const int2 start,
+                                  const int2 blocks,
+                                  const int2 blocksize)
+{
+  uint target = get_global_id(0);
+  uint startinfo = blockroutes[target];
+  uint elements_per_group = 2*(blocksize.x + blocksize.y - 2);
+  uint inoffset = get_global_size(2) + target*blocks.x*blocks.y*elements_per_group;
+  uint outoffset = blocks.x*blocks.y + target;
+  uint blockcount = 0;
+
+  uint newcost = blockInOutCost(startinfo);
+  int2 localorigin = blockInOutOrigin(startinfo);
+  interblockroutes[outoffset++] = (uint2)(0,pack(start));
+
+  int2 block = (int2)(start.x/blocksize.x, start.y/blocksize.y);
+  uint sumcost = 0;
+
+  while(newcost != 0)
+  {
+    sumcost += newcost;
+    int2 currentpos = block*blocksize + localorigin;
+    block.x += localorigin.x < 0 ? -1 : localorigin.x >= blocksize.x ? 1 : 0;
+    block.y += localorigin.y < 0 ? -1 : localorigin.y >= blocksize.y ? 1 : 0;
+    int2 localpos = currentpos - block*blocksize;
+
+    int localoffset = borderId(localpos, blocksize);
+    interblockroutes[outoffset++] = (uint2)(sumcost,pack(currentpos));
+
+    uint currentinfo = blockroutes[inoffset + (block.y*blocks.x + block.y)*elements_per_group + localoffset];
+    newcost = blockInOutCost(currentinfo);
+    localorigin = blockInOutOrigin(startinfo);
+    ++blockcount;
+  }
+  interblockroutes[target].x = blockcount;
+  interblockroutes[target].y = sumcost;
+}
+
+__kernel void constructRoute(global const float* routecost,
+                             global const uint2* interblockroutes,
+                             global int2* route,
+                             const int maxpoints_pertarget,
+                             const int numtargets,
+                             const int2 dim)
+{
+  uint target = get_global_id(0)/maxpoints_pertarget;
+  uint element = get_global_id(0)%maxpoints_pertarget;
+  if(element >= interblockroutes[target].x)
+    return;
+  
+  int offset = maxpoints_pertarget*target + interblockroutes[numtargets + get_global_id(0)].x;
+  int endoffset = offset + interblockroutes[numtargets + get_global_id(0) + 1].x;
+  int2 pos = unpack( interblockroutes[numtargets + get_global_id(0)].y );
+
+  route[offset++] = pos;
+  //follow the route
+  while(offset < endoffset)
+  {
+    float mincost = MAXFLOAT;
+    int2 next = pos;
+    for(int y = -1; y <= 1; ++y)
+      for(int x = -1; x <= 1; ++x)
+      {
+        int2 coord = (int2)(pos.x+x, pos.y+y);
+        if(coord.x >= 0 && coord.x < dim.x && 
+           coord.y >= 0 && coord.y < dim.y)
+        {
+          float tcost =  routecost[coord.x + dim.x*coord.y + dim.x*dim.y*target];
+          if(mincost > tcost)
+          {
+            mincost = tcost;
+            next = coord;
+          }
+        }
+      }
+    pos = next;
+    route[offset++] = pos;
+  }
+}
+
 #if 0
   int3 blockid = {get_group_id(0), get_group_id(1), get_global_id(2)};
   route(costmap, routecost, blockid, l_costs, dim);

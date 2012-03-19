@@ -12,6 +12,7 @@ set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} ${PROJROOT}/cmake)
 #include macros
 include( cmake/CopyFiles.cmake )
 include( cmake/AddComponent.cmake )
+include( cmake/AddSubdirOption.cmake )
 
 #set interface files
 set( INTERFACE_FILES
@@ -61,9 +62,9 @@ add_component(transparencyanalysis off)
 #message("comp inc:\n${COMPONENTS_INC_DIR} \ncomp libs:\n${COMPONENTS_LIBS}\ndepeping files:\n${COMPONENTS_DEPENDING_FILES}")
 
 #add default applications
-add_subdirectory(${PROJROOT}/qtfullscreensystem ${BIN_DIR}/qtfullscreensystem)
-add_subdirectory(${PROJROOT}/qt-ncc ${BIN_DIR}/qt-ncc EXCLUDE_FROM_ALL)
-add_subdirectory(${PROJROOT}/qt-ocr ${BIN_DIR}/qt-ocr EXCLUDE_FROM_ALL)
+add_subdir_option(qtfullscreensystem QTFullscreenSystem)
+add_subdir_option(qt-ncc QtNormalizedCrossCorrelationTest FALSE EXCLUDE_FROM_ALL)
+add_subdir_option(qt-ocr QtOCRTest FALSE EXCLUDE_FROM_ALL)
 #add_subdirectory(${PROJROOT}/singleimagesystem ${BIN_DIR}/singleimagesystem)
 
 
