@@ -593,6 +593,16 @@ __kernel void getMinimum(global const float* routecost,
   }
 }
 
+uint borderId(int2 lid, int2 lsize)
+{
+  uint id = lid.x + (lid.x==lsize.x-1)*lid.y;
+  if(lid.y==lsize.y-1)
+    id = lsize.x*2 + lsize.y - 3 - lid.x;
+  else if(lid.x == 0 && lid.y > 0)
+    id = 2*(lsize.x + lsize.y - 2) - lid.y;
+  return id;
+}
+
 __kernel void calcInOut(global const float* routecost,
                         global uint* blockroutes,
                         local int* l_cost,
@@ -666,9 +676,8 @@ __kernel void calcInOut(global const float* routecost,
 
   if(border)
   {
-    //markus: continue here!
-    int localoffset = 0;//get_local_id(0) + (get_local_id(1) > 0)*get_local_size(0) + get_local_id(1);
     //store the info
+    uint localoffset = borderId((int2)(get_local_id(0),get_local_id(1)), (int2)(get_local_size(0),get_local_size(1)));    
     uint groupid = get_group_id(0)+get_group_id(1)*get_num_groups(0) + get_group_id(2)*get_num_groups(0)*get_num_groups(1);
     uint elements_per_group = 2*(get_local_size(0) + get_local_size(1) - 2);
     blockroutes[ get_global_size(2) + groupid * elements_per_group + localoffset] =  info;
@@ -697,6 +706,10 @@ uint pack(int2 d)
 {
   return (d.x << 16) | d.y;
 }
+int2 unpack(uint d)
+{
+  return (int2)(d >> 16, d & 0xFFFF); 
+}
 
 __kernel void calcInterBlockRoute(global const uint* blockroutes,
                                   global uint2* interblockroutes,
@@ -704,11 +717,12 @@ __kernel void calcInterBlockRoute(global const uint* blockroutes,
                                   const int2 blocks,
                                   const int2 blocksize)
 {
-  uint target = get_global_id(2);
+  uint target = get_global_id(0);
   uint startinfo = blockroutes[target];
-  uint elements_per_group = 2*(get_local_size(0) + get_local_size(1) - 2);
+  uint elements_per_group = 2*(blocksize.x + blocksize.y - 2);
   uint inoffset = get_global_size(2) + target*blocks.x*blocks.y*elements_per_group;
-  uint outoffset = blocks.x*blocks.y;
+  uint outoffset = blocks.x*blocks.y + target;
+  uint blockcount = 0;
 
   uint newcost = blockInOutCost(startinfo);
   int2 localorigin = blockInOutOrigin(startinfo);
@@ -724,13 +738,58 @@ __kernel void calcInterBlockRoute(global const uint* blockroutes,
     block.x += localorigin.x < 0 ? -1 : localorigin.x >= blocksize.x ? 1 : 0;
     block.y += localorigin.y < 0 ? -1 : localorigin.y >= blocksize.y ? 1 : 0;
     int2 localpos = currentpos - block*blocksize;
-    //markus: continue here!
-    int localoffset = 0;
-    interblockroutes[outoffset++] = (int2)(sumcost,pack(currentpos));
+
+    int localoffset = borderId(localpos, blocksize);
+    interblockroutes[outoffset++] = (uint2)(sumcost,pack(currentpos));
 
     uint currentinfo = blockroutes[inoffset + (block.y*blocks.x + block.y)*elements_per_group + localoffset];
     newcost = blockInOutCost(currentinfo);
     localorigin = blockInOutOrigin(startinfo);
+    ++blockcount;
+  }
+  interblockroutes[target].x = blockcount;
+  interblockroutes[target].y = sumcost;
+}
+
+__kernel void constructRoute(global const float* routecost,
+                             global const uint2* interblockroutes,
+                             global int2* route,
+                             const int maxpoints_pertarget,
+                             const int numtargets,
+                             const int2 dim)
+{
+  uint target = get_global_id(0)/maxpoints_pertarget;
+  uint element = get_global_id(0)%maxpoints_pertarget;
+  if(element >= interblockroutes[target].x)
+    return;
+  
+  int offset = maxpoints_pertarget*target + interblockroutes[numtargets + get_global_id(0)].x;
+  int endoffset = offset + interblockroutes[numtargets + get_global_id(0) + 1].x;
+  int2 pos = unpack( interblockroutes[numtargets + get_global_id(0)].y );
+
+  route[offset++] = pos;
+  //follow the route
+  while(offset < endoffset)
+  {
+    float mincost = MAXFLOAT;
+    int2 next = pos;
+    for(int y = -1; y <= 1; ++y)
+      for(int x = -1; x <= 1; ++x)
+      {
+        int2 coord = (int2)(pos.x+x, pos.y+y);
+        if(coord.x >= 0 && coord.x < dim.x && 
+           coord.y >= 0 && coord.y < dim.y)
+        {
+          float tcost =  routecost[coord.x + dim.x*coord.y + dim.x*dim.y*target];
+          if(mincost > tcost)
+          {
+            mincost = tcost;
+            next = coord;
+          }
+        }
+      }
+    pos = next;
+    route[offset++] = pos;
   }
 }
 

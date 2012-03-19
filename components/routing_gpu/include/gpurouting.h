@@ -127,6 +127,7 @@ namespace LinksRouting
       cl::Kernel        _cl_getMinimum_kernel;
       cl::Kernel        _cl_routeInOut_kernel;
       cl::Kernel        _cl_routeInterBlock_kernel;
+      cl::Kernel        _cl_routeConstruct_kernel;
 
       int _blockSize[2];
       bool _enabled;

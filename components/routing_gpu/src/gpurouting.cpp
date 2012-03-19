@@ -244,6 +244,7 @@ namespace LinksRouting
     _cl_getMinimum_kernel = cl::Kernel(_cl_program, "getMinimum");
     _cl_routeInOut_kernel = cl::Kernel(_cl_program, "calcInOut");
     _cl_routeInterBlock_kernel = cl::Kernel(_cl_program, "calcInterBlockRoute");
+    _cl_routeConstruct_kernel = cl::Kernel(_cl_program, "constructRoute");
 
    // //test
    // int blocksize = 64;
@@ -432,6 +433,7 @@ namespace LinksRouting
         cl::Buffer targets(_cl_context, CL_MEM_READ_WRITE,numtargets*sizeof(cl_uint4));
         unsigned int blockborder =  2*(_blockSize[0] + _blockSize[1] - 2);
         cl::Buffer routing_block_inout(_cl_context, CL_MEM_READ_WRITE, numtargets*(1 + sumBlocks * blockborder ) * sizeof(cl_uint));
+        cl::Buffer routing_inter_block(_cl_context, CL_MEM_READ_WRITE, numtargets*(1 + sumBlocks) * sizeof(cl_uint2));
 
         _cl_command_queue.enqueueWriteBuffer(targets, true, 0, numtargets*sizeof(cl_uint4), &h_targets[0]);
 
@@ -588,6 +590,56 @@ namespace LinksRouting
 
         //inter block route reconstruction
         
+        _cl_routeInterBlock_kernel.setArg(0, routing_block_inout);
+        _cl_routeInterBlock_kernel.setArg(1, routing_inter_block);
+        _cl_routeInterBlock_kernel.setArg(2, 2 * sizeof(cl_int), startingpoint);
+        _cl_routeInterBlock_kernel.setArg(3, 2 * sizeof(cl_int), numBlocks);
+        _cl_routeInterBlock_kernel.setArg(4, 2 * sizeof(cl_int), _blockSize);
+
+        cl::Event routeInterBlock_Event;
+        _cl_command_queue.enqueueNDRangeKernel
+        (
+          _cl_routeInterBlock_kernel,
+          cl::NullRange,
+          cl::NDRange(numtargets),
+          cl::NDRange(1),
+          0,
+          &routeInterBlock_Event
+        );
+
+        _cl_command_queue.finish();
+
+        //copy info
+        cl_uint2 ui2_dummy;
+        std::vector<cl_uint2> interblockinfo(numtargets, ui2_dummy);
+        _cl_command_queue.enqueueReadBuffer(routing_inter_block, true, 0, sizeof(cl_uint2)*numtargets, &interblockinfo[0]);
+        int maxpoints = 0, maxblocks = 0;
+        for(int i = 0; i < numtargets; ++i)
+        {
+          maxpoints = std::max<int>(maxpoints, interblockinfo[i].s[1]);
+          maxblocks = std::max<int>(maxblocks, interblockinfo[i].s[0]);
+        }
+
+        //these are the routes! the maxpoints info will also be needed!
+        cl::Buffer routes(_cl_context, CL_MEM_READ_WRITE,maxpoints*sizeof(cl_int2)*numtargets);
+
+        _cl_routeConstruct_kernel.setArg(0, buf);
+        _cl_routeConstruct_kernel.setArg(1, routing_inter_block);
+        _cl_routeConstruct_kernel.setArg(2, routes);
+        _cl_routeConstruct_kernel.setArg(3, maxpoints);
+        _cl_routeConstruct_kernel.setArg(4, numtargets);
+        _cl_routeConstruct_kernel.setArg(5, 2 * sizeof(cl_int), dim);
+
+        cl::Event routeConstruct_Event;
+        _cl_command_queue.enqueueNDRangeKernel
+        (
+          _cl_routeConstruct_kernel,
+          cl::NullRange,
+          cl::NDRange(maxpoints*maxblocks),
+          cl::NullRange,
+          0,
+          &routeConstruct_Event
+        );
 
         _cl_command_queue.enqueueReleaseGLObjects(&memory_gl);
         _cl_command_queue.finish();
@@ -609,6 +661,13 @@ namespace LinksRouting
         routeInOut_Event.getProfilingInfo(CL_PROFILING_COMMAND_END, &end);
         routeInOut_Event.getProfilingInfo(CL_PROFILING_COMMAND_START, &start);
         std::cout << " - local route reconstruction: " << (end-start)/1000000.0  << "ms\n";
+        routeInterBlock_Event.getProfilingInfo(CL_PROFILING_COMMAND_END, &end);
+        routeInterBlock_Event.getProfilingInfo(CL_PROFILING_COMMAND_START, &start);
+        std::cout << " - inter block route reconstruction: " << (end-start)/1000000.0  << "ms\n";
+        routeConstruct_Event.getProfilingInfo(CL_PROFILING_COMMAND_END, &end);
+        routeConstruct_Event.getProfilingInfo(CL_PROFILING_COMMAND_START, &start);
+        std::cout << " - route construction: " << (end-start)/1000000.0  << "ms\n";
+        
 
         //std::vector<float> host_mem(num_points*numtargets);
         //_cl_command_queue.enqueueReadBuffer(buf, true, 0, num_points * numtargets * sizeof(float), &host_mem[0]);
