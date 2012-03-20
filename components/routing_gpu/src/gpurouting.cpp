@@ -110,7 +110,6 @@ namespace LinksRouting
                    << "\n\t -- extensions:\t " << dextensions
                    << std::endl;
          //for now (use first only)
-         if(i == 0)
 #if defined(__APPLE__) || defined(__MACOSX)
          if( dextensions.find("cl_apple_gl_sharing") != std::string::npos )
 #else
@@ -590,8 +589,11 @@ namespace LinksRouting
 
         _cl_command_queue.finish();
 
-        //inter block route reconstruction
+        std::vector<unsigned int> h_bio(numtargets*(1 + sumBlocks * blockborder ), 0);
+        _cl_command_queue.enqueueReadBuffer(routing_block_inout, true, 0, sizeof(cl_uint)*h_bio.size(), &h_bio[0]);
 
+
+        //inter block route reconstruction
         _cl_routeInterBlock_kernel.setArg(0, routing_block_inout);
         _cl_routeInterBlock_kernel.setArg(1, routing_inter_block);
         _cl_routeInterBlock_kernel.setArg(2, 2 * sizeof(cl_int), startingpoint);

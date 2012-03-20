@@ -724,7 +724,7 @@ __kernel void calcInterBlockRoute(global const uint* blockroutes,
   uint target = get_global_id(0);
   uint startinfo = blockroutes[target];
   uint elements_per_group = 2*(blocksize.x + blocksize.y - 2);
-  uint inoffset = get_global_size(2) + target*blocks.x*blocks.y*elements_per_group;
+  uint inoffset = get_global_size(0) + target*blocks.x*blocks.y*elements_per_group;
   uint outoffset = blocks.x*blocks.y + target;
   uint blockcount = 0;
 
@@ -734,7 +734,7 @@ __kernel void calcInterBlockRoute(global const uint* blockroutes,
 
   int2 block = (int2)(start.x/blocksize.x, start.y/blocksize.y);
   uint sumcost = 0;
-
+  
   uint counter = 0;
   while(newcost != 0 && ++counter < blocks.x*blocks.y)
   {
