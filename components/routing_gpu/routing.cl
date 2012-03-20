@@ -595,8 +595,10 @@ __kernel void getMinimum(global const float* routecost,
 
 uint borderId(int2 lid, int2 lsize)
 {
-  uint id = lid.x + (lid.x==lsize.x-1)*lid.y;
-  if(lid.y==lsize.y-1)
+  uint id = lid.x;
+  if(lid.x==lsize.x-1)
+    id += lid.y;
+  else if(lid.y==lsize.y-1)
     id = lsize.x*2 + lsize.y - 3 - lid.x;
   else if(lid.x == 0 && lid.y > 0)
     id = 2*(lsize.x + lsize.y - 2) - lid.y;
@@ -649,6 +651,7 @@ __kernel void calcInOut(global const float* routecost,
   l_origin[loffset] = origin;
   
   __local bool changed;
+  uint count = 0;
   do
   {
     changed = false;
@@ -664,7 +667,7 @@ __kernel void calcInOut(global const float* routecost,
     }      
     barrier(CLK_LOCAL_MEM_FENCE);
   }
-  while(changed);
+  while(changed && ++count < get_local_size(0)*get_local_size(1));
 
 
   border = get_local_id(0) == 0 ||
@@ -680,6 +683,7 @@ __kernel void calcInOut(global const float* routecost,
     uint localoffset = borderId((int2)(get_local_id(0),get_local_id(1)), (int2)(get_local_size(0),get_local_size(1)));    
     uint groupid = get_group_id(0)+get_group_id(1)*get_num_groups(0) + get_group_id(2)*get_num_groups(0)*get_num_groups(1);
     uint elements_per_group = 2*(get_local_size(0) + get_local_size(1) - 2);
+    //blockroutes[0] = info;
     blockroutes[ get_global_size(2) + groupid * elements_per_group + localoffset] =  info;
   }
 
@@ -731,7 +735,8 @@ __kernel void calcInterBlockRoute(global const uint* blockroutes,
   int2 block = (int2)(start.x/blocksize.x, start.y/blocksize.y);
   uint sumcost = 0;
 
-  while(newcost != 0)
+  uint counter = 0;
+  while(newcost != 0 && ++counter < blocks.x*blocks.y)
   {
     sumcost += newcost;
     int2 currentpos = block*blocksize + localorigin;

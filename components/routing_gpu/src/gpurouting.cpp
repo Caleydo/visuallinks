@@ -567,6 +567,8 @@ namespace LinksRouting
                   << "debug: " << baseQueueInfo.debug << "\n\n";
         //-----
 
+        _cl_command_queue.finish();
+
         //local route reconstruction
         _cl_routeInOut_kernel.setArg(0, buf);
         _cl_routeInOut_kernel.setArg(1, routing_block_inout);
