@@ -17,6 +17,9 @@ namespace LinkDescription
 
   struct Point
   {
+    Point()
+    {
+    }
     Point(int x, int y):
       x(x), y(y)
     {}
@@ -79,27 +82,41 @@ namespace LinkDescription
 //      virtual bool hasFixedColor(Color &color) const = 0;
 //      virtual const std::vector<Node*>& getConnections() const = 0;
 //
-//      virtual void setHyperEdgeDescription(HyperEdgeDescriptionForkation* desc) = 0;
-//      virtual const HyperEdgeDescriptionForkation* getHyperEdgeDescription() const = 0;
+        void setHyperEdgeDescription(HyperEdgeDescriptionForkation* desc)
+        {
+          fork = desc;
+        }
+        const HyperEdgeDescriptionForkation* getHyperEdgeDescription() const
+        {
+          return fork;
+        }
 
     private:
 
       std::vector<Node> _nodes;
       props_t _props;
       uint32_t _revision; ///!< Track modifications
+      HyperEdgeDescriptionForkation *fork;
   };
 
   struct HyperEdgeDescriptionForkation
   {
-      std::vector<Node*> incomingNodes;
+      HyperEdgeDescriptionForkation() : parent(0)
+      {
+      }
+
+      std::vector<const Node*> incomingNodes;
       Point position;
 
       HyperEdgeDescriptionSegment* parent;
-      std::vector<HyperEdgeDescriptionSegment*> outgoing;
+      std::list<HyperEdgeDescriptionSegment> outgoing;
   };
   struct HyperEdgeDescriptionSegment
   {
-      std::vector<Node*> nodes;
+      HyperEdgeDescriptionSegment() : parent(0), child(0)
+      {
+      }
+      std::vector<const Node*> nodes;
       std::vector<Point> trail;
 
       HyperEdgeDescriptionForkation *parent, *child;

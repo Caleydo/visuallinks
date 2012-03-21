@@ -627,7 +627,7 @@ __kernel void calcInOut(global const float* routecost,
          coord.y >= 0 && coord.y < dim.y)
       {
         float tcost =  routecost[coord.x + dim.x*coord.y + dim.x*dim.y*coord.z];
-        if(mincost > tcost)
+        if(tcost < mincost)
         {
           mincost = tcost;
           dir = (int2)(x,y);
@@ -635,18 +635,23 @@ __kernel void calcInOut(global const float* routecost,
       }
     }
   //store dir and cost
-  int cost = (dir.x == 0 && dir.y == 0) ? 0 : 1;
-  bool border = get_local_id(0) + dir.x < 0 ||
-                get_local_id(1) + dir.y < 0 ||
-                get_local_id(0) + dir.x >= get_local_size(0) ||
-                get_local_id(1) + dir.y >= get_local_size(1);
+  int2 lid = (int2)(get_local_id(0), get_local_id(1));
+  int2 fromid = lid + dir;
+  
+  bool outside = fromid.x < 0 ||
+                fromid.y < 0 ||
+                fromid.x >= get_local_size(0) ||
+                fromid.y >= get_local_size(1);
 
-  int origin = (dir.x == 0 && dir.y == 0) ? (get_local_id(0) << 8 | get_local_id(1)) :
-               border ? ( ( (1 + get_local_id(1) + dir.y) << 8 ) | (1 + get_local_id(0) + dir.x ) ) : 0;
+  int cost = (dir.x == 0 && dir.y == 0) ? 0 : 
+             (outside ? 1 : (2*get_local_size(0)*get_local_size(1)));
+
+  int origin = (dir.x == 0 && dir.y == 0) ? ( ( (1 + lid.y) << 8 ) | (lid.x + 1)) :
+               (outside ? ( ( (1 + fromid.y) << 8 ) | (1 + fromid.x ) ) : -1);
 
   
-  int loffset = get_local_id(0) + get_local_id(1)*get_local_size(0);
-  int lfrom = get_local_id(0) + dir.x + (get_local_id(1)+dir.y)*get_local_size(0);
+  int loffset = lid.x + lid.y*(int)get_local_size(0);
+  int lfrom = fromid.x + fromid.y*(int)get_local_size(0);
   l_cost[loffset] = cost;
   l_origin[loffset] = origin;
   
@@ -656,7 +661,7 @@ __kernel void calcInOut(global const float* routecost,
   {
     changed = false;
     barrier(CLK_LOCAL_MEM_FENCE);
-    if(origin == 0)
+    if(origin == -1)
     {
       if(l_cost[loffset] != l_cost[lfrom]+1)
       {
@@ -667,15 +672,15 @@ __kernel void calcInOut(global const float* routecost,
     }      
     barrier(CLK_LOCAL_MEM_FENCE);
   }
-  while(changed && ++count < get_local_size(0)*get_local_size(1));
+  while(changed);
 
 
-  border = get_local_id(0) == 0 ||
-           get_local_id(1) == 0 ||
-           get_local_id(0) == get_local_size(0)-1 ||
-           get_local_id(1) == get_local_size(1)-1;
+  bool border =  get_local_id(0) == 0 ||
+                 get_local_id(1) == 0 ||
+                 get_local_id(0) == get_local_size(0)-1 ||
+                 get_local_id(1) == get_local_size(1)-1;
   
-  uint info = (l_cost[loffset] << 16) | l_origin[loffset];
+  uint info = (l_cost[loffset] << 16) | (l_origin[loffset] &0xFFFF);
 
   if(border)
   {
@@ -725,7 +730,7 @@ __kernel void calcInterBlockRoute(global const uint* blockroutes,
   uint startinfo = blockroutes[target];
   uint elements_per_group = 2*(blocksize.x + blocksize.y - 2);
   uint inoffset = get_global_size(0) + target*blocks.x*blocks.y*elements_per_group;
-  uint outoffset = blocks.x*blocks.y + target;
+  uint outoffset = blocks.x*blocks.y*target + get_global_size(0);
   uint blockcount = 0;
 
   uint newcost = blockInOutCost(startinfo);
@@ -734,47 +739,53 @@ __kernel void calcInterBlockRoute(global const uint* blockroutes,
 
   int2 block = (int2)(start.x/blocksize.x, start.y/blocksize.y);
   uint sumcost = 0;
-  
-  uint counter = 0;
-  while(newcost != 0 && ++counter < blocks.x*blocks.y)
+  int2 blockdiff = (int2)(0,0);
+
+  do
   {
     sumcost += newcost;
     int2 currentpos = block*blocksize + localorigin;
-    block.x += localorigin.x < 0 ? -1 : localorigin.x >= blocksize.x ? 1 : 0;
-    block.y += localorigin.y < 0 ? -1 : localorigin.y >= blocksize.y ? 1 : 0;
+    blockdiff = (int2)(localorigin.x < 0 ? -1 : (localorigin.x >= blocksize.x ? 1 : 0),
+                       localorigin.y < 0 ? -1 : (localorigin.y >= blocksize.y ? 1 : 0));
+    block.x += blockdiff.x;
+    block.y += blockdiff.y;
     int2 localpos = currentpos - block*blocksize;
 
     int localoffset = borderId(localpos, blocksize);
     interblockroutes[outoffset++] = (uint2)(sumcost,pack(currentpos));
 
-    uint currentinfo = blockroutes[inoffset + (block.y*blocks.x + block.y)*elements_per_group + localoffset];
+    uint currentinfo = blockroutes[inoffset + (block.y*blocks.x + block.x)*elements_per_group + localoffset];
     newcost = blockInOutCost(currentinfo);
-    localorigin = blockInOutOrigin(startinfo);
+    localorigin = blockInOutOrigin(currentinfo);
     ++blockcount;
-  }
+
+  } while(blockdiff.x != 0 || blockdiff.y != 0);
+
   interblockroutes[target].x = blockcount;
-  interblockroutes[target].y = sumcost;
+  interblockroutes[target].y = sumcost+1;
 }
 
 __kernel void constructRoute(global const float* routecost,
                              global const uint2* interblockroutes,
                              global int2* route,
+                             const int maxblocks_pertarget,
                              const int maxpoints_pertarget,
                              const int numtargets,
-                             const int2 dim)
+                             const int2 dim,
+                             const int2 blocks)
 {
-  uint target = get_global_id(0)/maxpoints_pertarget;
-  uint element = get_global_id(0)%maxpoints_pertarget;
+  uint target = get_global_id(0)/maxblocks_pertarget;
+  uint element = get_global_id(0)%maxblocks_pertarget;
   if(element >= interblockroutes[target].x)
     return;
   
-  int offset = maxpoints_pertarget*target + interblockroutes[numtargets + get_global_id(0)].x;
-  int endoffset = offset + interblockroutes[numtargets + get_global_id(0) + 1].x;
-  int2 pos = unpack( interblockroutes[numtargets + get_global_id(0)].y );
+  int offset = maxpoints_pertarget*target + interblockroutes[blocks.x*blocks.y*target + numtargets + element].x;
+  int endoffset = maxpoints_pertarget*target + interblockroutes[blocks.x*blocks.y*target + numtargets + element + 1].x;
+  int2 pos = unpack( interblockroutes[blocks.x*blocks.y*target + numtargets + element].y );
 
   route[offset++] = pos;
   //follow the route
-  while(offset < endoffset)
+  while(offset <= endoffset)
   {
     float mincost = MAXFLOAT;
     int2 next = pos;

@@ -28,6 +28,160 @@
 namespace LinksRouting
 {
 
+  //DEBUG
+  typedef unsigned int uint;
+  struct int2
+  {
+    int x, y;
+    int2()
+    {
+    }
+    template<class T>
+    int2(const T ar[]) : x(ar[0]), y(ar[1])
+    {
+    }
+    int2(int _x, int _y) : x(_x), y(_y) { }
+    int2 operator * (const int2 & o)
+    {
+      return int2(x*o.x, y*o.y);
+    }
+    int2 operator - (const int2 & o)
+    {
+      return int2(x-o.x, y-o.y);
+    }
+    int2 operator + (const int2 & o)
+    {
+      return int2(x+o.x, y+o.y);
+    }
+  };
+  uint blockInOutCost(uint data)
+{
+  return data >> 16;
+}
+int2 blockInOutOrigin(uint data)
+{
+  int x = data & 0xFF;
+  int y = (data >> 8) & 0xFF;
+  return int2(x-1,y-1);
+}
+int pack(int2 d)
+{
+  return (d.x << 16) | d.y;
+}
+int2 unpack(uint d)
+{
+  return int2(d >> 16, d & 0xFFFF); 
+}
+uint borderId(int2 lid, int2 lsize)
+{
+  uint id = lid.x;
+  if(lid.x==lsize.x-1)
+    id += lid.y;
+  else if(lid.y==lsize.y-1)
+    id = lsize.x*2 + lsize.y - 3 - lid.x;
+  else if(lid.x == 0 && lid.y > 0)
+    id = 2*(lsize.x + lsize.y - 2) - lid.y;
+  return id;
+}
+
+void constructRoute(std::vector<float>& routecost,
+                    std::vector<int2>& interblockroutes,
+                    std::vector<int2>& route,
+                    const int maxblocks_pertarget,
+                    const int maxpoints_pertarget,
+                    const int numtargets,
+                    const int2 dim,
+                    const int2 blocks,
+                    int id)
+{
+  uint target = id/maxblocks_pertarget;
+  uint element = id%maxblocks_pertarget;
+  if(element >= interblockroutes[target].x)
+    return;
+  
+  int offset = maxpoints_pertarget*target + interblockroutes[blocks.x*blocks.y*target + numtargets + element].x;
+  int endoffset = maxpoints_pertarget*target + interblockroutes[blocks.x*blocks.y*target + numtargets + element + 1].x;
+  int2 pos = unpack( interblockroutes[blocks.x*blocks.y*target + numtargets + element].y );
+
+  route[offset++] = pos;
+  //follow the route
+  while(offset <= endoffset)
+  {
+    float mincost = 999999;
+    int2 next = pos;
+    for(int y = -1; y <= 1; ++y)
+      for(int x = -1; x <= 1; ++x)
+      {
+        int2 coord = int2(pos.x+x, pos.y+y);
+        if(coord.x >= 0 && coord.x < dim.x && 
+           coord.y >= 0 && coord.y < dim.y)
+        {
+          float tcost =  routecost[coord.x + dim.x*coord.y + dim.x*dim.y*target];
+          if(mincost > tcost)
+          {
+            mincost = tcost;
+            next = coord;
+          }
+        }
+      }
+    pos = next;
+    route[offset++] = pos;
+  }
+}
+
+
+void calcInterBlockRoute(std::vector<uint>& blockroutes,
+                         std::vector<int2>& interblockroutes,
+                        const int2 start,
+                        const int2 blocks,
+                        const int2 blocksize,
+                        int id,
+                        int numtargets)
+{
+  uint target = id;
+  uint startinfo = blockroutes[target];
+  int2 teststart = blockInOutOrigin(startinfo);
+  uint elements_per_group = 2*(blocksize.x + blocksize.y - 2);
+  uint inoffset = numtargets + target*blocks.x*blocks.y*elements_per_group;
+  uint outoffset = blocks.x*blocks.y*target + numtargets;
+  uint blockcount = 0;
+
+  uint newcost = blockInOutCost(startinfo);
+  int2 localorigin = blockInOutOrigin(startinfo);
+  interblockroutes[outoffset++] = int2(0,pack(start));
+
+  int2 block = int2(start.x/blocksize.x, start.y/blocksize.y);
+  uint sumcost = 0;
+  int2 blockdiff = int2(0,0);
+
+  do
+  {
+    sumcost += newcost;
+    int2 currentpos = block*blocksize + localorigin;
+    blockdiff =   int2(localorigin.x < 0 ? -1 : (localorigin.x >= blocksize.x ? 1 : 0),
+                            localorigin.y < 0 ? -1 : (localorigin.y >= blocksize.y ? 1 : 0));
+    block.x += blockdiff.x;
+    block.y += blockdiff.y;
+    int2 localpos = currentpos - block*blocksize;
+
+    int localoffset = borderId(localpos, blocksize);
+    interblockroutes[outoffset++] = int2(sumcost,pack(currentpos));
+
+    uint currentinfo = blockroutes[inoffset + (block.y*blocks.x + block.x)*elements_per_group + localoffset];
+    newcost = blockInOutCost(currentinfo);
+    localorigin = blockInOutOrigin(currentinfo);
+    ++blockcount;
+  } while(blockdiff.x != 0 || blockdiff.y != 0);
+  
+  interblockroutes[target].x = blockcount;
+  interblockroutes[target].y = sumcost+1;
+}
+
+
+  //DEBUG
+
+
+
   //----------------------------------------------------------------------------
   GPURouting::GPURouting() :
         myname("GPURouting")
@@ -351,7 +505,7 @@ namespace LinksRouting
 
     // now start analyzing the links
 
-    const LinkDescription::LinkList& links = *_subscribe_links->_data;
+    LinkDescription::LinkList& links = *_subscribe_links->_data;
     unsigned int width = _subscribe_costmap->_data->width,
               height = _subscribe_costmap->_data->height,
               num_points = width * height;
@@ -382,7 +536,8 @@ namespace LinksRouting
       cl::Buffer queue_info(_cl_context, CL_MEM_READ_WRITE, sizeof(cl_QueueGlobal));
       cl::Buffer idbuffer(_cl_context, CL_MEM_READ_WRITE, sizeof(cl_ushort2)*256);
 
-      std::vector<int4> h_targets;
+
+      std::vector<int4Aug<const LinkDescription::Node*> > h_targets;
       h_targets.reserve(it->_link.getNodes().size());
       for( auto node = it->_link.getNodes().begin();
            node != it->_link.getNodes().end();
@@ -390,7 +545,7 @@ namespace LinksRouting
       {
         //std::cout << "Polygon: (" << node->getVertices().size() << " points)\n";
         //compute min max for poly
-        int4 target(width-1, height-1,0,0);
+        int4Aug<const LinkDescription::Node*> target(width-1, height-1,0,0, &*node);
 
         for( auto p = node->getVertices().begin();
              p != node->getVertices().end();
@@ -413,8 +568,8 @@ namespace LinksRouting
       }
 
       //remove duplicates
-      std::set<int4> dups(h_targets.begin(), h_targets.end());
-      h_targets = std::vector<int4>(dups.begin(), dups.end());
+      std::set<int4Aug<const LinkDescription::Node*> > dups(h_targets.begin(), h_targets.end());
+      h_targets = std::vector<int4Aug<const LinkDescription::Node*> >(dups.begin(), dups.end());
 
       if(h_targets.size() > 1)
       {
@@ -434,7 +589,8 @@ namespace LinksRouting
         cl::Buffer routing_block_inout(_cl_context, CL_MEM_READ_WRITE, numtargets*(1 + sumBlocks * blockborder ) * sizeof(cl_uint));
         cl::Buffer routing_inter_block(_cl_context, CL_MEM_READ_WRITE, numtargets*(1 + sumBlocks) * sizeof(cl_uint2));
 
-        _cl_command_queue.enqueueWriteBuffer(targets, true, 0, numtargets*sizeof(cl_uint4), &h_targets[0]);
+        std::vector<int4> h_target_plain(h_targets.begin(), h_targets.end());
+        _cl_command_queue.enqueueWriteBuffer(targets, true, 0, numtargets*sizeof(cl_uint4), &h_target_plain[0]);
 
         cl_QueueGlobal baseQueueInfo(std::min<int>(overAllBlocks + 1, 128*1024));
         _cl_command_queue.enqueueWriteBuffer(queue_info, true, 0, sizeof(cl_QueueGlobal), &baseQueueInfo);
@@ -589,9 +745,31 @@ namespace LinksRouting
 
         _cl_command_queue.finish();
 
+
+        //debug
+        {
         std::vector<unsigned int> h_bio(numtargets*(1 + sumBlocks * blockborder ), 0);
         _cl_command_queue.enqueueReadBuffer(routing_block_inout, true, 0, sizeof(cl_uint)*h_bio.size(), &h_bio[0]);
 
+        std::vector<int2> outinterblock(numtargets*(1 + sumBlocks), int2(0,0));
+        for(int i = 0; i < numtargets; ++i)
+          calcInterBlockRoute(h_bio, outinterblock, startingpoint, numBlocks, _blockSize, i, numtargets);
+
+        std::vector<float> cost(dim[0]*dim[1]*numtargets,0);
+        _cl_command_queue.enqueueReadBuffer(buf, true, 0, sizeof(cl_float)*dim[0]*dim[1]*numtargets, &cost[0]);
+
+        int maxpoints = 0, maxblocks = 0;
+        for(int i = 0; i < numtargets; ++i)
+        {
+          maxpoints = std::max<int>(maxpoints, outinterblock[i].y);
+          maxblocks = std::max<int>(maxblocks, outinterblock[i].x);
+        }
+
+        std::vector<int2> outroute(maxpoints*numtargets, int2(0,0));
+        for(int i = 0; i < maxblocks*numtargets; ++i)
+          constructRoute(cost, outinterblock,  outroute, maxblocks, maxpoints, numtargets, dim, numBlocks, i);
+        }
+          //debug
 
         //inter block route reconstruction
         _cl_routeInterBlock_kernel.setArg(0, routing_block_inout);
@@ -617,6 +795,23 @@ namespace LinksRouting
         cl_uint2 ui2_dummy;
         std::vector<cl_uint2> interblockinfo(numtargets, ui2_dummy);
         _cl_command_queue.enqueueReadBuffer(routing_inter_block, true, 0, sizeof(cl_uint2)*numtargets, &interblockinfo[0]);
+
+        //debug
+        //std::vector<cl_uint2> interblockinfo(numtargets*(1 + sumBlocks), ui2_dummy);
+        //_cl_command_queue.enqueueReadBuffer(routing_inter_block, true, 0, sizeof(cl_uint2)*numtargets*(1 + sumBlocks), &interblockinfo[0]);
+
+        //int points = interblockinfo[0].s[1];
+        //int blocks = interblockinfo[0].s[0];
+        //for(int i = 0; i <= blocks; ++i)
+        //{
+        //  int cost = interblockinfo[numtargets + i].s[0];
+        //  int px = interblockinfo[numtargets + i].s[1] >> 16;
+        //  int py = interblockinfo[numtargets + i].s[1] &0xFFFF;
+
+        //  std::cout << cost << " -> (" << px << "," << py << ")\n"; 
+        //}
+        //
+
         int maxpoints = 0, maxblocks = 0;
         for(int i = 0; i < numtargets; ++i)
         {
@@ -630,23 +825,47 @@ namespace LinksRouting
         _cl_routeConstruct_kernel.setArg(0, buf);
         _cl_routeConstruct_kernel.setArg(1, routing_inter_block);
         _cl_routeConstruct_kernel.setArg(2, routes);
-        _cl_routeConstruct_kernel.setArg(3, maxpoints);
-        _cl_routeConstruct_kernel.setArg(4, numtargets);
-        _cl_routeConstruct_kernel.setArg(5, 2 * sizeof(cl_int), dim);
+        _cl_routeConstruct_kernel.setArg(3, maxblocks);
+        _cl_routeConstruct_kernel.setArg(4, maxpoints);
+        _cl_routeConstruct_kernel.setArg(5, numtargets);
+        _cl_routeConstruct_kernel.setArg(6, 2 * sizeof(cl_int), dim);
+        _cl_routeConstruct_kernel.setArg(7, 2 * sizeof(cl_int), numBlocks);
 
         cl::Event routeConstruct_Event;
         _cl_command_queue.enqueueNDRangeKernel
         (
           _cl_routeConstruct_kernel,
           cl::NullRange,
-          cl::NDRange(maxpoints*maxblocks),
+          cl::NDRange(numtargets*maxblocks),
           cl::NullRange,
           0,
           &routeConstruct_Event
         );
 
-        _cl_command_queue.enqueueReleaseGLObjects(&memory_gl);
         _cl_command_queue.finish();
+        //copy results to cpu
+        std::vector<LinkDescription::Point> outroutes(maxpoints*numtargets, LinkDescription::Point(0,0));
+        _cl_command_queue.enqueueReadBuffer(routes, true, 0, maxpoints*sizeof(cl_int2)*numtargets, &outroutes[0]);
+        
+        //copy routes to hyperedge
+        LinkDescription::HyperEdgeDescriptionForkation* fork = new LinkDescription::HyperEdgeDescriptionForkation();
+        fork->position.x = startingpoint[0]*downsample;
+        fork->position.y = startingpoint[1]*downsample;
+        for(int i = 0; i < numtargets; ++i)
+        {
+          fork->outgoing.push_back(LinkDescription::HyperEdgeDescriptionSegment());
+          fork->outgoing.back().parent = fork;
+          fork->outgoing.back().trail.reserve(interblockinfo[i].s[1]);
+          for(int j = 0; j < interblockinfo[i].s[1]; ++j)
+          {
+            fork->outgoing.back().trail.push_back(LinkDescription::Point(
+                  outroutes[i*maxpoints +j].x*downsample,
+                  outroutes[i*maxpoints +j].y*downsample));
+          }
+          fork->outgoing.back().nodes.push_back(h_targets[i].aug);
+        }
+        it->_link.setHyperEdgeDescription(fork);
+
 
         cl_ulong start, end;
         std::cout << "CLInfo:\n";
@@ -705,6 +924,9 @@ namespace LinksRouting
         info->second._revision = it->_link.getRevision();
       }
     }
+
+    _cl_command_queue.enqueueReleaseGLObjects(&memory_gl);
+    _cl_command_queue.finish();
     }
     catch(cl::Error& err)
     {
