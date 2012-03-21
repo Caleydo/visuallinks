@@ -28,160 +28,6 @@
 namespace LinksRouting
 {
 
-  //DEBUG
-  typedef unsigned int uint;
-  struct int2
-  {
-    int x, y;
-    int2()
-    {
-    }
-    template<class T>
-    int2(const T ar[]) : x(ar[0]), y(ar[1])
-    {
-    }
-    int2(int _x, int _y) : x(_x), y(_y) { }
-    int2 operator * (const int2 & o)
-    {
-      return int2(x*o.x, y*o.y);
-    }
-    int2 operator - (const int2 & o)
-    {
-      return int2(x-o.x, y-o.y);
-    }
-    int2 operator + (const int2 & o)
-    {
-      return int2(x+o.x, y+o.y);
-    }
-  };
-  uint blockInOutCost(uint data)
-{
-  return data >> 16;
-}
-int2 blockInOutOrigin(uint data)
-{
-  int x = data & 0xFF;
-  int y = (data >> 8) & 0xFF;
-  return int2(x-1,y-1);
-}
-int pack(int2 d)
-{
-  return (d.x << 16) | d.y;
-}
-int2 unpack(uint d)
-{
-  return int2(d >> 16, d & 0xFFFF); 
-}
-uint borderId(int2 lid, int2 lsize)
-{
-  uint id = lid.x;
-  if(lid.x==lsize.x-1)
-    id += lid.y;
-  else if(lid.y==lsize.y-1)
-    id = lsize.x*2 + lsize.y - 3 - lid.x;
-  else if(lid.x == 0 && lid.y > 0)
-    id = 2*(lsize.x + lsize.y - 2) - lid.y;
-  return id;
-}
-
-void constructRoute(std::vector<float>& routecost,
-                    std::vector<int2>& interblockroutes,
-                    std::vector<int2>& route,
-                    const int maxblocks_pertarget,
-                    const int maxpoints_pertarget,
-                    const int numtargets,
-                    const int2 dim,
-                    const int2 blocks,
-                    int id)
-{
-  uint target = id/maxblocks_pertarget;
-  uint element = id%maxblocks_pertarget;
-  if(element >= interblockroutes[target].x)
-    return;
-  
-  int offset = maxpoints_pertarget*target + interblockroutes[blocks.x*blocks.y*target + numtargets + element].x;
-  int endoffset = maxpoints_pertarget*target + interblockroutes[blocks.x*blocks.y*target + numtargets + element + 1].x;
-  int2 pos = unpack( interblockroutes[blocks.x*blocks.y*target + numtargets + element].y );
-
-  route[offset++] = pos;
-  //follow the route
-  while(offset <= endoffset)
-  {
-    float mincost = 999999;
-    int2 next = pos;
-    for(int y = -1; y <= 1; ++y)
-      for(int x = -1; x <= 1; ++x)
-      {
-        int2 coord = int2(pos.x+x, pos.y+y);
-        if(coord.x >= 0 && coord.x < dim.x && 
-           coord.y >= 0 && coord.y < dim.y)
-        {
-          float tcost =  routecost[coord.x + dim.x*coord.y + dim.x*dim.y*target];
-          if(mincost > tcost)
-          {
-            mincost = tcost;
-            next = coord;
-          }
-        }
-      }
-    pos = next;
-    route[offset++] = pos;
-  }
-}
-
-
-void calcInterBlockRoute(std::vector<uint>& blockroutes,
-                         std::vector<int2>& interblockroutes,
-                        const int2 start,
-                        const int2 blocks,
-                        const int2 blocksize,
-                        int id,
-                        int numtargets)
-{
-  uint target = id;
-  uint startinfo = blockroutes[target];
-  int2 teststart = blockInOutOrigin(startinfo);
-  uint elements_per_group = 2*(blocksize.x + blocksize.y - 2);
-  uint inoffset = numtargets + target*blocks.x*blocks.y*elements_per_group;
-  uint outoffset = blocks.x*blocks.y*target + numtargets;
-  uint blockcount = 0;
-
-  uint newcost = blockInOutCost(startinfo);
-  int2 localorigin = blockInOutOrigin(startinfo);
-  interblockroutes[outoffset++] = int2(0,pack(start));
-
-  int2 block = int2(start.x/blocksize.x, start.y/blocksize.y);
-  uint sumcost = 0;
-  int2 blockdiff = int2(0,0);
-
-  do
-  {
-    sumcost += newcost;
-    int2 currentpos = block*blocksize + localorigin;
-    blockdiff =   int2(localorigin.x < 0 ? -1 : (localorigin.x >= blocksize.x ? 1 : 0),
-                            localorigin.y < 0 ? -1 : (localorigin.y >= blocksize.y ? 1 : 0));
-    block.x += blockdiff.x;
-    block.y += blockdiff.y;
-    int2 localpos = currentpos - block*blocksize;
-
-    int localoffset = borderId(localpos, blocksize);
-    interblockroutes[outoffset++] = int2(sumcost,pack(currentpos));
-
-    uint currentinfo = blockroutes[inoffset + (block.y*blocks.x + block.x)*elements_per_group + localoffset];
-    newcost = blockInOutCost(currentinfo);
-    localorigin = blockInOutOrigin(currentinfo);
-    ++blockcount;
-  } while(blockdiff.x != 0 || blockdiff.y != 0);
-  
-  interblockroutes[target].x = blockcount;
-  interblockroutes[target].y = sumcost+1;
-}
-
-
-  //DEBUG
-
-
-
   //----------------------------------------------------------------------------
   GPURouting::GPURouting() :
         myname("GPURouting")
@@ -712,15 +558,15 @@ void calcInterBlockRoute(std::vector<uint>& blockroutes,
         cl_uint idbufferoffset = baseQueueInfo.mincost&0xFF;
         int startingpoint[2] = {h_idbuffer[idbufferoffset].s[0],
                                 h_idbuffer[idbufferoffset].s[1]};
-        //debug
-        std::cout << "front: " << baseQueueInfo.front << "\n"
-                  << "back: " << baseQueueInfo.back << "\n"
-                  << "filllevel: " << baseQueueInfo.filllevel << "\n"
-                  << "activeBlocks: " << baseQueueInfo.activeBlocks << "\n"
-                  << "processedBlocks: " << baseQueueInfo.processedBlocks << "\n"
-                  << "min: " <<  *(float*)&cleanedcost << " @ " <<  startingpoint[0] << "," << startingpoint[1] << "\n"
-                  << "debug: " << baseQueueInfo.debug << "\n\n";
-        //-----
+        ////debug
+        //std::cout << "front: " << baseQueueInfo.front << "\n"
+        //          << "back: " << baseQueueInfo.back << "\n"
+        //          << "filllevel: " << baseQueueInfo.filllevel << "\n"
+        //          << "activeBlocks: " << baseQueueInfo.activeBlocks << "\n"
+        //          << "processedBlocks: " << baseQueueInfo.processedBlocks << "\n"
+        //          << "min: " <<  *(float*)&cleanedcost << " @ " <<  startingpoint[0] << "," << startingpoint[1] << "\n"
+        //          << "debug: " << baseQueueInfo.debug << "\n\n";
+        ////-----
 
         _cl_command_queue.finish();
 
@@ -744,32 +590,6 @@ void calcInterBlockRoute(std::vector<uint>& blockroutes,
         );
 
         _cl_command_queue.finish();
-
-
-        //debug
-        {
-        std::vector<unsigned int> h_bio(numtargets*(1 + sumBlocks * blockborder ), 0);
-        _cl_command_queue.enqueueReadBuffer(routing_block_inout, true, 0, sizeof(cl_uint)*h_bio.size(), &h_bio[0]);
-
-        std::vector<int2> outinterblock(numtargets*(1 + sumBlocks), int2(0,0));
-        for(int i = 0; i < numtargets; ++i)
-          calcInterBlockRoute(h_bio, outinterblock, startingpoint, numBlocks, _blockSize, i, numtargets);
-
-        std::vector<float> cost(dim[0]*dim[1]*numtargets,0);
-        _cl_command_queue.enqueueReadBuffer(buf, true, 0, sizeof(cl_float)*dim[0]*dim[1]*numtargets, &cost[0]);
-
-        int maxpoints = 0, maxblocks = 0;
-        for(int i = 0; i < numtargets; ++i)
-        {
-          maxpoints = std::max<int>(maxpoints, outinterblock[i].y);
-          maxblocks = std::max<int>(maxblocks, outinterblock[i].x);
-        }
-
-        std::vector<int2> outroute(maxpoints*numtargets, int2(0,0));
-        for(int i = 0; i < maxblocks*numtargets; ++i)
-          constructRoute(cost, outinterblock,  outroute, maxblocks, maxpoints, numtargets, dim, numBlocks, i);
-        }
-          //debug
 
         //inter block route reconstruction
         _cl_routeInterBlock_kernel.setArg(0, routing_block_inout);
