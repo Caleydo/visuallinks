@@ -260,16 +260,16 @@ ShaderPtr loadShader( QString vert, QString frag )
 
       glColor3f(1,1,1);
 
-      glTexCoord2f(x/w,y/h);
+      glTexCoord2f(0,1);
       glVertex2f(-1,-1);
 
-      glTexCoord2f((x+w)/w,y/h);
+      glTexCoord2f(1,1);
       glVertex2f(1,-1);
 
-      glTexCoord2f((x+w)/w,(y+h)/h);
+      glTexCoord2f(1,0);
       glVertex2f(1,1);
 
-      glTexCoord2f(x/w,(y+h)/h);
+      glTexCoord2f(0,0);
       glVertex2f(-1,1);
 
     glEnd();
@@ -317,7 +317,7 @@ ShaderPtr loadShader( QString vert, QString frag )
     {
       writeTexture(_subscribe_links, QString("links%1.png").arg(counter));
 
-      QBitmap mask = QBitmap::fromImage( links.createMaskFromColor( qRgb(0,0,0) ) );
+      QBitmap mask = QBitmap::fromImage( links.mirrored().createMaskFromColor( qRgb(0,0,0) ) );
       setMask(mask);
       mask.save(QString("mask%1.png").arg(counter));
     }
