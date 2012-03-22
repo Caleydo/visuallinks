@@ -50,7 +50,6 @@ struct int4
 template<class T>
 struct int4Aug
 {
-  T aug;
   union
   {
     int v[4];
@@ -59,6 +58,7 @@ struct int4Aug
       int x,y,z,w;
     };
   };
+  T aug;
   int4Aug( int _x, int _y, int _z, int _w, T _aug = 0) : x(_x), y(_y), z(_z), w(_w), aug(_aug) { }
   bool operator < (const int4Aug& other) const
   {

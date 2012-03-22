@@ -20,6 +20,7 @@ namespace LinksRouting
       virtual ~GlRenderer();
 
       void publishSlots(SlotCollector& slots);
+      void subscribeSlots(SlotSubscriber& slot_subscriber);
 
       bool startup(Core* core, unsigned int type);
       void init();
@@ -36,13 +37,10 @@ namespace LinksRouting
 
       void process(Type type);
 
-//      bool setTransparencyInput(const Component::MapData& inputmap);
-      bool addLinkHierarchy(LinkDescription::Node* node);
-      bool addLinkHierarchy(LinkDescription::HyperEdge* hyperedge);
-      bool removeLinkHierarchy(LinkDescription::Node* node);
-      bool removeLinkHierarchy(LinkDescription::HyperEdge* hyperedge);
-
     protected:
+
+      /** Subscribe to the routed links */
+      slot_t<LinkDescription::LinkList>::type _subscribe_links;
 
       /** Publish the links rendered to fbo */
       slot_t<SlotType::Image>::type _slot_links;
@@ -51,6 +49,8 @@ namespace LinksRouting
       gl::FBO   _links_fbo;
 
       bool  _enabled;
+
+      void renderLinks(const LinkDescription::LinkList& links);
   };
 }
 

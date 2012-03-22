@@ -33,6 +33,7 @@ namespace qtfullscreensystem
       void captureScreen();
 
       void publishSlots(LinksRouting::SlotCollector slots);
+      void subscribeSlots(LinksRouting::SlotSubscriber& slot_subscriber);
 
       /**
        *
@@ -70,6 +71,7 @@ namespace qtfullscreensystem
       // TODO make readonly
       LinksRouting::slot_t<LinksRouting::SlotType::Image>::type _subscribe_links;
       LinksRouting::slot_t<LinksRouting::SlotType::Image>::type _subscribe_costmap;
+      LinksRouting::slot_t<LinksRouting::LinkDescription::LinkList>::type _subscribe_routed_links;
 
       /** And now the components */
       LinksRouting::StaticCore      _core;

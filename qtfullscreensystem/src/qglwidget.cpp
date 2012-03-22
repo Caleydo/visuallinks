@@ -127,8 +127,16 @@ ShaderPtr loadShader( QString vert, QString frag )
     _core.attachComponent(&_renderer);
     _core.init();
 
-    _subscribe_links = _core.getSlotSubscriber().getSlot<LinksRouting::SlotType::Image>("/rendered-links");
-    _subscribe_costmap = _core.getSlotSubscriber().getSlot<LinksRouting::SlotType::Image>("/costmap");
+    LinksRouting::SlotSubscriber subscriber = _core.getSlotSubscriber();
+    subscribeSlots(subscriber);
+
+    foreach (QWidget *widget, QApplication::allWidgets())
+    {
+      std::cout << widget->objectName().toStdString() << ": "
+                << widget->internalWinId() << " - "
+                << widget->windowTitle().toStdString() << " - "
+                << widget->window()->objectName().toStdString() << std::endl;
+    }
   }
 
   //----------------------------------------------------------------------------
@@ -151,6 +159,17 @@ ShaderPtr loadShader( QString vert, QString frag )
     _slot_desktop =
       slot_collector.create<LinksRouting::SlotType::Image>("/desktop");
     _slot_desktop->_data->type = LinksRouting::SlotType::Image::OpenGLTexture;
+  }
+
+  //----------------------------------------------------------------------------
+  void GLWidget::subscribeSlots(LinksRouting::SlotSubscriber& slot_subscriber)
+  {
+    _subscribe_links =
+      slot_subscriber.getSlot<LinksRouting::SlotType::Image>("/rendered-links");
+    _subscribe_costmap =
+      slot_subscriber.getSlot<LinksRouting::SlotType::Image>("/costmap");
+    _subscribe_routed_links =
+      slot_subscriber.getSlot<LinksRouting::LinkDescription::LinkList>("/links");
   }
 
   //----------------------------------------------------------------------------
@@ -215,7 +234,19 @@ ShaderPtr loadShader( QString vert, QString frag )
       _window_end = window_end;
     }
 
+    float x = _window_offset.x(),
+          y = _window_offset.y(),
+          w = _window_end.x() - x,
+          h = _window_end.y() - y;
+
+    glMatrixMode(GL_PROJECTION);
+    glOrtho(x, x + w, y, y + h, -1.0, 1.0);
+
     _core.process();
+
+    glMatrixMode(GL_PROJECTION);
+    glLoadIdentity();
+
     updateScreenShot(window_offset, window_end);
 
     // normal draw...
@@ -229,20 +260,25 @@ ShaderPtr loadShader( QString vert, QString frag )
 
       glColor3f(1,1,1);
 
-      glTexCoord2f(0,0);
+      glTexCoord2f(x/w,y/h);
       glVertex2f(-1,-1);
 
-      glTexCoord2f(1,0);
+      glTexCoord2f((x+w)/w,y/h);
       glVertex2f(1,-1);
 
-      glTexCoord2f(1,1);
+      glTexCoord2f((x+w)/w,(y+h)/h);
       glVertex2f(1,1);
 
-      glTexCoord2f(0,1);
+      glTexCoord2f(x/w,(y+h)/h);
       glVertex2f(-1,1);
 
     glEnd();
     glDisable(GL_TEXTURE_2D);
+
+    glBegin(GL_LINES);
+    glVertex2f(-1,-1);
+    glVertex2f(1,1);
+    glEnd();
 
     static int counter = 0;
 
@@ -252,7 +288,7 @@ ShaderPtr loadShader( QString vert, QString frag )
     glReadPixels(0, 0, width(), height(), GL_RGB, GL_UNSIGNED_BYTE, links.bits());
     //links.mirrored().save(QString("links%1.png").arg(counter));
 
-    //----------------------------------------------------------------------------
+    //--------------------------------------------------------------------------
     auto writeTexture = []
     (
       const LinksRouting::slot_t<LinksRouting::SlotType::Image>::type& slot,
@@ -266,21 +302,27 @@ ShaderPtr loadShader( QString vert, QString frag )
       glBindTexture(GL_TEXTURE_2D, slot->_data->id);
       glGetTexImage(GL_TEXTURE_2D, 0, GL_RGB, GL_UNSIGNED_BYTE, image.bits());
       glDisable(GL_TEXTURE_2D);
-      image.mirrored().save(name);
+      image.save(name);
     };
 
     writeTexture(_subscribe_costmap, QString("costmap%1.png").arg(counter));
 //    writeTexture(_slot_desktop, QString("desktop%1.png").arg(counter));
-    writeTexture(_core.getSlotSubscriber().getSlot<LinksRouting::SlotType::Image>("/downsampled_desktop"), QString("downsampled_desktop%1.png").arg(counter));
+//    writeTexture(_core.getSlotSubscriber().getSlot<LinksRouting::SlotType::Image>("/downsampled_desktop"), QString("downsampled_desktop%1.png").arg(counter));
     writeTexture(_core.getSlotSubscriber().getSlot<LinksRouting::SlotType::Image>("/featuremap"), QString("featuremap%1.png").arg(counter));
 
     glPopAttrib();
 
     //links.save("fbo.png");
-    QBitmap mask = QBitmap::fromImage( links.mirrored().createMaskFromColor( qRgb(0,0,0) ) );
-    //mask.save("mask.png");
-    setMask(mask);
+    if( !_subscribe_routed_links->_data->empty() )
+    {
+      writeTexture(_subscribe_links, QString("links%1.png").arg(counter));
 
+      QBitmap mask = QBitmap::fromImage( links.createMaskFromColor( qRgb(0,0,0) ) );
+      setMask(mask);
+      mask.save(QString("mask%1.png").arg(counter));
+    }
+    else
+      setMask(QRegion(-1, -1, 1, 1));
 
     ++counter;
 

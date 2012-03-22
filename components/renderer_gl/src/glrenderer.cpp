@@ -134,6 +134,13 @@ namespace LinksRouting
   }
 
   //----------------------------------------------------------------------------
+  void GlRenderer::subscribeSlots(SlotSubscriber& slot_subscriber)
+  {
+    _subscribe_links =
+      slot_subscriber.getSlot<LinkDescription::LinkList>("/links");
+  }
+
+  //----------------------------------------------------------------------------
   bool GlRenderer::startup(Core* core, unsigned int type)
   {
     return true;
@@ -152,7 +159,7 @@ namespace LinksRouting
     glGetIntegerv(GL_VIEWPORT, vp);
 
     _links_fbo.init(vp[2], vp[3], GL_RGBA8, 1, false, GL_NEAREST);
-    _slot_links->_data->id = _links_fbo.colorBuffers.at(0);
+    *_slot_links->_data = SlotType::Image(vp[2], vp[3], _links_fbo.colorBuffers.at(0));
   }
 
   //----------------------------------------------------------------------------
@@ -169,9 +176,70 @@ namespace LinksRouting
 
     _slot_links->setValid(false);
     _links_fbo.bind();
+
     glClearColor(0,0,0,0);
     glClear(GL_COLOR_BUFFER_BIT);
 
+    if( !_subscribe_links->_data->empty() )
+      renderLinks(*_subscribe_links->_data);
+
+    _links_fbo.unbind();
+    _slot_links->setValid(true);
+  }
+
+  //----------------------------------------------------------------------------
+  void GlRenderer::renderLinks(const LinkDescription::LinkList& links)
+  {
+    float m[4][4];
+    glGetFloatv(GL_PROJECTION_MATRIX, &m[0][0]);
+    for(int i = 0; i < 4; ++i)
+    {
+      for(int j = 0; j < 4; ++j)
+        std::cout << ", " << m[j][i];
+      std::cout << "\n";
+    }
+
+    glColor3f(1.0, 0.2, 0.2);
+    glLineWidth(4);
+
+    for(auto link = links.begin(); link != links.end(); ++link)
+    {
+      const LinkDescription::HyperEdgeDescriptionForkation* fork =
+        link->_link.getHyperEdgeDescription();
+
+      for( auto segment = fork->outgoing.begin();
+           segment != fork->outgoing.end();
+           ++segment )
+      {
+        glBegin(GL_LINE_STRIP);
+        glVertex2f(fork->position.x, fork->position.y);
+        std::cout << "Outgoing: " << fork->position.x << "|" << fork->position.y << std::endl;
+
+        for( auto point = segment->trail.begin();
+             point != segment->trail.end();
+             ++point )
+        {
+          glVertex2f(point->x, point->y);
+          std::cout << point->x << "|" << point->y << std::endl;
+        }
+
+        glEnd();
+
+        for( auto node = segment->nodes.begin();
+             node != segment->nodes.end();
+             ++node )
+        {
+          std::cout << "node" << std::endl;
+          glBegin(GL_LINE_LOOP);
+          for( auto vertex = (*node)->getVertices().begin();
+               vertex != (*node)->getVertices().end();
+               ++vertex )
+            glVertex2f(vertex->x, vertex->y);
+          glEnd();
+        }
+      }
+    }
+#if 1
     glColor3f(1.0, 1.0, 1.0);
     glLineWidth(2);
     float2 points[] = {
@@ -273,32 +341,6 @@ namespace LinksRouting
 
     glEnd();
 #endif
-
-    _links_fbo.unbind();
-    _slot_links->setValid(true);
-  }
-
-  //----------------------------------------------------------------------------
-  bool GlRenderer::addLinkHierarchy(LinkDescription::Node* node)
-  {
-    return true;
-  }
-
-  //----------------------------------------------------------------------------
-  bool GlRenderer::addLinkHierarchy(LinkDescription::HyperEdge* hyperedge)
-  {
-    return true;
-  }
-
-  //----------------------------------------------------------------------------
-  bool GlRenderer::removeLinkHierarchy(LinkDescription::Node* node)
-  {
-    return true;
-  }
-
-  //----------------------------------------------------------------------------
-  bool GlRenderer::removeLinkHierarchy(LinkDescription::HyperEdge* hyperedge)
-  {
-    return true;
+#endif
   }
 };
