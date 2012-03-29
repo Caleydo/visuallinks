@@ -70,6 +70,8 @@ namespace LinksRouting
       class JSON;
       std::vector<LinkDescription::Node> parseRegions(JSON& json);
 
+      std::string   _debug_regions;
+
   };
 
 } // namespace LinksRouting

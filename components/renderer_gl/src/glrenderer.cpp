@@ -1,5 +1,6 @@
 #include "glrenderer.h"
 #include "float2.hpp"
+#include "log.hpp"
 
 #include <iostream>
 
@@ -207,13 +208,19 @@ namespace LinksRouting
       const LinkDescription::HyperEdgeDescriptionForkation* fork =
         link->_link.getHyperEdgeDescription();
 
+      if( !fork )
+      {
+        LOG_ERROR("Missing HyperEdgeDescription for " << link->_id);
+        continue;
+      }
+
       for( auto segment = fork->outgoing.begin();
            segment != fork->outgoing.end();
            ++segment )
       {
         glBegin(GL_LINE_STRIP);
-        glVertex2f(fork->position.x, fork->position.y);
-        std::cout << "Outgoing: " << fork->position.x << "|" << fork->position.y << std::endl;
+//        glVertex2f(fork->position.x, fork->position.y);
+//        std::cout << "Outgoing: " << fork->position.x << "|" << fork->position.y << std::endl;
 
         for( auto point = segment->trail.begin();
              point != segment->trail.end();

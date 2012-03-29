@@ -19,8 +19,9 @@
 
 namespace qtfullscreensystem
 {
-  // TODO make also component?
-  class GLWidget: public QGLWidget
+  class GLWidget:
+    public QGLWidget,
+    public LinksRouting::ComponentArguments
   {
     public:
 
@@ -35,10 +36,16 @@ namespace qtfullscreensystem
       void publishSlots(LinksRouting::SlotCollector slots);
       void subscribeSlots(LinksRouting::SlotSubscriber& slot_subscriber);
 
+      const std::string& name() const
+      {
+        static const std::string name("QGLWidget");
+        return name;
+      }
+
       /**
        *
        */
-      void initGL();
+      void setupGL();
 
       /**
        * Do actual render (To be called eg. by renderthread)
@@ -81,6 +88,8 @@ namespace qtfullscreensystem
       LinksRouting::GPURouting      _routing;
       LinksRouting::GlRenderer      _renderer;
 
+      /** Use image from given file instead of desktop screenshot if not empty */
+      std::string   _debug_desktop_image;
   };
 } // namespace qtfullscreensystem
 

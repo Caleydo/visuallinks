@@ -123,7 +123,7 @@ namespace LinksRouting
   //----------------------------------------------------------------------------
   IPCServer::IPCServer()
   {
-
+    registerArg("DebugRegions", _debug_regions);
   }
 
   //----------------------------------------------------------------------------
@@ -169,7 +169,11 @@ namespace LinksRouting
   //----------------------------------------------------------------------------
   void IPCServer::process(Type type)
   {
-
+    if( !_debug_regions.empty() )
+    {
+      onDataReceived( QString::fromStdString(_debug_regions) );
+      _debug_regions.clear();
+    }
   }
 
   //----------------------------------------------------------------------------

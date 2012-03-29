@@ -71,14 +71,14 @@ namespace LinksRouting
       virtual void publishSlots(SlotCollector& slot_list) {};
       virtual void subscribeSlots(SlotSubscriber& slot_subscriber) {};
 
-      virtual bool startup(Core* core, unsigned int type) = 0;
-      virtual void init() = 0;
-      virtual void initGL(){};
-      virtual void shutdown() = 0;
-      virtual bool supports(Type type) const = 0;
+      virtual bool startup(Core* core, unsigned int type) { return true; };
+      virtual void init() {};
+      virtual void initGL() {};
+      virtual void shutdown() {};
+      virtual bool supports(Type type) const { return false; };
       virtual const std::string& name() const = 0;
 
-      virtual void process(Type type = None) = 0;
+      virtual void process(Type type = None) {};
 
       virtual bool setFlag(const std::string& name, bool val) = 0;
       virtual bool getFlag(const std::string& name, bool& val) const = 0;

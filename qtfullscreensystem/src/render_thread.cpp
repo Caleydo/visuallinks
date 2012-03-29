@@ -36,7 +36,7 @@ namespace qtfullscreensystem
 
     _do_render = true;
     _gl_widget->makeCurrent();
-    _gl_widget->initGL();
+    _gl_widget->setupGL();
 
     int screenshot_counter = 0;
     do

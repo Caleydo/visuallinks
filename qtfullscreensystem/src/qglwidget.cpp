@@ -7,6 +7,7 @@
 #endif
 
 #include "qglwidget.hpp"
+#include "log.hpp"
 
 #include <cmath>
 #include <cstddef>
@@ -125,6 +126,10 @@ ShaderPtr loadShader( QString vert, QString frag )
     _core.attachComponent(&_cost_analysis);
     _core.attachComponent(&_routing);
     _core.attachComponent(&_renderer);
+
+    _core.attachComponent(this);
+    registerArg("DebugDesktopImage", _debug_desktop_image);
+
     _core.init();
 
     LinksRouting::SlotSubscriber subscriber = _core.getSlotSubscriber();
@@ -174,7 +179,7 @@ ShaderPtr loadShader( QString vert, QString frag )
 
   //----------------------------------------------------------------------------
   ShaderPtr shader;
-  void GLWidget::initGL()
+  void GLWidget::setupGL()
   {
     LOG_ENTER_FUNC();
 
@@ -183,28 +188,46 @@ ShaderPtr loadShader( QString vert, QString frag )
       qFatal("Unable to init Glew");
 #endif
 
-    if( _fbo_desktop )
-      qDebug("FBO already initialized!");
+    if( !_debug_desktop_image.empty() )
+    {
+      LOG_INFO("Using image instead of screenshot: " << _debug_desktop_image);
+      if( _slot_desktop->isValid() )
+        LOG_WARN("Already initialized!");
 
-    _fbo_desktop.reset
-    (
-      new QGLFramebufferObject
+      QPixmap img( QString::fromStdString(_debug_desktop_image) );
+
+      _slot_desktop->_data->id = bindTexture(img);
+      _slot_desktop->_data->width = img.width();
+      _slot_desktop->_data->height = img.height();
+
+      _slot_desktop->setValid(true);
+    }
+    else
+    {
+
+      if( _fbo_desktop )
+        qDebug("FBO already initialized!");
+
+      _fbo_desktop.reset
       (
-        size(),
-        QGLFramebufferObject::Depth
-      )
-    );
+        new QGLFramebufferObject
+        (
+          size(),
+          QGLFramebufferObject::Depth
+        )
+      );
 
-    if( !_fbo_desktop->isValid() )
-      qFatal("Failed to create framebufferobject!");
+      if( !_fbo_desktop->isValid() )
+        qFatal("Failed to create framebufferobject!");
 
-    _slot_desktop->_data->id = _fbo_desktop->texture();
-    _slot_desktop->_data->width = size().width();
-    _slot_desktop->_data->height = size().height();
+      _slot_desktop->_data->id = _fbo_desktop->texture();
+      _slot_desktop->_data->width = size().width();
+      _slot_desktop->_data->height = size().height();
 
-    shader = loadShader("simple.vert", "remove_links.frag");
-    if( !shader )
-      qFatal("Failed to load shader.");
+      shader = loadShader("simple.vert", "remove_links.frag");
+      if( !shader )
+        qFatal("Failed to load shader.");
+    }
 
     glClearColor(0, 0, 0, 0);
     glEnable(GL_BLEND);
@@ -357,7 +380,7 @@ ShaderPtr loadShader( QString vert, QString frag )
   //----------------------------------------------------------------------------
   void GLWidget::updateScreenShot(QPoint window_offset, QPoint window_end)
   {
-    if( _screenshot.isNull() )
+    if( _screenshot.isNull() || !_fbo_desktop )
       return;
 
     qDebug("Update screenshot...");
