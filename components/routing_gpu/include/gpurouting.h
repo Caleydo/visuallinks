@@ -84,7 +84,7 @@ namespace LinksRouting
         {
         }
         LinkInfo(uint32_t  stamp, uint32_t revision) : _stamp(stamp), _revision(revision)
-        {     
+        {
         }
       };
 
@@ -102,7 +102,7 @@ namespace LinksRouting
         cl_uint mincost;
 
         cl_QueueGlobal() { }
-        cl_QueueGlobal(cl_uint _sortingBarrier) : 
+        cl_QueueGlobal(cl_uint _sortingBarrier) :
           front(0),
           back(0),
           filllevel(0),

@@ -291,6 +291,42 @@ namespace LinksRouting
 
   }
 
+  template<typename T>
+  void dumpBuffer( cl::CommandQueue& cl_queue,
+                   const cl::Buffer& buf,
+                   size_t width,
+                   size_t height,
+                   const std::string& file )
+  {
+//            cl_bool blocking,
+//            ::size_t offset,
+//            ::size_t size,
+//            void* ptr
+    cl_queue.finish();
+
+    std::vector<T> mem(width * height);
+    cl_queue.enqueueReadBuffer(buf, true, 0, width * height * sizeof(T), &mem[0]);
+
+    //std::ofstream fimg("test.pfm", std::ios_base::out | std::ios_base::binary | std::ios_base::trunc );
+    //fimg << "PF\n";
+    //fimg << width << " " << height*numtargets << '\n';
+    //fimg << -1.0f << '\n';
+
+    std::ofstream img( (file + ".pgm").c_str(), std::ios_base::trunc);
+    img << "P2\n"
+        << width << " " << height << "\n"
+        << "4095\n";
+
+    auto minmax = std::minmax_element(mem.begin(), mem.end());
+    T min = *minmax.first,
+      range = *minmax.second - min;
+
+    std::cout << file << "-> min=" << min << ", range=" << range << std::endl;
+
+    for(auto it = mem.begin(); it != mem.end(); ++it)
+      img << static_cast<int>((*it - min) / range * 4095) << "\n";
+  }
+
   //----------------------------------------------------------------------------
   void GPURouting::process(Type type)
   {
@@ -454,7 +490,6 @@ namespace LinksRouting
           &clearQueueLink_Event
         );
 
-
         //insert nodes and prepare data
         _cl_prepare_kernel.setArg(0, memory_gl[0]);
         _cl_prepare_kernel.setArg(1, buf);
@@ -477,6 +512,18 @@ namespace LinksRouting
           0,
           &prepare_kernel_Event
         );
+
+        dumpBuffer<float>(_cl_command_queue, buf, width, height * numtargets, "prepare");
+
+        _cl_command_queue.finish();
+        _cl_command_queue.enqueueReadBuffer(queue_info, true, 0, sizeof(cl_QueueGlobal), &baseQueueInfo);
+
+        std::cout << "front: " << baseQueueInfo.front << " "
+                  << "back: " << baseQueueInfo.back << " "
+                  << "filllevel: " << baseQueueInfo.filllevel << " "
+                  << "activeBlocks: " << baseQueueInfo.activeBlocks << " "
+                  << "processedBlocks: " << baseQueueInfo.processedBlocks << " "
+                  << "debug: " << baseQueueInfo.debug << "\n";
 
         //compute shortest paths
         size_t localmem = std::max
@@ -506,6 +553,17 @@ namespace LinksRouting
           &shortestpath_Event
         );
 
+        dumpBuffer<float>(_cl_command_queue, buf, width, height * numtargets, "shortestpath");
+
+        _cl_command_queue.finish();
+        _cl_command_queue.enqueueReadBuffer(queue_info, true, 0, sizeof(cl_QueueGlobal), &baseQueueInfo);
+
+        std::cout << "front: " << baseQueueInfo.front << " "
+                  << "back: " << baseQueueInfo.back << " "
+                  << "filllevel: " << baseQueueInfo.filllevel << " "
+                  << "activeBlocks: " << baseQueueInfo.activeBlocks << " "
+                  << "processedBlocks: " << baseQueueInfo.processedBlocks << " "
+                  << "debug: " << baseQueueInfo.debug << "\n";
 
 
         //_cl_command_queue.enqueueReadBuffer(queue_info, true, 0, sizeof(cl_QueueGlobal), &baseQueueInfo);
@@ -515,18 +573,16 @@ namespace LinksRouting
         //          << "activeBlocks: " << baseQueueInfo.activeBlocks << " "
         //          << "processedBlocks: " << baseQueueInfo.processedBlocks << " "
         //          << "debug: " << baseQueueInfo.debug << "\n";
-        //std::vector<cl_QueueElement> test(baseQueueInfo.back-baseQueueInfo.front);
-        //_cl_command_queue.enqueueReadBuffer(queue, true, sizeof(cl_QueueElement)*baseQueueInfo.front, sizeof(cl_QueueElement)*(baseQueueInfo.back-baseQueueInfo.front), &test[0]);
-        //for(int i = 0; i < test.size(); ++i)
-        //{
-        //  std::cout << test[i].block.s[0] << " "
-        //            << test[i].block.s[1] << " "
-        //            << test[i].node << " "
-        //            << test[i].priority << "\n";
-        //}
-        //_cl_command_queue.finish();
-
-
+        std::cout << "overAllBlocks=" << overAllBlocks << std::endl;
+        std::vector<cl_QueueElement> test(baseQueueInfo.back-baseQueueInfo.front);
+        _cl_command_queue.enqueueReadBuffer(queue, true, sizeof(cl_QueueElement)*baseQueueInfo.front, sizeof(cl_QueueElement)*(baseQueueInfo.back-baseQueueInfo.front), &test[0]);
+        for(unsigned int i = 0; i < test.size(); ++i)
+        {
+          for(int i = 0; i < 4; ++i)
+            std::cout << test[i].s[i] << " ";
+          std::cout << "\n";
+        }
+throw std::runtime_error("stop!");
         //search for minimum
 
         _cl_command_queue.finish();
@@ -554,7 +610,7 @@ namespace LinksRouting
         std::vector<cl_ushort2> h_idbuffer(256, us2_dummy);
         _cl_command_queue.enqueueReadBuffer(idbuffer, true, 0, sizeof(cl_ushort2)*256, &h_idbuffer[0]);
         _cl_command_queue.enqueueReadBuffer(queue_info, true, 0, sizeof(cl_QueueGlobal), &baseQueueInfo);
-        cl_uint cleanedcost = (baseQueueInfo.mincost & 0xFFFFFF00) >> 1;
+        //cl_uint cleanedcost = (baseQueueInfo.mincost & 0xFFFFFF00) >> 1;
         cl_uint idbufferoffset = baseQueueInfo.mincost&0xFF;
         int startingpoint[2] = {h_idbuffer[idbufferoffset].s[0],
                                 h_idbuffer[idbufferoffset].s[1]};
@@ -628,7 +684,7 @@ namespace LinksRouting
         //  int px = interblockinfo[numtargets + i].s[1] >> 16;
         //  int py = interblockinfo[numtargets + i].s[1] &0xFFFF;
 
-        //  std::cout << cost << " -> (" << px << "," << py << ")\n"; 
+        //  std::cout << cost << " -> (" << px << "," << py << ")\n";
         //}
         //
 
@@ -666,7 +722,7 @@ namespace LinksRouting
         //copy results to cpu
         std::vector<LinkDescription::Point> outroutes(maxpoints*numtargets, LinkDescription::Point(0,0));
         _cl_command_queue.enqueueReadBuffer(routes, true, 0, maxpoints*sizeof(cl_int2)*numtargets, &outroutes[0]);
-        
+
         //copy routes to hyperedge
         LinkDescription::HyperEdgeDescriptionForkation* fork = new LinkDescription::HyperEdgeDescriptionForkation();
         fork->position.x = startingpoint[0]*downsample;
@@ -676,7 +732,7 @@ namespace LinksRouting
           fork->outgoing.push_back(LinkDescription::HyperEdgeDescriptionSegment());
           fork->outgoing.back().parent = fork;
           fork->outgoing.back().trail.reserve(interblockinfo[i].s[1]);
-          for(int j = 0; j < interblockinfo[i].s[1]; ++j)
+          for(unsigned int j = 0; j < interblockinfo[i].s[1]; ++j)
           {
             fork->outgoing.back().trail.push_back(LinkDescription::Point(
                   outroutes[i*maxpoints +j].x*downsample,
@@ -712,18 +768,13 @@ namespace LinksRouting
         std::cout << " - route construction: " << (end-start)/1000000.0  << "ms\n";
 
 
-        //std::vector<float> host_mem(num_points*numtargets);
-        //_cl_command_queue.enqueueReadBuffer(buf, true, 0, num_points * numtargets * sizeof(float), &host_mem[0]);
+//        std::vector<float> host_mem(num_points*numtargets);
+//        _cl_command_queue.enqueueReadBuffer(buf, true, 0, num_points * numtargets * sizeof(float), &host_mem[0]);
 
         //std::ofstream fimg("test.pfm", std::ios_base::out | std::ios_base::binary | std::ios_base::trunc );
         //fimg << "PF\n";
         //fimg << width << " " << height*numtargets << '\n';
         //fimg << -1.0f << '\n';
-
-        ////std::ofstream img("test.pgm", std::ios_base::trunc);
-        ////img << "P2\n"
-        ////    << width << " " << height*numtargets << "\n"
-        ////    << "255\n";
 
         //for( unsigned int i = 0; i < num_points*numtargets; ++i )
         //{
@@ -743,6 +794,8 @@ namespace LinksRouting
         info->second._stamp = it->_stamp;
         info->second._revision = it->_link.getRevision();
       }
+
+      throw std::runtime_error("Done routing!");
     }
 
     _cl_command_queue.enqueueReleaseGLObjects(&memory_gl);
@@ -751,6 +804,7 @@ namespace LinksRouting
     catch(cl::Error& err)
     {
       std::cerr << err.err() << "->" << err.what() << std::endl;
+      throw;
     }
   }
 
