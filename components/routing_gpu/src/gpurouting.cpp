@@ -574,17 +574,52 @@ namespace LinksRouting
         //          << "processedBlocks: " << baseQueueInfo.processedBlocks << " "
         //          << "debug: " << baseQueueInfo.debug << "\n";
         std::cout << "overAllBlocks=" << overAllBlocks << std::endl;
-        std::vector<cl_QueueElement> test(baseQueueInfo.back-baseQueueInfo.front);
-        _cl_command_queue.enqueueReadBuffer(queue, true, sizeof(cl_QueueElement)*baseQueueInfo.front, sizeof(cl_QueueElement)*(baseQueueInfo.back-baseQueueInfo.front), &test[0]);
-        for(unsigned int i = 0; i < test.size(); ++i)
+        uint32_t front = baseQueueInfo.front % overAllBlocks,
+                 back  = baseQueueInfo.back % overAllBlocks;
+
+        std::vector<cl_QueueElement> queue_data;
+
+        if( front < back )
+        {
+          queue_data.resize(back - front);
+          _cl_command_queue.enqueueReadBuffer
+          (
+            queue,
+            true,
+            sizeof(cl_QueueElement) * front,
+            sizeof(cl_QueueElement) * queue_data.size(),
+            &queue_data[0]
+          );
+        }
+        else
+        {
+          queue_data.resize(overAllBlocks - front + back);
+          _cl_command_queue.enqueueReadBuffer
+          (
+            queue,
+            true,
+            sizeof(cl_QueueElement) * front,
+            sizeof(cl_QueueElement) * (overAllBlocks - front),
+            &queue_data[0]
+          );
+          _cl_command_queue.enqueueReadBuffer
+          (
+            queue,
+            true,
+            0,
+            sizeof(cl_QueueElement) * back,
+            &queue_data[overAllBlocks - front]
+          );
+        }
+
+        for(unsigned int i = 0; i < queue_data.size(); ++i)
         {
           for(int i = 0; i < 4; ++i)
-            std::cout << test[i].s[i] << " ";
+            std::cout << queue_data[i].s[i] << " ";
           std::cout << "\n";
         }
-throw std::runtime_error("stop!");
-        //search for minimum
 
+        //search for minimum
         _cl_command_queue.finish();
 
         _cl_getMinimum_kernel.setArg(0, buf);
