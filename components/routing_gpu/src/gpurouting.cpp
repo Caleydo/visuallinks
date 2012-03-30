@@ -291,6 +291,7 @@ namespace LinksRouting
 
   }
 
+  //----------------------------------------------------------------------------
   template<typename T>
   void dumpBuffer( cl::CommandQueue& cl_queue,
                    const cl::Buffer& buf,
@@ -307,24 +308,29 @@ namespace LinksRouting
     std::vector<T> mem(width * height);
     cl_queue.enqueueReadBuffer(buf, true, 0, width * height * sizeof(T), &mem[0]);
 
-    //std::ofstream fimg("test.pfm", std::ios_base::out | std::ios_base::binary | std::ios_base::trunc );
-    //fimg << "PF\n";
-    //fimg << width << " " << height*numtargets << '\n';
-    //fimg << -1.0f << '\n';
+#if 1
+    std::ofstream fimg( (file + ".pfm").c_str(), std::ios_base::out | std::ios_base::binary | std::ios_base::trunc );
+    fimg << "Pf\n";
+    fimg << width << " " << height << '\n';
+    fimg << -1.0f << '\n';
 
+    for(auto it = mem.begin(); it != mem.end(); ++it)
+      fimg.write(reinterpret_cast<char*>(&*it), sizeof(T));
+#else
     std::ofstream img( (file + ".pgm").c_str(), std::ios_base::trunc);
     img << "P2\n"
         << width << " " << height << "\n"
-        << "4095\n";
+        << "8191\n";
 
     auto minmax = std::minmax_element(mem.begin(), mem.end());
     T min = *minmax.first,
-      range = *minmax.second - min;
+      range = 10;//*minmax.second - min;
 
     std::cout << file << "-> min=" << min << ", range=" << range << std::endl;
 
     for(auto it = mem.begin(); it != mem.end(); ++it)
-      img << static_cast<int>((*it - min) / range * 4095) << "\n";
+      img << static_cast<int>(std::min(*it - min, 10.f) / range * 8191) << "\n";
+#endif
   }
 
   //----------------------------------------------------------------------------
@@ -461,7 +467,7 @@ namespace LinksRouting
         int numtargets = h_targets.size();
 
         unsigned int overAllBlocks = sumBlocks * numtargets;
-        unsigned int blockProcessThreshold = overAllBlocks*40;
+        unsigned int blockProcessThreshold = overAllBlocks * 40;
         cl::Buffer buf(_cl_context, CL_MEM_READ_WRITE, num_points * numtargets * sizeof(float));
 
         cl::Buffer queue_priority(_cl_context, CL_MEM_READ_WRITE, overAllBlocks * sizeof(cl_float));
@@ -801,22 +807,6 @@ namespace LinksRouting
         routeConstruct_Event.getProfilingInfo(CL_PROFILING_COMMAND_END, &end);
         routeConstruct_Event.getProfilingInfo(CL_PROFILING_COMMAND_START, &start);
         std::cout << " - route construction: " << (end-start)/1000000.0  << "ms\n";
-
-
-//        std::vector<float> host_mem(num_points*numtargets);
-//        _cl_command_queue.enqueueReadBuffer(buf, true, 0, num_points * numtargets * sizeof(float), &host_mem[0]);
-
-        //std::ofstream fimg("test.pfm", std::ios_base::out | std::ios_base::binary | std::ios_base::trunc );
-        //fimg << "PF\n";
-        //fimg << width << " " << height*numtargets << '\n';
-        //fimg << -1.0f << '\n';
-
-        //for( unsigned int i = 0; i < num_points*numtargets; ++i )
-        //{
-        //  //img << host_mem[i] << "\n";
-        //  for(int j = 0; j < 3; ++j)
-        //    fimg.write(reinterpret_cast<char*>(&host_mem[i]),sizeof(float));
-        //}
       }
 
       // --------------------------------------------------------
