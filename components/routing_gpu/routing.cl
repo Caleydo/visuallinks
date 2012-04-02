@@ -809,12 +809,18 @@ __kernel void constructRoute(global const float* routecost,
   }
 }
 
-#if 0
+
+__kernel void route_no_queue(read_only image2d_t costmap,
+                      global float* routecost,
+                      const int2 dim,
+                      local float* l_costs)
+{
   int3 blockid = {get_group_id(0), get_group_id(1), get_global_id(2)};
   route(costmap, routecost, blockid, l_costs, dim);
   return;
+}
 
-
+#if 0
   int3 id = {get_global_id(0), get_global_id(1), get_global_id(2)};
 
   //copy cost to local
