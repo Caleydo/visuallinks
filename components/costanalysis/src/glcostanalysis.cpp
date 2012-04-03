@@ -47,11 +47,8 @@ namespace LinksRouting
   //----------------------------------------------------------------------------
   void GlCostAnalysis::initGL()
   {
-    GLint vp[4];
-    glGetIntegerv(GL_VIEWPORT, vp);
-
-    size_t width = vp[2] / _downsample,
-           height = vp[3] / _downsample;
+    size_t width = _subscribe_desktop->_data->width / _downsample,
+           height = _subscribe_desktop->_data->height / _downsample;
     _feature_map_fbo.init(width, height, GL_RGBA32F, 1, false, GL_NEAREST);
     _saliency_map_fbo.init(width, height, GL_R32F, 3, false, GL_NEAREST);
     _downsampled_input_fbo.init(width, height, GL_RGBA8, 1, false, GL_NEAREST);
