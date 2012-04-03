@@ -7,6 +7,7 @@
 
 //QUEUE
 typedef int4 QueueElement;
+#define MAGICPRIORITY 999999.0f
 
 #define QueueElementCopySteps 3
 
@@ -78,14 +79,14 @@ void Enqueue(volatile global QueueGlobal* queueInfo,
   float old_priority = atomic_min_float(myQueuePriority, priority);
   
   //if there is a priority, it is in the queue
-  if(old_priority != MAXFLOAT)
+  if(old_priority != MAGICPRIORITY)
     return;
   else
   {
     //add to queue
 
     //inc size 
-    uint filllevel = atomic_inc(&queueInfo->filllevel);
+    int filllevel = atomic_inc(&queueInfo->filllevel);
     
     //make sure there is enough space?
     //assert(filllevel < queueSize)
@@ -143,7 +144,7 @@ bool Dequeue(volatile global QueueGlobal* queueInfo,
   
   //remove priority (mark as not in queue)
   volatile global float* myQueuePriority = queuePriority + linAccess3D(*element, blocks);
-  atomic_xchg(myQueuePriority, MAXFLOAT);
+  atomic_xchg(myQueuePriority, MAGICPRIORITY);
 
   //free queue element
   setQueueState(queue + pos, QueueElementRead);
@@ -163,7 +164,7 @@ float getPenalty(read_only image2d_t costmap, int2 pos)
 
 __kernel void clearQueueLink(global float* queuePriority)
 {
-  queuePriority[get_global_id(0)] = MAXFLOAT;
+  queuePriority[get_global_id(0)] = MAGICPRIORITY;
 }
 
 //it might be better to do that via opengl or something (arbitrary node shapes etc)
