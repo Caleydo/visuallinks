@@ -131,6 +131,10 @@ namespace LinksRouting
 
       int _blockSize[2];
       bool _enabled;
+      bool _noQueue;
+
+      friend std::ostream& operator<<( std::ostream&,
+                                         const GPURouting::cl_QueueElement& );
 
   };
 } // namespace LinksRouting

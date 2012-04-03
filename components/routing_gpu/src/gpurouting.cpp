@@ -8,6 +8,7 @@
 #include <algorithm>
 #include "datatypes.h"
 
+#define USE_QUEUE_ROUTING 1
 
 #if defined(__APPLE__) || defined(__MACOSX)
 # error "Context sharing not supported yet."
@@ -35,6 +36,7 @@ namespace LinksRouting
     registerArg("BlockSizeX", _blockSize[0] = 8);
     registerArg("BlockSizeY", _blockSize[1] = 8);
     registerArg("enabled", _enabled = true);
+    registerArg("NoQueue", _noQueue = true);
   }
 
   //------------------------------------------------------------------------------
@@ -239,7 +241,7 @@ namespace LinksRouting
 
     _cl_clearQueueLink_kernel = cl::Kernel(_cl_program, "clearQueueLink");
     _cl_prepare_kernel = cl::Kernel(_cl_program, "prepareRouting");
-    _cl_shortestpath_kernel = cl::Kernel(_cl_program, "routing");
+   	_cl_shortestpath_kernel = cl::Kernel(_cl_program, _noQueue ? "route_no_queue" : "routing");
     _cl_getMinimum_kernel = cl::Kernel(_cl_program, "getMinimum");
     _cl_routeInOut_kernel = cl::Kernel(_cl_program, "calcInOut");
     _cl_routeInterBlock_kernel = cl::Kernel(_cl_program, "calcInterBlockRoute");
@@ -286,6 +288,8 @@ namespace LinksRouting
    //   std::cout <<  "<" << h_keys[i] << "," << h_values[i] << ">,\n";
    // std::cout << std::endl;
   }
+
+  //----------------------------------------------------------------------------
   void GPURouting::shutdown()
   {
 
@@ -309,7 +313,7 @@ namespace LinksRouting
     cl_queue.enqueueReadBuffer(buf, true, 0, width * height * sizeof(T), &mem[0]);
 
 #if 1
-    std::ofstream fimg( (file + ".pfm").c_str(), std::ios_base::out | std::ios_base::binary | std::ios_base::trunc );
+    std::ofstream fimg(file + ".pfm", std::ios_base::out | std::ios_base::binary | std::ios_base::trunc);
     fimg << "Pf\n";
     fimg << width << " " << height << '\n';
     fimg << -1.0f << '\n';
@@ -331,6 +335,71 @@ namespace LinksRouting
     for(auto it = mem.begin(); it != mem.end(); ++it)
       img << static_cast<int>(std::min(*it - min, 10.f) / range * 8191) << "\n";
 #endif
+  }
+
+  //----------------------------------------------------------------------------
+  template<typename T>
+  std::vector<T> dumpRingBuffer( cl::CommandQueue& cl_queue,
+                                   const cl::Buffer& buf,
+                                   size_t front,
+                                   size_t back,
+                                   size_t max_len,
+                                   const std::string& file )
+  {
+    cl_queue.finish();
+    std::cout << "Dumping buffer to '" << file << "'" << std::endl;
+
+    std::vector<T> mem;
+    if( front < back )
+    {
+      mem.resize(back - front);
+      cl_queue.enqueueReadBuffer
+      (
+        buf,
+        true,
+        sizeof(T) * front,
+        sizeof(T) * mem.size(),
+        &mem[0]
+      );
+    }
+    else
+    {
+      mem.resize(max_len - front + back);
+      cl_queue.enqueueReadBuffer
+      (
+        buf,
+        true,
+        sizeof(T) * front,
+        sizeof(T) * (max_len - front),
+        &mem[0]
+      );
+      cl_queue.enqueueReadBuffer
+      (
+        buf,
+        true,
+        0,
+        sizeof(T) * back,
+        &mem[max_len - front]
+      );
+    }
+
+    std::ofstream strm(file);
+
+    for(size_t i = 0; i < mem.size(); ++i)
+    {
+      strm << mem[i] << "\n";
+    }
+
+    return mem;
+  }
+
+  //----------------------------------------------------------------------------
+  std::ostream& operator<<( std::ostream& strm,
+                             const GPURouting::cl_QueueElement& el )
+  {
+    for(int i = 0; i < 4; ++i)
+      strm << el.s[i] << " ";
+    return strm;
   }
 
   //----------------------------------------------------------------------------
@@ -413,7 +482,10 @@ namespace LinksRouting
         //TODO: check if screen has changed -> update
         continue;
 
-      LOG_INFO("NEW DATA to route: " << it->_id);
+      LOG_INFO("NEW DATA to route: "
+               << it->_id
+               << " using routing kernel with" <<  (_noQueue ? "out" : "")
+               << " queue.");
 
       // --------------------------------------------------------
 
@@ -537,27 +609,42 @@ namespace LinksRouting
           sizeof(cl_float) * (_blockSize[0] + 2) * (_blockSize[1] + 2),
           _blockSize[0] * _blockSize[1] * 2 * (sizeof(cl_float) + sizeof(cl_uint))
         );
-        _cl_shortestpath_kernel.setArg(0, memory_gl[0]);
-        _cl_shortestpath_kernel.setArg(1, buf);
-        _cl_shortestpath_kernel.setArg(2, queue);
-        _cl_shortestpath_kernel.setArg(3, queue_priority);
-        _cl_shortestpath_kernel.setArg(4, queue_info);
-        _cl_shortestpath_kernel.setArg(5, sizeof(unsigned int), &overAllBlocks);
-        _cl_shortestpath_kernel.setArg(6, 2 * sizeof(int), dim);
-        _cl_shortestpath_kernel.setArg(7, 2 * sizeof(int), numBlocks);
-        _cl_shortestpath_kernel.setArg(8, sizeof(unsigned int), &blockProcessThreshold);
-        _cl_shortestpath_kernel.setArg(9, localmem, NULL);
+
+        if( _noQueue )
+        {
+          _cl_shortestpath_kernel.setArg(0, memory_gl[0]);
+          _cl_shortestpath_kernel.setArg(1, buf);
+          _cl_shortestpath_kernel.setArg(2, 2 * sizeof(int), dim);
+          _cl_shortestpath_kernel.setArg(3, localmem, NULL);
+        }
+        else
+        {
+          _cl_shortestpath_kernel.setArg(0, memory_gl[0]);
+          _cl_shortestpath_kernel.setArg(1, buf);
+          _cl_shortestpath_kernel.setArg(2, queue);
+          _cl_shortestpath_kernel.setArg(3, queue_priority);
+          _cl_shortestpath_kernel.setArg(4, queue_info);
+          _cl_shortestpath_kernel.setArg(5, sizeof(unsigned int), &overAllBlocks);
+          _cl_shortestpath_kernel.setArg(6, 2 * sizeof(int), dim);
+          _cl_shortestpath_kernel.setArg(7, 2 * sizeof(int), numBlocks);
+          _cl_shortestpath_kernel.setArg(8, sizeof(unsigned int), &blockProcessThreshold);
+          _cl_shortestpath_kernel.setArg(9, localmem, NULL);
+        }
 
         cl::Event shortestpath_Event;
-        _cl_command_queue.enqueueNDRangeKernel
-        (
-          _cl_shortestpath_kernel,
-          cl::NullRange,
-          cl::NDRange(_blockSize[0]*numBlocks[0],_blockSize[1]*numBlocks[1],numtargets),
-          cl::NDRange(_blockSize[0], _blockSize[1], 1),
-          0,
-          &shortestpath_Event
-        );
+        for( int i = 0; i < (_noQueue ? 10 : 1); ++i )
+        {
+          _cl_command_queue.enqueueNDRangeKernel
+          (
+            _cl_shortestpath_kernel,
+            cl::NullRange,
+            cl::NDRange(_blockSize[0]*numBlocks[0],_blockSize[1]*numBlocks[1],numtargets),
+            cl::NDRange(_blockSize[0], _blockSize[1], 1),
+            0,
+            &shortestpath_Event
+          );
+          _cl_command_queue.finish();
+        }
 
         dumpBuffer<float>(_cl_command_queue, buf, width, height * numtargets, "shortestpath");
 
@@ -580,50 +667,41 @@ namespace LinksRouting
         //          << "processedBlocks: " << baseQueueInfo.processedBlocks << " "
         //          << "debug: " << baseQueueInfo.debug << "\n";
         std::cout << "overAllBlocks=" << overAllBlocks << std::endl;
-        uint32_t front = baseQueueInfo.front % overAllBlocks,
-                 back  = baseQueueInfo.back % overAllBlocks;
 
-        std::vector<cl_QueueElement> queue_data;
+        std::vector<cl_QueueElement> queue_data =
+          dumpRingBuffer<cl_QueueElement>
+          (
+            _cl_command_queue,
+            queue,
+            baseQueueInfo.front,
+            baseQueueInfo.back,
+            overAllBlocks,
+            "queue.txt"
+          );
+        dumpRingBuffer<cl_float>
+        (
+          _cl_command_queue,
+          queue_priority,
+          baseQueueInfo.front,
+          baseQueueInfo.back,
+          overAllBlocks,
+          "queue_priorities.txt"
+        );
 
-        if( front < back )
-        {
-          queue_data.resize(back - front);
-          _cl_command_queue.enqueueReadBuffer
-          (
-            queue,
-            true,
-            sizeof(cl_QueueElement) * front,
-            sizeof(cl_QueueElement) * queue_data.size(),
-            &queue_data[0]
-          );
-        }
-        else
-        {
-          queue_data.resize(overAllBlocks - front + back);
-          _cl_command_queue.enqueueReadBuffer
-          (
-            queue,
-            true,
-            sizeof(cl_QueueElement) * front,
-            sizeof(cl_QueueElement) * (overAllBlocks - front),
-            &queue_data[0]
-          );
-          _cl_command_queue.enqueueReadBuffer
-          (
-            queue,
-            true,
-            0,
-            sizeof(cl_QueueElement) * back,
-            &queue_data[overAllBlocks - front]
-          );
-        }
+        for(int i = 0; i < h_targets.size(); ++i)
+          std::cout << h_targets[i].x/_blockSize[0] << "->" <<  h_targets[i].z/_blockSize[0]
+                    << " " << h_targets[i].y/_blockSize[1] << "->" <<  h_targets[i].w/_blockSize[1]
+                    << std::endl;
 
+        std::set<int4> cleanup;
         for(unsigned int i = 0; i < queue_data.size(); ++i)
-        {
-          for(int i = 0; i < 4; ++i)
-            std::cout << queue_data[i].s[i] << " ";
-          std::cout << "\n";
-        }
+          if(!cleanup.insert(int4(queue_data[i].s[0],queue_data[i].s[1],queue_data[i].s[2],0)).second)
+          {
+            std::cout << "duplicated queue entry: ";
+            for(int j = 0; j < 4; ++j)
+            std::cout << queue_data[i].s[j] << " ";
+            std::cout << "\n";
+          }
 
         //search for minimum
         _cl_command_queue.finish();
@@ -820,7 +898,7 @@ namespace LinksRouting
         info->second._revision = it->_link.getRevision();
       }
 
-      throw std::runtime_error("Done routing!");
+      //throw std::runtime_error("Done routing!");
     }
 
     _cl_command_queue.enqueueReleaseGLObjects(&memory_gl);

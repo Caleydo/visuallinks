@@ -191,14 +191,14 @@ namespace LinksRouting
   //----------------------------------------------------------------------------
   void GlRenderer::renderLinks(const LinkDescription::LinkList& links)
   {
-    float m[4][4];
-    glGetFloatv(GL_PROJECTION_MATRIX, &m[0][0]);
-    for(int i = 0; i < 4; ++i)
-    {
-      for(int j = 0; j < 4; ++j)
-        std::cout << ", " << m[j][i];
-      std::cout << "\n";
-    }
+//    float m[4][4];
+//    glGetFloatv(GL_PROJECTION_MATRIX, &m[0][0]);
+//    for(int i = 0; i < 4; ++i)
+//    {
+//      for(int j = 0; j < 4; ++j)
+//        std::cout << ", " << m[j][i];
+//      std::cout << "\n";
+//    }
 
     glColor3f(1.0, 0.2, 0.2);
     glLineWidth(4);
@@ -227,7 +227,7 @@ namespace LinksRouting
              ++point )
         {
           glVertex2f(point->x, point->y);
-          std::cout << point->x << "|" << point->y << std::endl;
+          //std::cout << point->x << "|" << point->y << std::endl;
         }
 
         glEnd();
@@ -236,7 +236,7 @@ namespace LinksRouting
              node != segment->nodes.end();
              ++node )
         {
-          std::cout << "node" << std::endl;
+          //std::cout << "node" << std::endl;
           glBegin(GL_LINE_LOOP);
           for( auto vertex = (*node)->getVertices().begin();
                vertex != (*node)->getVertices().end();

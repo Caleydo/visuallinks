@@ -8,6 +8,7 @@ set(COMPONENTS_INC_DIR )
 set(COMPONENTS_LIBS )
 set(BIN_DIR ${PROJROOT}/bin)
 set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} ${PROJROOT}/cmake)
+set(LIBRARY_OUTPUT_PATH ${BIN_DIR}/lib) 
 
 #include macros
 include( cmake/CopyFiles.cmake )

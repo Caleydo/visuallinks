@@ -14,6 +14,7 @@
   
   <GPURouting>
     <enabled type="Bool" val="true" />
+    <NoQueue type="Bool" val="true" />
     <BlockSizeX type="Integer" val="8" />
     <BlockSizeY type="Integer" val="8" />
   </GPURouting>
