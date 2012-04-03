@@ -183,12 +183,10 @@ __kernel void prepareRouting(read_only image2d_t costmap,
 
   int3 id = {get_global_id(0), get_global_id(1), get_global_id(2)};
 
-
-  if(get_local_id(0) == 0 && get_local_id(1) == 0 && get_local_id(2) == 0)
-    hasStartingPoint = false;
+  hasStartingPoint = false;
   barrier(CLK_LOCAL_MEM_FENCE);
 
-  if(get_local_id(0) < dim.x && get_local_id(1) < dim.y)
+  if(id.x < dim.x && id.y < dim.y)
   {
     float cost = 0.01f*MAXFLOAT;
     if(startingPoints[id.z].x <= id.x && id.x <= startingPoints[id.z].z &&
@@ -199,13 +197,13 @@ __kernel void prepareRouting(read_only image2d_t costmap,
     }
     //prepare data
     routecost[dim.x*id.y+id.x + dim.x*dim.y*id.z] = cost;
-    barrier(CLK_LOCAL_MEM_FENCE);
-    if(hasStartingPoint && get_local_id(0) == 0 && get_local_id(1) == 0)
-    {
-      //insert into queue
-      int3 block = (int3)(get_group_id(0), get_group_id(1), id.z);
-      Enqueue(queueInfo, queue, queuePriority, block, 0, numBlocks, queueSize);
-    }
+  }
+  barrier(CLK_LOCAL_MEM_FENCE);
+  if(hasStartingPoint && get_local_id(0) == 0 && get_local_id(1) == 0)
+  {
+    //insert into queue
+    int3 block = (int3)(get_group_id(0), get_group_id(1), id.z);
+    Enqueue(queueInfo, queue, queuePriority, block, 0, numBlocks, queueSize);
   }
 }
 
