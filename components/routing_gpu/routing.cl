@@ -7,7 +7,10 @@
 
 //QUEUE
 typedef int4 QueueElement;
-#define MAGICPRIORITY 999999.0f
+#define MAGICPRIORITYF 999999.0f
+#define MAGICPRIORITY 0x7FFFFFFF
+#define FIXEDPRECISSIONBITS 7
+#define PRECISSIONMULTIPLIER (1 << FIXEDPRECISSIONBITS)
 
 #define QueueElementCopySteps 3
 
@@ -62,6 +65,25 @@ float atomic_min_float(volatile global float* p, float val)
   return as_float(atomic_min((volatile global uint*)(p),as_uint(val)));
 }
 
+void setPriorityEntry(global float* p)
+{
+  *(global uint*)(p) = MAGICPRIORITY;
+  //*p = MAGICPRIORITYF;
+}
+void removePriorityEntry(volatile global float* p)
+{
+  atomic_xchg((volatile global uint*)(p), MAGICPRIORITY);
+  //atomic_xchg(p, MAGICPRIORITYF);
+}
+bool updatePriority(volatile global float* p, float val)
+{
+  uint nval = val * PRECISSIONMULTIPLIER;
+  uint v = atomic_min((volatile global uint*)(p),nval);
+  return v != MAGICPRIORITY;
+  //float old_priority = atomic_min_float(p, val);
+  //return old_priority != MAGICPRIORITYF;
+}
+
 
 void Enqueue(volatile global QueueGlobal* queueInfo, 
              volatile global QueueElement* queue,
@@ -76,10 +98,10 @@ void Enqueue(volatile global QueueGlobal* queueInfo,
   volatile global float* myQueuePriority = queuePriority + linAccess3D(block, blocks);
 
   //update priority:
-  float old_priority = atomic_min_float(myQueuePriority, priority);
+  bool hadPriority = updatePriority(myQueuePriority, priority);
   
   //if there is a priority, it is in the queue
-  if(old_priority != MAGICPRIORITY)
+  if(hadPriority)
     return;
   else
   {
@@ -144,7 +166,7 @@ bool Dequeue(volatile global QueueGlobal* queueInfo,
   
   //remove priority (mark as not in queue)
   volatile global float* myQueuePriority = queuePriority + linAccess3D(*element, blocks);
-  atomic_xchg(myQueuePriority, MAGICPRIORITY);
+  removePriorityEntry(myQueuePriority);
 
   //free queue element
   setQueueState(queue + pos, QueueElementRead);
@@ -164,7 +186,7 @@ float getPenalty(read_only image2d_t costmap, int2 pos)
 
 __kernel void clearQueueLink(global float* queuePriority)
 {
-  queuePriority[get_global_id(0)] = MAGICPRIORITY;
+  setPriorityEntry(queuePriority + get_global_id(0));
 }
 
 //it might be better to do that via opengl or something (arbitrary node shapes etc)
@@ -280,7 +302,9 @@ bool route(read_only image2d_t costmap,
       for(offset.x = -1; offset.x <= 1; ++offset.x)
       {
         //TODO d is either 1 or M_SQRT2 - maybe it is faster to substitute
-        float d = native_sqrt((float)(offset.x*offset.x+offset.y*offset.y));
+        //float d = native_sqrt((float)(offset.x*offset.x+offset.y*offset.y));
+        int d2 = offset.x*offset.x+offset.y*offset.y;
+        float d = (d2-1)*M_SQRT2 + (2-d2);
         float penalty = 0.5f*(myPenalty + getPenalty(costmap, globalid + offset));
         float c_other = *accessLocalCost(l_costs, localid + offset);
         //TODO use custom params here
