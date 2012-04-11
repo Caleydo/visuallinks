@@ -6,11 +6,21 @@
 
 
 //QUEUE
-typedef int4 QueueElement;
+typedef struct _QueueElement
+{
+  int blockx,
+      blocky,
+      blockz;
+  uint state;
+} QueueElement;
+//typedef int4 QueueElement;
+
+
+#define FIXEDPRECISSIONBITS 7
+#define NOATOMICFLOAT 1
+#define PRECISSIONMULTIPLIER (1 << FIXEDPRECISSIONBITS)
 #define MAGICPRIORITYF 999999.0f
 #define MAGICPRIORITY 0x7FFFFFFF
-#define FIXEDPRECISSIONBITS 7
-#define PRECISSIONMULTIPLIER (1 << FIXEDPRECISSIONBITS)
 
 #define QueueElementCopySteps 3
 
@@ -20,28 +30,39 @@ typedef int4 QueueElement;
 #define  QueueElementRead 0
 void checkAndSetQueueState(volatile global QueueElement* element, uint state, uint expected)
 {
-  volatile global int* pstate = ((volatile global int*)element) + 3;
-  while(atomic_cmpxchg(pstate, expected, state) != expected);
+  //volatile global int* pstate = ((volatile global int*)element) + 3;
+  //while(atomic_cmpxchg(pstate, expected, state) != expected);
+  while(atomic_cmpxchg(&element->state, expected, state) != expected);
 }
 void setQueueState(volatile global QueueElement* element, uint state)
 {
-  volatile global int* pstate = ((volatile global int*)element) + 3;
-  uint old = atomic_xchg(pstate, state);
+  //volatile global int* pstate = ((volatile global int*)element) + 3;
+  //uint old = atomic_xchg(pstate, state);
+  atomic_xchg(&element->state, state);
   //check: old + 1 % (QueueElementReading+1) == state
 }
 uint getQueueState(volatile global QueueElement* element)
 {
-  return element->w;
+  return element->state;
+  //return element->w;
+}
+void waitForQueueState(volatile global QueueElement* element, uint expected)
+{
+  while(getQueueState(element) != expected);
 }
 
 int3 getBlockId(volatile global QueueElement* element)
 {
-  return (*element).xyz;
+  return (int3)(element->blockx, element->blocky, element->blockz);
+  //return (*element).xyz;
 }
 
 void setBlockId(volatile global QueueElement* element, int3 block)
 {
-  (*element).xyz = block;
+  element->blockx = block.x;
+  element->blocky = block.y;
+  element->blockz = block.z;
+  //(*element).xyz = block;
 }
 
 struct _QueueGlobal
@@ -64,24 +85,37 @@ float atomic_min_float(volatile global float* p, float val)
 {
   return as_float(atomic_min((volatile global uint*)(p),as_uint(val)));
 }
+float atomic_min_float_local(volatile local float* p, float val)
+{
+  return as_float(atomic_min((volatile local uint*)(p), as_uint(val)));
+}
 
 void setPriorityEntry(global float* p)
 {
+#if NOATOMICFLOAT
   *(global uint*)(p) = MAGICPRIORITY;
-  //*p = MAGICPRIORITYF;
+#else
+  *p = MAGICPRIORITYF;
+#endif
 }
 void removePriorityEntry(volatile global float* p)
 {
+#if NOATOMICFLOAT
   atomic_xchg((volatile global uint*)(p), MAGICPRIORITY);
-  //atomic_xchg(p, MAGICPRIORITYF);
+#else
+  atomic_xchg(p, MAGICPRIORITYF);
+#endif
 }
 bool updatePriority(volatile global float* p, float val)
 {
+#if NOATOMICFLOAT
   uint nval = val * PRECISSIONMULTIPLIER;
   uint v = atomic_min((volatile global uint*)(p),nval);
   return v != MAGICPRIORITY;
-  //float old_priority = atomic_min_float(p, val);
-  //return old_priority != MAGICPRIORITYF;
+#else
+  float old_priority = atomic_min_float(p, val);
+  return old_priority != MAGICPRIORITYF;
+#endif
 }
 
 
@@ -117,11 +151,12 @@ void Enqueue(volatile global QueueGlobal* queueInfo,
     uint pos = atomic_inc(&queueInfo->back)%queueSize;
 
     //make sure it is free?
+    waitForQueueState(queue + pos, QueueElementEmpty);
     //queue[pos] == QueueElementEmpty
 
     //insert the data
     setBlockId(queue + pos, block);
-    write_mem_fence(CLK_GLOBAL_MEM_FENCE);
+    mem_fence(CLK_GLOBAL_MEM_FENCE);
     
     //increase the number of active Blocks
     atomic_inc(&queueInfo->activeBlocks);
@@ -162,14 +197,16 @@ bool Dequeue(volatile global QueueGlobal* queueInfo,
   checkAndSetQueueState(queue + pos, QueueElementReading, QueueElementReady);
   
   //read
-  *element = getBlockId(queue + pos);
+  int3 blockId = getBlockId(queue + pos);
+  read_mem_fence(CLK_GLOBAL_MEM_FENCE);
   
   //remove priority (mark as not in queue)
-  volatile global float* myQueuePriority = queuePriority + linAccess3D(*element, blocks);
+  volatile global float* myQueuePriority = queuePriority + linAccess3D(blockId, blocks);
   removePriorityEntry(myQueuePriority);
 
   //free queue element
   setQueueState(queue + pos, QueueElementRead);
+  *element = blockId;
   return true;
 }
 //
@@ -187,6 +224,10 @@ float getPenalty(read_only image2d_t costmap, int2 pos)
 __kernel void clearQueueLink(global float* queuePriority)
 {
   setPriorityEntry(queuePriority + get_global_id(0));
+}
+__kernel void clearQueue(global QueueElement* queue)
+{
+  setQueueState(queue + get_global_id(0),  QueueElementEmpty);
 }
 
 //it might be better to do that via opengl or something (arbitrary node shapes etc)
@@ -325,20 +366,40 @@ bool route(read_only image2d_t costmap,
 void minBorderCosts(local float* l_costs,
                     local float borderCosts[4])
 {
+#if NOATOMICFLOAT
+  local uint* l_cost = (local uint*)(borderCosts);
+  if(get_local_id(0) < 4)
+    l_cost[get_local_id(0)] = MAGICPRIORITY;
+  barrier(CLK_LOCAL_MEM_FENCE);
+  float myCost = *accessLocalCost( l_costs, (int2)(get_local_id(0), get_local_id(1)) );
+  uint myIntCost =  myCost * PRECISSIONMULTIPLIER;
+  if(get_local_id(0) == 0)
+    atomic_min(&l_cost[0], myIntCost);
+  else if(get_local_id(0) == get_local_size(0) - 1)
+    atomic_min(&l_cost[2], myIntCost);
+  if(get_local_id(1) == 0)
+    atomic_min(&l_cost[1], myIntCost);
+  else if(get_local_id(1) == get_local_size(1) - 1)
+    atomic_min(&l_cost[3], myIntCost);
+  barrier(CLK_LOCAL_MEM_FENCE);
+  if(get_local_id(0) < 4)
+    borderCosts[get_local_id(0)] = ((float)l_cost[get_local_id(0)])/PRECISSIONMULTIPLIER;
+#else
   if(get_local_id(0) < 4)
     borderCosts[get_local_id(0)] = MAXFLOAT;
   barrier(CLK_LOCAL_MEM_FENCE);
   float myCost = *accessLocalCost( l_costs, (int2)(get_local_id(0), get_local_id(1)) );
-  int target = -1;
   if(get_local_id(0) == 0)
-    atomic_min((local uint*)(&borderCosts[0]), as_uint(myCost));
+    atomic_min_float_local(&borderCosts[0], myCost);
   else if(get_local_id(0) == get_local_size(0) - 1)
-    atomic_min((local uint*)(&borderCosts[2]), as_uint(myCost));
+    atomic_min_float_local(&borderCosts[2], myCost);
   if(get_local_id(1) == 0)
-    atomic_min((local uint*)(&borderCosts[1]), as_uint(myCost));
+    atomic_min_float_local(&borderCosts[1], myCost);
   else if(get_local_id(1) == get_local_size(1) - 1)
-    atomic_min((local uint*)(&borderCosts[3]), as_uint(myCost));
+    atomic_min_float_local(&borderCosts[3], myCost);
+#endif
   barrier(CLK_LOCAL_MEM_FENCE);
+
 }
 
 void routing_worker(read_only image2d_t costmap,
