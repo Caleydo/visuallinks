@@ -310,14 +310,13 @@ void copyOutLocalData(global float* routecost,
     routecost[dim.x*global_pos.y + global_pos.x + dim.x*dim.y*blockid.z] = *accessLocalCost(l_costs, (int2)(get_local_id(0), get_local_id(1)));
 }
 
-bool route(read_only image2d_t costmap,
+
+bool route_data_available(read_only image2d_t costmap,
            global float* routecost,
            int3 blockid,
            local float* l_costs,
            int2 dim)
 {
-  copyInLocalData(routecost, blockid, l_costs, dim);
-
 
   //route as long as there is change
   local bool change;
@@ -361,6 +360,16 @@ bool route(read_only image2d_t costmap,
 
   copyOutLocalData(routecost, blockid, l_costs, dim);
   return counter > 0;
+}
+
+bool route(read_only image2d_t costmap,
+           global float* routecost,
+           int3 blockid,
+           local float* l_costs,
+           int2 dim)
+{
+  copyInLocalData(routecost, blockid, l_costs, dim);
+  return route_data_available(costmap, routecost, blockid, l_costs, dim);
 }
 
 void minBorderCosts(local float* l_costs,
@@ -428,8 +437,14 @@ void routing_worker(read_only image2d_t costmap,
     
     if(blockId.x > -1)
     {
+      //copy in
+      copyInLocalData(routecost, blockId, l_costs, dim);
+      //get current state
+      local float initborderCosts[4];
+      minBorderCosts(l_costs, initborderCosts);
+
       //process it
-      bool change = route(costmap, routecost, blockId, l_costs, dim);
+      bool change = route_data_available(costmap, routecost, blockId, l_costs, dim);
 
       //add surrounding ones
       if(change)
@@ -439,24 +454,24 @@ void routing_worker(read_only image2d_t costmap,
         if(get_local_id(0) == 0 && get_local_id(1) == 0)
         {
           int3 block = blockId;
-          if(blockId.x - 1 >= 0)
+          if(blockId.x - 1 >= 0 && initborderCosts[0] > borderCosts[0])
           {
             block.x = blockId.x - 1;
             Enqueue(queueInfo, queue, queuePriority, block, borderCosts[0], numBlocks, queueSize);
             block.x = blockId.x;
           }
-          if(blockId.x + 1 < numBlocks.x)
+          if(blockId.x + 1 < numBlocks.x && initborderCosts[2] > borderCosts[2])
           {
             block.x = blockId.x + 1;
             Enqueue(queueInfo, queue, queuePriority, block, borderCosts[2], numBlocks, queueSize);
             block.x = blockId.x;
           }
-          if(blockId.y - 1 >= 0)
+          if(blockId.y - 1 >= 0 && initborderCosts[1] > borderCosts[1])
           {
             block.y = blockId.y - 1;
             Enqueue(queueInfo, queue, queuePriority, block, borderCosts[1], numBlocks, queueSize);
           }
-          if(blockId.y + 1 < numBlocks.y)
+          if(blockId.y + 1 < numBlocks.y && initborderCosts[3] > borderCosts[3])
           {
             block.y = blockId.y + 1;
             Enqueue(queueInfo, queue, queuePriority, block, borderCosts[3], numBlocks, queueSize);
