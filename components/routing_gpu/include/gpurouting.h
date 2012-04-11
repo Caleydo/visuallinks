@@ -92,8 +92,15 @@ namespace LinksRouting
       //typedef cl_int4 cl_QueueElement;
       struct cl_QueueElement
       {
-        cl_int x,y,z;
-        cl_uint priority;
+        union
+        {
+          cl_int s[4];
+          struct
+          {
+            cl_int x,y,z;
+            cl_uint priority;
+          };
+        };
       };
       struct cl_QueueGlobal
       {

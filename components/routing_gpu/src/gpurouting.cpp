@@ -399,9 +399,8 @@ namespace LinksRouting
   std::ostream& operator<<( std::ostream& strm,
                              const GPURouting::cl_QueueElement& el )
   {
-    //for(int i = 0; i < 4; ++i)
-    //  strm << el.s[i] << " ";
-    strm << el.x << " " << el.y << " " <<  el.z << " " << el.priority;
+    for(int i = 0; i < 4; ++i)
+      strm << el.s[i] << " ";
     return strm;
   }
 
