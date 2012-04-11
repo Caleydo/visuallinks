@@ -36,7 +36,7 @@ namespace LinksRouting
     registerArg("BlockSizeX", _blockSize[0] = 8);
     registerArg("BlockSizeY", _blockSize[1] = 8);
     registerArg("enabled", _enabled = true);
-    registerArg("NoQueue", _noQueue = true);
+    registerArg("NoQueue", _noQueue = false);
   }
 
   //------------------------------------------------------------------------------
@@ -239,6 +239,7 @@ namespace LinksRouting
               << "\n -- Log: " << _cl_program.getBuildInfo<CL_PROGRAM_BUILD_LOG>(_cl_device)
               << std::endl;
 
+    _cl_clearQueue_kernel  = cl::Kernel(_cl_program, "clearQueue");
     _cl_clearQueueLink_kernel = cl::Kernel(_cl_program, "clearQueueLink");
     _cl_prepare_kernel = cl::Kernel(_cl_program, "prepareRouting");
    	_cl_shortestpath_kernel = cl::Kernel(_cl_program, _noQueue ? "route_no_queue" : "routing");
@@ -246,6 +247,7 @@ namespace LinksRouting
     _cl_routeInOut_kernel = cl::Kernel(_cl_program, "calcInOut");
     _cl_routeInterBlock_kernel = cl::Kernel(_cl_program, "calcInterBlockRoute");
     _cl_routeConstruct_kernel = cl::Kernel(_cl_program, "constructRoute");
+    
 
    // //test
    // int blocksize = 64;
@@ -542,7 +544,7 @@ namespace LinksRouting
         int numtargets = h_targets.size();
 
         unsigned int overAllBlocks = sumBlocks * numtargets;
-        unsigned int blockProcessThreshold = overAllBlocks * 40;
+        unsigned int blockProcessThreshold = overAllBlocks * 128;
         cl::Buffer buf(_cl_context, CL_MEM_READ_WRITE, num_points * numtargets * sizeof(float));
 
         cl::Buffer queue_priority(_cl_context, CL_MEM_READ_WRITE, overAllBlocks * sizeof(cl_float));
@@ -570,6 +572,18 @@ namespace LinksRouting
           0,
           &clearQueueLink_Event
         );
+
+        _cl_clearQueue_kernel.setArg(0, queue);
+        _cl_command_queue.enqueueNDRangeKernel
+        (
+          _cl_clearQueue_kernel,
+          cl::NullRange,
+          cl::NDRange(overAllBlocks),
+          cl::NullRange,
+          0,
+          0
+        );
+         
 
         //insert nodes and prepare data
         _cl_prepare_kernel.setArg(0, memory_gl[0]);

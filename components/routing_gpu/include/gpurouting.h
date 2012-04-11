@@ -89,7 +89,19 @@ namespace LinksRouting
       };
 
       //structs used in kernel
-      typedef cl_int4 cl_QueueElement;
+      //typedef cl_int4 cl_QueueElement;
+      struct cl_QueueElement
+      {
+        union
+        {
+          cl_int s[4];
+          struct
+          {
+            cl_int x,y,z;
+            cl_uint priority;
+          };
+        };
+      };
       struct cl_QueueGlobal
       {
         cl_uint front;
@@ -124,6 +136,7 @@ namespace LinksRouting
       cl::Kernel        _cl_prepare_kernel;
       cl::Kernel        _cl_shortestpath_kernel;
       cl::Kernel        _cl_clearQueueLink_kernel;
+      cl::Kernel        _cl_clearQueue_kernel;
       cl::Kernel        _cl_getMinimum_kernel;
       cl::Kernel        _cl_routeInOut_kernel;
       cl::Kernel        _cl_routeInterBlock_kernel;
