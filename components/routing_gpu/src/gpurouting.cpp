@@ -349,10 +349,13 @@ namespace LinksRouting
     cl_queue.finish();
     std::cout << "Dumping buffer to '" << file << "'" << std::endl;
 
+    front = front % max_len;
+    back = back % max_len;
+
     std::vector<T> mem;
     if( front < back )
     {
-      mem.resize(back - front);
+      mem.resize(back - front + 1);
       cl_queue.enqueueReadBuffer
       (
         buf,
@@ -364,7 +367,7 @@ namespace LinksRouting
     }
     else
     {
-      mem.resize(max_len - front + back);
+      mem.resize(max_len - front + back + 1);
       cl_queue.enqueueReadBuffer
       (
         buf,
@@ -686,6 +689,15 @@ namespace LinksRouting
           baseQueueInfo.back,
           overAllBlocks,
           "queue_priorities.txt"
+        );
+        dumpRingBuffer<cl_float>
+        (
+          _cl_command_queue,
+          queue_priority,
+          0,
+          overAllBlocks - 1,
+          overAllBlocks,
+          "queue_priorities_all.txt"
         );
 
         for(int i = 0; i < h_targets.size(); ++i)
