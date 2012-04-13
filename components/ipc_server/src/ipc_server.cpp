@@ -323,7 +323,7 @@ namespace LinksRouting
     QVariantList regions = json.getValue<QVariantList>("regions");
     for(auto region = regions.begin(); region != regions.end(); ++region)
     {
-      std::vector<LinkDescription::Point> points;
+      std::vector<float2> points;
       LinkDescription::props_t props;
 
       //for(QVariant point: region.toList())
@@ -339,7 +339,7 @@ namespace LinksRouting
             continue;
           }
 
-          points.push_back(LinkDescription::Point(
+          points.push_back( float2(
             coords.at(0).toInt(),
             coords.at(1).toInt()
           ));

@@ -298,11 +298,6 @@ ShaderPtr loadShader( QString vert, QString frag )
     glEnd();
     glDisable(GL_TEXTURE_2D);
 
-    glBegin(GL_LINES);
-    glVertex2f(-1,-1);
-    glVertex2f(1,1);
-    glEnd();
-
     static int counter = 0;
 
     static QImage links(size(), QImage::Format_RGB888);
@@ -328,21 +323,21 @@ ShaderPtr loadShader( QString vert, QString frag )
       image.save(name);
     };
 
-    writeTexture(_subscribe_costmap, QString("costmap%1.png").arg(counter));
+//    writeTexture(_subscribe_costmap, QString("costmap%1.png").arg(counter));
 //    writeTexture(_slot_desktop, QString("desktop%1.png").arg(counter));
 //    writeTexture(_core.getSlotSubscriber().getSlot<LinksRouting::SlotType::Image>("/downsampled_desktop"), QString("downsampled_desktop%1.png").arg(counter));
-    writeTexture(_core.getSlotSubscriber().getSlot<LinksRouting::SlotType::Image>("/featuremap"), QString("featuremap%1.png").arg(counter));
+//    writeTexture(_core.getSlotSubscriber().getSlot<LinksRouting::SlotType::Image>("/featuremap"), QString("featuremap%1.png").arg(counter));
 
     glPopAttrib();
 
     //links.save("fbo.png");
     if( !_subscribe_routed_links->_data->empty() )
     {
-      writeTexture(_subscribe_links, QString("links%1.png").arg(counter));
+//      writeTexture(_subscribe_links, QString("links%1.png").arg(counter));
 
       QBitmap mask = QBitmap::fromImage( links.mirrored().createMaskFromColor( qRgb(0,0,0) ) );
       setMask(mask);
-      mask.save(QString("mask%1.png").arg(counter));
+//      mask.save(QString("mask%1.png").arg(counter));
     }
     else
       setMask(QRegion(-1, -1, 1, 1));

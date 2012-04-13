@@ -516,10 +516,10 @@ namespace LinksRouting
              p != node->getVertices().end();
              ++p )
         {
-          target.x = std::min(target.x, p->x/downsample);
-          target.y = std::min(target.y, p->y/downsample);
-          target.z = std::max(target.z, p->x/downsample);
-          target.w = std::max(target.w, p->y/downsample);
+          target.x = std::min<int>(target.x, p->x/downsample);
+          target.y = std::min<int>(target.y, p->y/downsample);
+          target.z = std::max<int>(target.z, p->x/downsample);
+          target.w = std::max<int>(target.w, p->y/downsample);
         }
 
         target.x = std::max(target.x, 0);
@@ -649,7 +649,8 @@ namespace LinksRouting
         }
 
         cl::Event shortestpath_Event;
-        for( int i = 0; i < (_noQueue ? 10 : 1); ++i )
+        size_t num_iterations = 2 * std::max(numBlocks[0], numBlocks[1]);
+        for( int i = 0; i < (_noQueue ? num_iterations : 1); ++i )
         {
           _cl_command_queue.enqueueNDRangeKernel
           (
@@ -714,7 +715,7 @@ namespace LinksRouting
           "queue_priorities_all.txt"
         );
 
-        for(int i = 0; i < h_targets.size(); ++i)
+        for(size_t i = 0; i < h_targets.size(); ++i)
           std::cout << h_targets[i].x/_blockSize[0] << "->" <<  h_targets[i].z/_blockSize[0]
                     << " " << h_targets[i].y/_blockSize[1] << "->" <<  h_targets[i].w/_blockSize[1]
                     << std::endl;
@@ -865,13 +866,13 @@ namespace LinksRouting
 
         _cl_command_queue.finish();
         //copy results to cpu
-        std::vector<LinkDescription::Point> outroutes(maxpoints*numtargets, LinkDescription::Point(0,0));
+        std::vector<cl_int2> outroutes(maxpoints * numtargets);
         _cl_command_queue.enqueueReadBuffer(routes, true, 0, maxpoints*sizeof(cl_int2)*numtargets, &outroutes[0]);
 
         //copy routes to hyperedge
         LinkDescription::HyperEdgeDescriptionForkation* fork = new LinkDescription::HyperEdgeDescriptionForkation();
-        fork->position.x = startingpoint[0]*downsample;
-        fork->position.y = startingpoint[1]*downsample;
+        fork->position.x = startingpoint[0] * downsample;
+        fork->position.y = startingpoint[1] * downsample;
         for(int i = 0; i < numtargets; ++i)
         {
           fork->outgoing.push_back(LinkDescription::HyperEdgeDescriptionSegment());
@@ -879,9 +880,11 @@ namespace LinksRouting
           fork->outgoing.back().trail.reserve(interblockinfo[i].s[1]);
           for(unsigned int j = 0; j < interblockinfo[i].s[1]; ++j)
           {
-            fork->outgoing.back().trail.push_back(LinkDescription::Point(
-                  outroutes[i*maxpoints +j].x*downsample,
-                  outroutes[i*maxpoints +j].y*downsample));
+            fork->outgoing.back().trail.push_back
+            (
+              float2( outroutes[i*maxpoints +j].s[0] * downsample,
+                      outroutes[i*maxpoints +j].s[1] * downsample )
+            );
           }
           fork->outgoing.back().nodes.push_back(h_targets[i].aug);
         }

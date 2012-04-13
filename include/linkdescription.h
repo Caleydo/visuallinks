@@ -3,6 +3,7 @@
 
 #include "color.h"
 #include "datatypes.h"
+#include "float2.hpp"
 
 #include <list>
 #include <vector>
@@ -15,30 +16,19 @@ namespace LinkDescription
   struct HyperEdgeDescriptionSegment;
   struct HyperEdgeDescriptionForkation;
 
-  struct Point
-  {
-    Point()
-    {
-    }
-    Point(int x, int y):
-      x(x), y(y)
-    {}
-    int x, y;
-  };
-
   typedef std::map<std::string, std::string> props_t;
 
   class Node
   {
     public:
 
-      explicit Node( const std::vector<Point>& points,
+      explicit Node( const std::vector<float2>& points,
                      const props_t& props = props_t() ):
         _points( points ),
         _props( props )
       {}
 
-      const std::vector<Point>& getVertices() const { return _points; }
+      const std::vector<float2>& getVertices() const { return _points; }
       const props_t& getProps() const { return _props; }
 
 //        virtual float positionDistancePenalty() const = 0;
@@ -46,12 +36,12 @@ namespace LinkDescription
 //        virtual const HyperEdge* getParent() const = 0;
 //        virtual const std::vector<HyperEdge*>& getChildren() const = 0;
 //
-//        virtual void setComputedPosition(const Point& pos) = 0;
-//        virtual Point getComputedPosition() const = 0;
+//        virtual void setComputedPosition(const float2& pos) = 0;
+//        virtual float2 getComputedPosition() const = 0;
 
     private:
 
-      std::vector<Point>  _points;
+      std::vector<float2>  _points;
       std::map<std::string, std::string> _props;
   };
 
@@ -106,7 +96,7 @@ namespace LinkDescription
       }
 
       std::vector<const Node*> incomingNodes;
-      Point position;
+      float2 position;
 
       HyperEdgeDescriptionSegment* parent;
       std::list<HyperEdgeDescriptionSegment> outgoing;
@@ -117,7 +107,7 @@ namespace LinkDescription
       {
       }
       std::vector<const Node*> nodes;
-      std::vector<Point> trail;
+      std::vector<float2> trail;
 
       HyperEdgeDescriptionForkation *parent, *child;
   };

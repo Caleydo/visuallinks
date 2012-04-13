@@ -74,43 +74,57 @@ namespace LinksRouting
    * @param width TODO which unit should be used?
    */
   template<typename Collection>
-  line_borders_t calcLineBorders(const Collection& points, float width)
+  line_borders_t calcLineBorders( const Collection& points,
+                                    float width,
+                                    bool closed = false )
   {
     auto begin = std::begin(points),
          end = std::end(points);
 
     decltype(begin) p0 = begin,
-                    p1 = p0 + 1;
+                     p1 = p0 + 1;
 
     if( p0 == end || p1 == end )
       return line_borders_t();
 
     line_borders_t ret;
-    float half_width = width / 2.f;
+    float w_out = 0.5 * width,
+          w_in = 0.5 * width;
 
-    float2 prev_dir = (*p1 - *p0).normalize(),
+    float2 prev_dir = (closed ? (*p0 - *(end - 1)) : (*p1 - *p0)).normalize(),
            prev_normal = float2( prev_dir.y, -prev_dir.x );
 
-    for( ; p1 != end; ++p0, ++p1 )
+    for( ; p0 != end; ++p0, ++p1 )
     {
-      float2 dir = (*p1 - *p0).normalize(),
-             mean_dir = 0.5f * (prev_dir + dir),
-             normal = float2( mean_dir.y, -mean_dir.x );
+      float2 normal, dir;
+
+      if( closed || p1 != end )
+      {
+        dir = (((closed && p1 == end) ? *begin : *p1) - *p0).normalize();
+        float2 mean_dir = 0.5f * (prev_dir + dir);
+        normal = float2( mean_dir.y, -mean_dir.x );
+      }
+      else // !closed && p1 == end
+      {
+        normal = float2( prev_dir.y, -prev_dir.x );
+      }
 
       // project on normal
-      float2 offset = normal / normal.dot(prev_normal / half_width);
+      float2 offset_out = normal / normal.dot(prev_normal / (w_out)),
+             offset_in = normal / normal.dot(prev_normal / (w_in));
 
-      ret.first.push_back(  *p0 + offset );
-      ret.second.push_back( *p0 - offset );
+      ret.first.push_back(  *p0 + offset_out );
+      ret.second.push_back( *p0 - offset_in );
 
       prev_dir = dir;
       prev_normal = float2( dir.y, -dir.x );
     }
 
-    // last point
-    float2 offset = prev_normal * half_width;
-    ret.first.push_back(  *p0 + offset );
-    ret.second.push_back( *p0 - offset );
+    if( closed )
+    {
+      ret.first.push_back( ret.first.front() );
+      ret.second.push_back( ret.second.front() );
+    }
 
     return ret;
   }
@@ -191,17 +205,8 @@ namespace LinksRouting
   //----------------------------------------------------------------------------
   void GlRenderer::renderLinks(const LinkDescription::LinkList& links)
   {
-//    float m[4][4];
-//    glGetFloatv(GL_PROJECTION_MATRIX, &m[0][0]);
-//    for(int i = 0; i < 4; ++i)
-//    {
-//      for(int j = 0; j < 4; ++j)
-//        std::cout << ", " << m[j][i];
-//      std::cout << "\n";
-//    }
-
     glColor3f(1.0, 0.2, 0.2);
-    glLineWidth(4);
+    glLineWidth(3);
 
     for(auto link = links.begin(); link != links.end(); ++link)
     {
@@ -218,136 +223,30 @@ namespace LinksRouting
            segment != fork->outgoing.end();
            ++segment )
       {
+        std::vector<float2> points = smooth(segment->trail, 0.4, 5);
         glBegin(GL_LINE_STRIP);
-//        glVertex2f(fork->position.x, fork->position.y);
-//        std::cout << "Outgoing: " << fork->position.x << "|" << fork->position.y << std::endl;
-
-        for( auto point = segment->trail.begin();
-             point != segment->trail.end();
-             ++point )
-        {
-          glVertex2f(point->x, point->y);
-          //std::cout << point->x << "|" << point->y << std::endl;
-        }
-
+        for(auto p = std::begin(points); p != std::end(points); ++p)
+          glVertex2f(p->x, p->y);
         glEnd();
 
         for( auto node = segment->nodes.begin();
              node != segment->nodes.end();
              ++node )
         {
-          //std::cout << "node" << std::endl;
-          glBegin(GL_LINE_LOOP);
-          for( auto vertex = (*node)->getVertices().begin();
-               vertex != (*node)->getVertices().end();
-               ++vertex )
-            glVertex2f(vertex->x, vertex->y);
+          line_borders_t region = calcLineBorders((*node)->getVertices(), 4, true);
+          glBegin(GL_TRIANGLE_STRIP);
+          for( auto first = std::begin(region.first),
+                    second = std::begin(region.second);
+               first != std::end(region.first);
+               ++first,
+               ++second )
+          {
+            glVertex2f(first->x, first->y);
+            glVertex2f(second->x, second->y);
+          }
           glEnd();
         }
       }
     }
-#if 1
-    glColor3f(1.0, 1.0, 1.0);
-    glLineWidth(2);
-    float2 points[] = {
-      float2( -0.7,    -0.5     ),
-      float2( -0.55,   -0.8     ),
-      float2( -0.4,    -0.9     ),
-      float2( -0.39,   -0.91    ),
-      float2( -0.38,   -0.92    ),
-      float2( -0.35,    0.0     ),
-      float2( -0.25,    0.2     ),
-      float2( -0.15,   -0.2     ),
-      float2( -0.05,    0.0     ),
-      float2(  0.25,    0.2     ),
-      float2(  0.65,    0.1     ),
-      float2(  0.65,    0.5     ),
-      float2(  0.5,     0.5     ),
-      float2(  0.6,     0.8     ),
-      float2(  0.05,    0.6     ),
-      float2(  0.0,     0.8     ),
-      float2(  0.5,     1.3     )
-    };
-
-    std::vector<float2> smoothed_points = smooth(points, 0.1, 2);
-    line_borders_t line_borders = calcLineBorders(smoothed_points, 0.015);
-
-    std::vector<float2> render_points;
-    render_points.reserve(line_borders.first.size() * 2);
-
-    for( auto first = std::begin(line_borders.first),
-              second = std::begin(line_borders.second);
-         first != std::end(line_borders.first);
-         ++first,
-         ++second )
-    {
-      render_points.push_back(*first);
-      render_points.push_back(*second);
-    }
-
-    glColor3f(1, 0.8, 0.8);
-    glBegin(GL_LINE_STRIP);
-
-    for(auto p = std::begin(points); p != std::end(points); ++p)
-      glVertex2f(p->x, p->y);
-
-    glEnd();
-
-    glLineWidth(1);
-#if 0
-    glColor3f(1, 0, 1);
-    glBegin(GL_LINE_STRIP);
-      for( const float2& p: line_borders.first )
-      {
-        glVertex2f(p.x, p.y);
-      }
-    glEnd();
-
-    glBegin(GL_LINE_STRIP);
-      for( const float2& p: line_borders.second )
-        glVertex2f(p.x, p.y);
-    glEnd();
-#endif
-
-    glColor3f(0.5, 0.5, 0.9);
-    glBegin(GL_TRIANGLE_STRIP);
-      for(auto p = std::begin(render_points); p != std::end(render_points); ++p)
-        glVertex2f(p->x, p->y);
-    glEnd();
-
-#if 0
-    glColor3f(1, 0, 1);
-    glBegin(GL_LINE_STRIP);
-
-      for( const float2& p: smooth(points, 0.4,1) )
-        glVertex2f(p.x, p.y);
-    glEnd();
-
-    glColor3f(1, 0.5, 1);
-    glBegin(GL_LINE_STRIP);
-
-    for( const float2& p: smooth(points, 0.4,2) )
-      glVertex2f(p.x, p.y);
-
-  //  Point p1(-5, 1),
-  //        p2(-0.95, 1),
-  //        p3(0.5, -0.8),
-  //        p4(0.5, -5);
-  //
-  //
-  //  for( float t = 0; t <= 1; t += 0.025 )
-  //  {
-  //    Point p = 0.5 * ( ( -p1 + 3*p2 - 3*p3 + p4) * t*t*t
-  //                    + (2*p1 - 5*p2 + 4*p3 - p4) * t*t
-  //                    + ( -p1        +   p3     ) * t
-  //                    +         2*p2
-  //                    );
-  //
-  //    glVertex2f(p.x, p.y);
-  //  }
-
-    glEnd();
-#endif
-#endif
   }
 };

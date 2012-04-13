@@ -23,6 +23,11 @@ struct float2
   /**
    *
    */
+  float2(): x(), y() {}
+
+  /**
+   *
+   */
   float2(float _x, float _y) : x(_x), y(_y) { }
 
   /**
@@ -105,7 +110,7 @@ inline const float2 operator /(const float2& v, float a)
 /**
  *
  */
-std::ostream& operator<<(std::ostream& strm, const float2& p)
+inline std::ostream& operator<<(std::ostream& strm, const float2& p)
 {
   return strm << "(" << p.x << "|" << p.y << ")";
 }
