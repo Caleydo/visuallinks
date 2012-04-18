@@ -24,7 +24,10 @@ set(SOURCE_FILES
   ${COMPONENTSRC_DIR}/glrenderer.cpp
 )
 
+set(SHADER_FILES ${COMPONENTROOT}/blurX.glsl
+                 ${COMPONENTROOT}/blurY.glsl)
+
 add_library(glrenderer ${HEADER_FILES} ${SOURCE_FILES})
 target_link_libraries(glrenderer tools ${ADDITIONAL_LIBS})
 
-add_component_data(${COMPONENTINC_DIR} glrenderer)
+add_component_data(${COMPONENTINC_DIR} glrenderer SHADER_FILES)

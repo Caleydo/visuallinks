@@ -5,6 +5,7 @@
 #include <common/componentarguments.h>
 
 #include "fbo.h"
+#include "glsl/glsl.h"
 #include "slots.hpp"
 #include "slotdata/image.hpp"
 
@@ -39,6 +40,8 @@ namespace LinksRouting
 
     protected:
 
+      bool  _enabled;
+
       /** Subscribe to the routed links */
       slot_t<LinkDescription::LinkList>::type _subscribe_links;
 
@@ -48,7 +51,9 @@ namespace LinksRouting
       /** Frame buffer object where links get rendered to */
       gl::FBO   _links_fbo;
 
-      bool  _enabled;
+      cwc::glShaderManager  _shader_manager;
+      cwc::glShader*    _blur_x_shader;
+      cwc::glShader*    _blur_y_shader;
 
       void renderLinks(const LinkDescription::LinkList& links);
   };

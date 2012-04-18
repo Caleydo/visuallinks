@@ -649,7 +649,7 @@ namespace LinksRouting
         }
 
         cl::Event shortestpath_Event;
-        size_t num_iterations = 2 * std::max(numBlocks[0], numBlocks[1]);
+        size_t num_iterations = 3 * std::max(numBlocks[0], numBlocks[1]);
         for( int i = 0; i < (_noQueue ? num_iterations : 1); ++i )
         {
           _cl_command_queue.enqueueNDRangeKernel

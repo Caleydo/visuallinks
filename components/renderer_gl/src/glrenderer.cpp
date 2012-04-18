@@ -130,7 +130,8 @@ namespace LinksRouting
   }
 
   //----------------------------------------------------------------------------
-  GlRenderer::GlRenderer() : myname("GLRenderer")
+  GlRenderer::GlRenderer():
+    myname("GLRenderer")
   {
     registerArg("enabled", _enabled = true);
   }
@@ -173,8 +174,11 @@ namespace LinksRouting
     GLint vp[4];
     glGetIntegerv(GL_VIEWPORT, vp);
 
-    _links_fbo.init(vp[2], vp[3], GL_RGBA8, 1, false, GL_NEAREST);
+    _links_fbo.init(vp[2], vp[3], GL_RGBA8, 2, false, GL_NEAREST);
     *_slot_links->_data = SlotType::Image(vp[2], vp[3], _links_fbo.colorBuffers.at(0));
+
+    _blur_x_shader = _shader_manager.loadfromFile(0, "blurX.glsl");
+    _blur_y_shader = _shader_manager.loadfromFile(0, "blurY.glsl");
   }
 
   //----------------------------------------------------------------------------
@@ -189,16 +193,49 @@ namespace LinksRouting
     if( !_enabled )
       return;
 
+    assert( _blur_x_shader );
+    assert( _blur_y_shader );
+
     _slot_links->setValid(false);
     _links_fbo.bind();
 
     glClearColor(0,0,0,0);
     glClear(GL_COLOR_BUFFER_BIT);
 
-    if( !_subscribe_links->_data->empty() )
-      renderLinks(*_subscribe_links->_data);
+    if( _subscribe_links->_data->empty() )
+      return _links_fbo.unbind();
 
+    renderLinks(*_subscribe_links->_data);
     _links_fbo.unbind();
+
+    glDisable(GL_BLEND);
+    glColor4f(1,1,1,1);
+
+    // blur
+    int width = _slot_links->_data->width,
+        height = _slot_links->_data->height;
+for( int i = 0; i < 1; ++i )
+{
+    _links_fbo.swapColorAttachment(1);
+    _links_fbo.bind();
+    _links_fbo.bindTex(0);
+    _blur_x_shader->begin();
+    _blur_x_shader->setUniform1i("inputTex", 0);
+    _blur_x_shader->setUniform1f("scale", 1);
+    _links_fbo.draw(width, height, 0, 0, 0, true, true);
+    _blur_x_shader->end();
+    _links_fbo.unbind();
+
+    _links_fbo.swapColorAttachment(0);
+    _links_fbo.bind();
+    _links_fbo.bindTex(1);
+    _blur_y_shader->begin();
+    _blur_y_shader->setUniform1i("inputTex", 0);
+    _blur_y_shader->setUniform1f("scale", 1);
+    _links_fbo.draw(width, height, 0, 0, 1, true, true);
+    _blur_y_shader->end();
+    _links_fbo.unbind();
+}
     _slot_links->setValid(true);
   }
 
@@ -233,7 +270,7 @@ namespace LinksRouting
              node != segment->nodes.end();
              ++node )
         {
-          line_borders_t region = calcLineBorders((*node)->getVertices(), 4, true);
+          line_borders_t region = calcLineBorders((*node)->getVertices(), 3, true);
           glBegin(GL_TRIANGLE_STRIP);
           for( auto first = std::begin(region.first),
                     second = std::begin(region.second);

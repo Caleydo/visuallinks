@@ -94,9 +94,10 @@ ShaderPtr loadShader( QString vert, QString frag )
                   | Qt::MSWindowsOwnDC
                   //| Qt::X11BypassWindowManagerHint
                   );
-    setWindowOpacity(0.5);
+//    setWindowOpacity(0.5);
     setMask(QRegion(-1, -1, 1, 1));
     setAutoBufferSwap(false);
+    setAttribute(Qt::WA_TranslucentBackground);
 
     if( !isValid() )
       qFatal("Unable to create OpenGL context (not valid)");
