@@ -1,7 +1,7 @@
 #ifdef WIN32
 #define WIN32_LEAN_AND_MEAN
 #define NOMINMAX
-#include <Windows.h>
+#include <qt_windows.h>
 #include <gl/glew.h>
 #include <gl/gl.h>
 #endif
@@ -94,11 +94,11 @@ ShaderPtr loadShader( QString vert, QString frag )
                   | Qt::MSWindowsOwnDC
                   //| Qt::X11BypassWindowManagerHint
                   );
-//    setWindowOpacity(0.5);
+    setWindowOpacity(0.6);
     setMask(QRegion(-1, -1, 1, 1));
     setAutoBufferSwap(false);
-    setAttribute(Qt::WA_TranslucentBackground);
-
+	//setAttribute(Qt::WA_TranslucentBackground);
+    
     if( !isValid() )
       qFatal("Unable to create OpenGL context (not valid)");
 
@@ -179,7 +179,7 @@ ShaderPtr loadShader( QString vert, QString frag )
   }
 
   //----------------------------------------------------------------------------
-  ShaderPtr shader;
+  ShaderPtr shader, shader_blend;
   void GLWidget::setupGL()
   {
     LOG_ENTER_FUNC();
@@ -228,6 +228,10 @@ ShaderPtr loadShader( QString vert, QString frag )
       shader = loadShader("simple.vert", "remove_links.frag");
       if( !shader )
         qFatal("Failed to load shader.");
+
+	  shader_blend = loadShader("simple.vert", "blend.frag");
+      if( !shader_blend )
+        qFatal("Failed to load blend shader.");
     }
 
     glClearColor(0, 0, 0, 0);
@@ -274,12 +278,21 @@ ShaderPtr loadShader( QString vert, QString frag )
     updateScreenShot(window_offset, window_end);
 
     // normal draw...
-    glClear(GL_COLOR_BUFFER_BIT);
+    //glClear(GL_COLOR_BUFFER_BIT);
+
+	shader_blend->bind();
 
     glActiveTexture(GL_TEXTURE0);
     glEnable(GL_TEXTURE_2D);
     glBindTexture(GL_TEXTURE_2D,  _subscribe_links->_data->id);
 
+	glActiveTexture(GL_TEXTURE1);
+    //glEnable(GL_TEXTURE_2D);
+	glBindTexture(GL_TEXTURE_2D, _fbo_desktop->texture());
+
+	shader_blend->setUniformValue("desktop", 1);
+	shader_blend->setUniformValue("links", 0);
+	/*
     glBegin( GL_QUADS );
 
       glColor3f(1,1,1);
@@ -296,8 +309,32 @@ ShaderPtr loadShader( QString vert, QString frag )
       glTexCoord2f(0,0);
       glVertex2f(-1,1);
 
+    glEnd();*/
+
+	glBegin( GL_QUADS );
+
+      glMultiTexCoord2f(GL_TEXTURE0, 0,1);
+      glMultiTexCoord2f(GL_TEXTURE1, 0,0);
+      glVertex2f(-1, -1);
+
+      glMultiTexCoord2f(GL_TEXTURE0,1,1);
+      glMultiTexCoord2f(GL_TEXTURE1,1,0);
+      glVertex2f(1,-1);
+
+      glMultiTexCoord2f(GL_TEXTURE0,1,0);
+      glMultiTexCoord2f(GL_TEXTURE1,1,1);
+      glVertex2f(1,1);
+
+      glMultiTexCoord2f(GL_TEXTURE0,0,0);
+      glMultiTexCoord2f(GL_TEXTURE1,0,1);
+      glVertex2f(-1, 1);
+
     glEnd();
+
+	glActiveTexture(GL_TEXTURE0);
     glDisable(GL_TEXTURE_2D);
+
+	shader_blend->release();
 
     static int counter = 0;
 
@@ -344,6 +381,9 @@ ShaderPtr loadShader( QString vert, QString frag )
       setMask(QRegion(-1, -1, 1, 1));
 
     ++counter;
+	/*
+	QPixmap screen = QPixmap::fromImage( grabFrameBuffer(true) );
+	screen.save(QString("links%1.png").arg(counter));*/
 
     // TODO render flipped to not need mirror anymore
   }

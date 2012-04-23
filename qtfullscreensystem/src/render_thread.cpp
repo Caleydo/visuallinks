@@ -50,13 +50,13 @@ namespace qtfullscreensystem
 
       _gl_widget->render();
       _gl_widget->swapBuffers();
-      msleep(100);
-      if( --screenshot_counter < 0 )
-      {
+      msleep(5);
+      /*if( --screenshot_counter < 0 )
+      {*/
         _gl_widget->captureScreen();
-        screenshot_counter = 5;
-      }
-      msleep(100);
+        /*screenshot_counter = 5;
+      }*/
+      msleep(2);
     } while( _do_render );
   }
 

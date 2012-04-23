@@ -17,6 +17,7 @@ set( SOURCE_FILES
 set( SHADER_FILES
 	${CMAKE_CURRENT_SOURCE_DIR}/simple.vert
 	${CMAKE_CURRENT_SOURCE_DIR}/remove_links.frag
+	${CMAKE_CURRENT_SOURCE_DIR}/blend.frag
 )
 
 set( RUNTIME_FILES
