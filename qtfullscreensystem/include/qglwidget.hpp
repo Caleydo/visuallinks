@@ -68,7 +68,9 @@ namespace qtfullscreensystem
 
       RenderThread  _render_thread;
 
-      std::unique_ptr<QGLFramebufferObject> _fbo_desktop;
+      int _cur_fbo;
+      std::unique_ptr<QGLFramebufferObject> _fbo_desktop[2];
+
       QPoint _window_offset;
       QPoint _window_end;
 

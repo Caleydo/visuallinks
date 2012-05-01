@@ -25,6 +25,8 @@
 
 #include <QGLShader>
 
+// Enable alpha blending with desktop (windows doesn't support this...)
+#define USE_DESKTOP_BLEND 0
 #define LOG_ENTER_FUNC() qDebug() << __FUNCTION__
 
 namespace qtfullscreensystem
@@ -32,6 +34,19 @@ namespace qtfullscreensystem
 
 typedef QGLShaderProgram Shader;
 typedef std::shared_ptr<Shader> ShaderPtr;
+
+const QByteArray loadShaderSource( const QString& file_name,
+                                      const QByteArray defs = "" )
+{
+  QFile file(file_name);
+  if( !file.open(QFile::ReadOnly) )
+  {
+    qWarning() << "loadShaderSource: Unable to open file" << file_name;
+    return QByteArray();
+  }
+
+  return defs + "\n" + file.readAll();
+}
 
 /**
  *
@@ -43,15 +58,24 @@ ShaderPtr loadShader( QString vert, QString frag )
   qDebug() << "loadShader("<< vert << "|" << frag << ")";
 
   ShaderPtr program = std::make_shared<Shader>();
+  QByteArray defs = "#define USE_DESKTOP_BLEND "
+#if USE_DESKTOP_BLEND
+  "1"
+#else
+  "0"
+#endif
+  ;
 
-  if( !program->addShaderFromSourceFile(QGLShader::Vertex, vert) )
+  if( !program->addShaderFromSourceCode( QGLShader::Vertex,
+                                         loadShaderSource(vert, defs) ) )
   {
     qWarning() << "Failed to load vertex shader (" << vert << ")\n"
                << program->log();
     return ShaderPtr();
   }
 
-  if( !program->addShaderFromSourceFile(QGLShader::Fragment, frag) )
+  if( !program->addShaderFromSourceCode( QGLShader::Fragment,
+                                         loadShaderSource(frag, defs) ) )
   {
     qWarning() << "Failed to load fragment shader (" << frag << ")\n"
                << program->log();
@@ -70,7 +94,8 @@ ShaderPtr loadShader( QString vert, QString frag )
 
   //----------------------------------------------------------------------------
   GLWidget::GLWidget(int& argc, char *argv[]):
-    _render_thread(this)
+    _render_thread(this),
+    _cur_fbo(0)
   {
     //--------------------------------
     // Setup opengl and window
@@ -94,10 +119,13 @@ ShaderPtr loadShader( QString vert, QString frag )
                   | Qt::MSWindowsOwnDC
                   //| Qt::X11BypassWindowManagerHint
                   );
-    setWindowOpacity(0.6);
+#if USE_DESKTOP_BLEND
+    setAttribute(Qt::WA_TranslucentBackground);
+#else
+    setWindowOpacity(0.5);
+#endif
     setMask(QRegion(-1, -1, 1, 1));
     setAutoBufferSwap(false);
-	//setAttribute(Qt::WA_TranslucentBackground);
     
     if( !isValid() )
       qFatal("Unable to create OpenGL context (not valid)");
@@ -136,13 +164,13 @@ ShaderPtr loadShader( QString vert, QString frag )
     LinksRouting::SlotSubscriber subscriber = _core.getSlotSubscriber();
     subscribeSlots(subscriber);
 
-    foreach (QWidget *widget, QApplication::allWidgets())
-    {
-      std::cout << widget->objectName().toStdString() << ": "
-                << widget->internalWinId() << " - "
-                << widget->windowTitle().toStdString() << " - "
-                << widget->window()->objectName().toStdString() << std::endl;
-    }
+//    foreach (QWidget *widget, QApplication::allWidgets())
+//    {
+//      std::cout << widget->objectName().toStdString() << ": "
+//                << widget->internalWinId() << " - "
+//                << widget->windowTitle().toStdString() << " - "
+//                << widget->window()->objectName().toStdString() << std::endl;
+//    }
   }
 
   //----------------------------------------------------------------------------
@@ -195,7 +223,7 @@ ShaderPtr loadShader( QString vert, QString frag )
       if( _slot_desktop->isValid() )
         LOG_WARN("Already initialized!");
 
-      QPixmap img( QString::fromStdString(_debug_desktop_image) );
+      static QPixmap img( QString::fromStdString(_debug_desktop_image) );
 
       _slot_desktop->_data->id = bindTexture(img);
       _slot_desktop->_data->width = img.width();
@@ -206,33 +234,27 @@ ShaderPtr loadShader( QString vert, QString frag )
     else
     {
 
-      if( _fbo_desktop )
+      if( _fbo_desktop[0] || _fbo_desktop[1] )
         qDebug("FBO already initialized!");
 
-      _fbo_desktop.reset
-      (
-        new QGLFramebufferObject
-        (
-          size(),
-          QGLFramebufferObject::Depth
-        )
-      );
+      _fbo_desktop[0].reset( new QGLFramebufferObject(size()) );
+      _fbo_desktop[1].reset( new QGLFramebufferObject(size()) );
 
-      if( !_fbo_desktop->isValid() )
+      if( !_fbo_desktop[0]->isValid() || !_fbo_desktop[1]->isValid() )
         qFatal("Failed to create framebufferobject!");
 
-      _slot_desktop->_data->id = _fbo_desktop->texture();
+      _slot_desktop->_data->id = _fbo_desktop[_cur_fbo]->texture();
       _slot_desktop->_data->width = size().width();
       _slot_desktop->_data->height = size().height();
 
       shader = loadShader("simple.vert", "remove_links.frag");
       if( !shader )
         qFatal("Failed to load shader.");
-
-	  shader_blend = loadShader("simple.vert", "blend.frag");
-      if( !shader_blend )
-        qFatal("Failed to load blend shader.");
     }
+
+    shader_blend = loadShader("simple.vert", "blend.frag");
+    if( !shader_blend )
+      qFatal("Failed to load blend shader.");
 
     glClearColor(0, 0, 0, 0);
     glEnable(GL_BLEND);
@@ -262,6 +284,8 @@ ShaderPtr loadShader( QString vert, QString frag )
       _window_end = window_end;
     }
 
+    updateScreenShot(window_offset, window_end);
+
     float x = _window_offset.x(),
           y = _window_offset.y(),
           w = _window_end.x() - x,
@@ -275,41 +299,20 @@ ShaderPtr loadShader( QString vert, QString frag )
     glMatrixMode(GL_PROJECTION);
     glLoadIdentity();
 
-    updateScreenShot(window_offset, window_end);
-
     // normal draw...
     //glClear(GL_COLOR_BUFFER_BIT);
 
-	shader_blend->bind();
-
     glActiveTexture(GL_TEXTURE0);
-    glEnable(GL_TEXTURE_2D);
-    glBindTexture(GL_TEXTURE_2D,  _subscribe_links->_data->id);
+    glBindTexture(GL_TEXTURE_2D, _subscribe_links->_data->id);
+
+#if !USE_DESKTOP_BLEND
+    shader_blend->bind();
 
 	glActiveTexture(GL_TEXTURE1);
-    //glEnable(GL_TEXTURE_2D);
-	glBindTexture(GL_TEXTURE_2D, _fbo_desktop->texture());
+	glBindTexture(GL_TEXTURE_2D, _slot_desktop->_data->id);
 
-	shader_blend->setUniformValue("desktop", 1);
 	shader_blend->setUniformValue("links", 0);
-	/*
-    glBegin( GL_QUADS );
-
-      glColor3f(1,1,1);
-
-      glTexCoord2f(0,1);
-      glVertex2f(-1,-1);
-
-      glTexCoord2f(1,1);
-      glVertex2f(1,-1);
-
-      glTexCoord2f(1,0);
-      glVertex2f(1,1);
-
-      glTexCoord2f(0,0);
-      glVertex2f(-1,1);
-
-    glEnd();*/
+	shader_blend->setUniformValue("desktop", 1);
 
 	glBegin( GL_QUADS );
 
@@ -332,9 +335,29 @@ ShaderPtr loadShader( QString vert, QString frag )
     glEnd();
 
 	glActiveTexture(GL_TEXTURE0);
-    glDisable(GL_TEXTURE_2D);
 
 	shader_blend->release();
+#else
+	glEnable(GL_TEXTURE_2D);
+    glBegin( GL_QUADS );
+
+      glColor3f(1,1,1);
+
+      glTexCoord2f(0,1);
+      glVertex2f(-1,-1);
+
+      glTexCoord2f(1,1);
+      glVertex2f(1,-1);
+
+      glTexCoord2f(1,0);
+      glVertex2f(1,1);
+
+      glTexCoord2f(0,0);
+      glVertex2f(-1,1);
+
+    glEnd();
+    glDisable(GL_TEXTURE_2D);
+#endif
 
     static int counter = 0;
 
@@ -362,7 +385,7 @@ ShaderPtr loadShader( QString vert, QString frag )
     };
 
 //    writeTexture(_subscribe_costmap, QString("costmap%1.png").arg(counter));
-//    writeTexture(_slot_desktop, QString("desktop%1.png").arg(counter));
+    writeTexture(_slot_desktop, QString("desktop%1.png").arg(counter));
 //    writeTexture(_core.getSlotSubscriber().getSlot<LinksRouting::SlotType::Image>("/downsampled_desktop"), QString("downsampled_desktop%1.png").arg(counter));
 //    writeTexture(_core.getSlotSubscriber().getSlot<LinksRouting::SlotType::Image>("/featuremap"), QString("featuremap%1.png").arg(counter));
 
@@ -416,23 +439,33 @@ ShaderPtr loadShader( QString vert, QString frag )
   //----------------------------------------------------------------------------
   void GLWidget::updateScreenShot(QPoint window_offset, QPoint window_end)
   {
-    if( _screenshot.isNull() || !_fbo_desktop )
+    if( _screenshot.isNull() || !_fbo_desktop[0] || !_fbo_desktop[1] )
       return;
 
     qDebug("Update screenshot...");
+
     _slot_desktop->setValid(false);
+    _cur_fbo = 1 - _cur_fbo;
 
     // remove links from screenshot
-    _fbo_desktop->bind();
+    _fbo_desktop[_cur_fbo]->bind();
     shader->bind();
 
     glActiveTexture(GL_TEXTURE0);
-    glEnable(GL_TEXTURE_2D);
     bindTexture( _screenshot );
 
     glActiveTexture(GL_TEXTURE1);
-    glEnable(GL_TEXTURE_2D);
     glBindTexture(GL_TEXTURE_2D, _subscribe_links->_data->id);
+
+    shader->setUniformValue("screenshot", 0);
+    shader->setUniformValue("links", 1);
+
+#if !USE_DESKTOP_BLEND
+    glActiveTexture(GL_TEXTURE2);
+    glBindTexture(GL_TEXTURE_2D, _slot_desktop->_data->id);
+
+    shader->setUniformValue("desktop", 2);
+#endif
 
     float w0x = static_cast<float>(window_offset.x()) / _screenshot.width(),
           w0y = 1- static_cast<float>(window_end.y()) / _screenshot.height();
@@ -442,9 +475,6 @@ ShaderPtr loadShader( QString vert, QString frag )
 
     //y for opengl and windows are swapped
     //std::swap(w0y,w1y);
-
-    shader->setUniformValue("desktop", 0);
-    shader->setUniformValue("links", 1);
 
     glBegin( GL_QUADS );
 
@@ -466,12 +496,12 @@ ShaderPtr loadShader( QString vert, QString frag )
 
     glEnd();
 
-    glDisable(GL_TEXTURE_2D);
     glActiveTexture(GL_TEXTURE0);
-    glDisable(GL_TEXTURE_2D);
 
     shader->release();
-    _fbo_desktop->release();
+    _fbo_desktop[_cur_fbo]->release();
+
+    _slot_desktop->_data->id = _fbo_desktop[_cur_fbo]->texture();
     _slot_desktop->setValid(true);
 
 //    static int counter = 0;

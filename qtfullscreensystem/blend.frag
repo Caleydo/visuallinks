@@ -11,10 +11,21 @@ void main()
   else
     gl_FragColor = desktop_color * 0.001 + vec4(0,1,0,1);
 	*/
+
   if( link_color.a < 0.001 )
     gl_FragColor = vec4(0,0,0,0);
   else
-    gl_FragColor = link_color.a * link_color + (1 - link_color.a) * desktop_color;
+  {
+    float fac = min(2 * link_color.a, 1);
+    gl_FragColor = fac * link_color + (1 - fac) * desktop_color;
+  }
 
   gl_FragColor.a = 1;
 }
+/*
+// blend
+0.5 * (desktop + (1 - link.a) * screenshot) + 0.5 * link.a * link;
+
+// normal
+link.a * link + (1 - link.a) * desktop;
+*/

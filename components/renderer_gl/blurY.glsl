@@ -23,6 +23,6 @@ void main()
   if( color.b > 0.2 )
     color.b *= 2;
 */
-  color.a = min(color.a, 0.6);
+  color.a = min(color.a, 0.5);
   gl_FragColor = color;
 }
