@@ -246,7 +246,6 @@ for( int i = 0; i < 1; ++i )
   void GlRenderer::renderLinks(const LinkDescription::LinkList& links)
   {
     glColor3f(1.0, 0.2, 0.2);
-    glLineWidth(3);
 
     for(auto link = links.begin(); link != links.end(); ++link)
     {
@@ -263,10 +262,18 @@ for( int i = 0; i < 1; ++i )
            segment != fork->outgoing.end();
            ++segment )
       {
-        std::vector<float2> points = smooth(segment->trail, 0.4, 5);
-        glBegin(GL_LINE_STRIP);
-        for(auto p = std::begin(points); p != std::end(points); ++p)
-          glVertex2f(p->x, p->y);
+        std::vector<float2> points = smooth(segment->trail, 0.4, 10);
+        line_borders_t region = calcLineBorders(points, 3);
+        glBegin(GL_TRIANGLE_STRIP);
+        for( auto first = std::begin(region.first),
+                  second = std::begin(region.second);
+             first != std::end(region.first);
+             ++first,
+             ++second )
+        {
+          glVertex2f(first->x, first->y);
+          glVertex2f(second->x, second->y);
+        }
         glEnd();
 
         for( auto node = segment->nodes.begin();
