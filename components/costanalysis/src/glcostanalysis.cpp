@@ -8,7 +8,7 @@ namespace LinksRouting
 
   //----------------------------------------------------------------------------
   GlCostAnalysis::GlCostAnalysis():
-    myname("GlCostAnalysis")
+    myname("GLCostAnalysis")
   {
     registerArg("DownsampleCost", _downsample = 2);
   }
