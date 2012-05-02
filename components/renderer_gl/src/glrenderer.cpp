@@ -94,7 +94,7 @@ namespace LinksRouting
     float2 prev_dir = (closed ? (*p0 - *(end - 1)) : (*p1 - *p0)).normalize(),
            prev_normal = float2( prev_dir.y, -prev_dir.x );
 
-    for( ; p0 != end; ++p0, ++p1 )
+    for( ; p0 != end; ++p0 )
     {
       float2 normal, dir;
 
@@ -118,6 +118,9 @@ namespace LinksRouting
 
       prev_dir = dir;
       prev_normal = float2( dir.y, -dir.x );
+
+      if(p1 != end)
+        ++p1;
     }
 
     if( closed )
