@@ -124,7 +124,13 @@ ShaderPtr loadShader( QString vert, QString frag )
 #else
     setWindowOpacity(0.5);
 #endif
+
+#ifndef _WIN32
+    setMask(QRegion(size().width() - 2, size().height() - 2, 1, 1));
+#else
     setMask(QRegion(-1, -1, 1, 1));
+#endif
+
     setAutoBufferSwap(false);
     
     if( !isValid() )
@@ -171,6 +177,8 @@ ShaderPtr loadShader( QString vert, QString frag )
 //                << widget->windowTitle().toStdString() << " - "
 //                << widget->window()->objectName().toStdString() << std::endl;
 //    }
+
+    std::cout << "Is virtual desktop: " << QApplication::desktop()->isVirtualDesktop() << std::endl;
   }
 
   //----------------------------------------------------------------------------
@@ -182,7 +190,7 @@ ShaderPtr loadShader( QString vert, QString frag )
   //----------------------------------------------------------------------------
   void GLWidget::captureScreen()
   {
-    LOG_ENTER_FUNC();
+    //LOG_ENTER_FUNC();
 
     _screenshot = QPixmap::grabWindow(QApplication::desktop()->winId());
   }
@@ -385,7 +393,7 @@ ShaderPtr loadShader( QString vert, QString frag )
     };
 
 //    writeTexture(_subscribe_costmap, QString("costmap%1.png").arg(counter));
-    writeTexture(_slot_desktop, QString("desktop%1.png").arg(counter));
+//    writeTexture(_slot_desktop, QString("desktop%1.png").arg(counter));
 //    writeTexture(_core.getSlotSubscriber().getSlot<LinksRouting::SlotType::Image>("/downsampled_desktop"), QString("downsampled_desktop%1.png").arg(counter));
 //    writeTexture(_core.getSlotSubscriber().getSlot<LinksRouting::SlotType::Image>("/featuremap"), QString("featuremap%1.png").arg(counter));
 
@@ -401,7 +409,11 @@ ShaderPtr loadShader( QString vert, QString frag )
 //      mask.save(QString("mask%1.png").arg(counter));
     }
     else
+#ifndef _WIN32
+      setMask(QRegion(size().width() - 2, size().height() - 2, 1, 1));
+#else
       setMask(QRegion(-1, -1, 1, 1));
+#endif
 
     ++counter;
 	/*
@@ -442,7 +454,7 @@ ShaderPtr loadShader( QString vert, QString frag )
     if( _screenshot.isNull() || !_fbo_desktop[0] || !_fbo_desktop[1] )
       return;
 
-    qDebug("Update screenshot...");
+    //qDebug("Update screenshot...");
 
     _slot_desktop->setValid(false);
     _cur_fbo = 1 - _cur_fbo;

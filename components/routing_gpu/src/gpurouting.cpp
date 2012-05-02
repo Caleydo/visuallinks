@@ -440,7 +440,7 @@ namespace LinksRouting
 
     if( !_subscribe_links->isValid() )
     {
-      LOG_INFO("No valid routing data available.");
+      LOG_DEBUG("No valid routing data available.");
       return;
     }
 
@@ -536,13 +536,31 @@ namespace LinksRouting
       std::set<int4Aug<const LinkDescription::Node*> > dups(h_targets.begin(), h_targets.end());
       h_targets = std::vector<int4Aug<const LinkDescription::Node*> >(dups.begin(), dups.end());
 
-      if(h_targets.size() > 1)
+      int numtargets = h_targets.size();
+
+      // prepare storage for result
+      LinkDescription::HyperEdgeDescriptionForkation* fork = new LinkDescription::HyperEdgeDescriptionForkation();
+      it->_link.setHyperEdgeDescription(fork);
+
+      if(h_targets.size() < 2)
+      {
+        assert( h_targets.size() == 1 );
+        std::cout << "Only 1 target!" << std::endl;
+
+        // TODO do we need position?
+//        fork->position.x = startingpoint[0] * downsample;
+//        fork->position.y = startingpoint[1] * downsample;
+
+        // copy only the single region
+        fork->outgoing.push_back(LinkDescription::HyperEdgeDescriptionSegment());
+        fork->outgoing.back().parent = fork;
+        fork->outgoing.back().nodes.push_back(h_targets[0].aug);
+      }
+      else
       {
         // there is something on screen -> call routing
 
         // setup queue
-        int numtargets = h_targets.size();
-
         unsigned int overAllBlocks = sumBlocks * numtargets;
         unsigned int blockProcessThreshold = overAllBlocks * 128;
         cl::Buffer buf(_cl_context, CL_MEM_READ_WRITE, num_points * numtargets * sizeof(float));
@@ -870,7 +888,6 @@ namespace LinksRouting
         _cl_command_queue.enqueueReadBuffer(routes, true, 0, maxpoints*sizeof(cl_int2)*numtargets, &outroutes[0]);
 
         //copy routes to hyperedge
-        LinkDescription::HyperEdgeDescriptionForkation* fork = new LinkDescription::HyperEdgeDescriptionForkation();
         fork->position.x = startingpoint[0] * downsample;
         fork->position.y = startingpoint[1] * downsample;
         for(int i = 0; i < numtargets; ++i)
@@ -888,8 +905,6 @@ namespace LinksRouting
           }
           fork->outgoing.back().nodes.push_back(h_targets[i].aug);
         }
-        it->_link.setHyperEdgeDescription(fork);
-
 
         cl_ulong start, end;
         std::cout << "CLInfo:\n";

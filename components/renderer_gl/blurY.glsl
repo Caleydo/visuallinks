@@ -12,17 +12,9 @@ void main()
   vec4 color;
   for(int i = -size + 1; i < size; ++i)
     color += weights[abs(i)] * texture2D(inputTex, gl_TexCoord[0].xy + vec2(0,i) * dims_inv);
-  /*
-  if( color.r < 0.05 || color.g < 0.05 || color.b < 0.05 )
-    discard;
-  
-  if( color.r > 0.2 )
-    color.r *= 2;
-  if( color.g > 0.2 )
-    color.g *= 2;
-  if( color.b > 0.2 )
-    color.b *= 2;
-*/
-  color.a = min(color.a, 0.5);
+
+  if( color.a > 0.0001 )
+    color.rgb /= color.a;
+
   gl_FragColor = color;
 }

@@ -15,6 +15,7 @@
 #define LOG_MSG(strm, type, msg)\
   strm << "[" << type << "] '" << msg << "' in " << BOOST_CURRENT_FUNCTION << std::endl
 
+#define LOG_DEBUG(msg) //LOG_MSG(std::cout,  "DEBUG", msg)
 #define LOG_INFO(msg) LOG_MSG(std::cout,  "INFO", msg)
 #define LOG_WARN(msg) LOG_MSG(std::cout,  "WARNING", msg)
 #define LOG_ERROR(msg) LOG_MSG(std::cerr,  "ERROR", msg)
