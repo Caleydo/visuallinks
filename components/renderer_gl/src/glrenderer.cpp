@@ -4,6 +4,8 @@
 
 #include <iostream>
 
+#define USE_DESKTOP_BLEND 0
+
 namespace LinksRouting
 {
   // internal helper...
@@ -235,6 +237,11 @@ for( int i = 0; i < 1; ++i )
     _blur_y_shader->begin();
     _blur_y_shader->setUniform1i("inputTex", 0);
     _blur_y_shader->setUniform1f("scale", 1);
+#if USE_DESKTOP_BLEND
+    _blur_y_shader->setUniform1i("normalize_color", 0);
+#else
+    _blur_y_shader->setUniform1i("normalize_color", 1);
+#endif
     _links_fbo.draw(width, height, 0, 0, 1, true, true);
     _blur_y_shader->end();
     _links_fbo.unbind();
