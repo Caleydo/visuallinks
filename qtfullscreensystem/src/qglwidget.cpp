@@ -106,7 +106,7 @@ ShaderPtr loadShader( QString vert, QString frag )
       qFatal("OpenGL framebufferobjects not supported!");
 
     // fullscreen
-    setGeometry( QApplication::desktop()->screenGeometry(this) );
+    setGeometry( QApplication::desktop()->screen(-1)->geometry() );
 
     // don't allow user to change the window size
     setFixedSize( size() );
