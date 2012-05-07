@@ -4,6 +4,7 @@ var status = '';
 
 var last_id = null;
 var last_stamp = null;
+var offset = [0,0];
 
 /**
  * Set status icon
@@ -34,6 +35,20 @@ function send(data)
 }
 
 //------------------------------------------------------------------------------
+function calibrate(e)
+{
+  // Wait until we leave the ui and get an html element
+  if( e.target instanceof XULElement )
+    return;
+
+  offset[0] = e.screenX - e.clientX;
+  offset[1] = e.screenY - e.clientY;
+  
+  alert("X="+e.screenX+"("+offset[0]+"), Y="+e.screenY+"("+offset[1]+")");
+  window.removeEventListener('mousemove', calibrate, true);
+}
+
+//------------------------------------------------------------------------------
 function onVisLinkButton()
 {
   if( status == 'active')
@@ -47,7 +62,8 @@ function onVisLinkButton()
       window.addEventListener('unload', stopVisLinks, false);
   //    window.addEventListener('scroll', windowChanged, false);
   //    window.addEventListener('resize', resize, false);
-      window.addEventListener("DOMContentLoaded", windowChanged, false); 
+      window.addEventListener("DOMContentLoaded", windowChanged, false);
+      window.addEventListener('mousemove', calibrate, true);
       //setTimeout("triggerSearch()", 500);
     }
   }
@@ -125,6 +141,7 @@ function stopVisLinks()
 	setStatus('');
 	window.removeEventListener('unload', stopVisLinks, false);
 	window.removeEventListener('scroll', clearVisualLinks, false);
+	window.removeEventListener('mousemove', calibrate, true);
 	unregister();
 }
 
@@ -510,9 +527,10 @@ function findAreaBoundingBox(doc, img, areaCoords){
 
 //------------------------------------------------------------------------------
 function findBoundingBox(doc, obj) {
-	var	w =	obj.offsetWidth + 2;
+	var	w =	obj.offsetWidth + 3;
 	var	h =	obj.offsetHeight + 2;
-	var	curleft	= curtop = 0;
+	var curleft	= -1;
+	var curtop = -2;
 
 	if (obj.offsetParent) {
 		do {
@@ -523,16 +541,13 @@ function findBoundingBox(doc, obj) {
 
 	var	body = doc.getElementsByTagName("body")[0];
 	var	win	= body.ownerDocument.defaultView;
-	// y offset is very OS / decorator specific
-	var	yoffset	= win.outerHeight -	win.innerHeight	- 2;
 
-	var	ret	= null;
 	// check if	visible
 	//if (((curtop - win.pageYOffset)	> 0) &&	((curtop - win.pageYOffset)	< win.innerHeight) && 
 	//	((curleft -	win.pageXOffset) > 0) && ((curleft - win.pageXOffset) <	win.innerWidth)) {
-			
-	y = curtop + win.screenY + yoffset - win.pageYOffset;
-	x = curleft + win.screenX + 1 - win.pageXOffset;
+	
+	x = offset[0] + curleft - win.pageXOffset;		
+	y = offset[1] + curtop - win.pageYOffset;
 	
 //		ret	= new Object();
 //		ret.x =	finalleft;
