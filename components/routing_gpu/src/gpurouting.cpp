@@ -667,7 +667,10 @@ namespace LinksRouting
         }
 
         cl::Event shortestpath_Event;
-        size_t num_iterations = 3 * std::max(numBlocks[0], numBlocks[1]);
+        cl_ulong routing_time = 0;
+        size_t num_iterations = std::max(25/numtargets, 5) * std::max(numBlocks[0], numBlocks[1]);
+        if( _noQueue )
+          std::cout << "num_iterations=" << num_iterations << std::endl;
         for( int i = 0; i < (_noQueue ? num_iterations : 1); ++i )
         {
           _cl_command_queue.enqueueNDRangeKernel
@@ -680,6 +683,11 @@ namespace LinksRouting
             &shortestpath_Event
           );
           _cl_command_queue.finish();
+
+          cl_ulong start, end;
+          shortestpath_Event.getProfilingInfo(CL_PROFILING_COMMAND_END, &end);
+          shortestpath_Event.getProfilingInfo(CL_PROFILING_COMMAND_START, &start);
+          routing_time += end - start;
         }
 
         dumpBuffer<float>(_cl_command_queue, buf, width, height * numtargets, "shortestpath");
@@ -914,9 +922,7 @@ namespace LinksRouting
         prepare_kernel_Event.getProfilingInfo(CL_PROFILING_COMMAND_END, &end);
         prepare_kernel_Event.getProfilingInfo(CL_PROFILING_COMMAND_START, &start);
         std::cout << " - preparing data: " << (end-start)/1000000.0  << "ms\n";
-        shortestpath_Event.getProfilingInfo(CL_PROFILING_COMMAND_END, &end);
-        shortestpath_Event.getProfilingInfo(CL_PROFILING_COMMAND_START, &start);
-        std::cout << " - routing: " << (end-start)/1000000.0  << "ms\n";
+        std::cout << " - routing: " << routing_time/1000000.0  << "ms\n";
         getmin_Event.getProfilingInfo(CL_PROFILING_COMMAND_END, &end);
         getmin_Event.getProfilingInfo(CL_PROFILING_COMMAND_START, &start);
         std::cout << " - get minimum: " << (end-start)/1000000.0  << "ms\n";

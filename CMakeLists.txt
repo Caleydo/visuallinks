@@ -15,6 +15,21 @@ include( cmake/CopyFiles.cmake )
 include( cmake/AddComponent.cmake )
 include( cmake/AddSubdirOption.cmake )
 
+# custom options
+set( RenderUseDesktopBlend_desc
+     "Use direct alpha blending with desktop (doesn't work on windows)" )
+if(WIN32)
+  option( RenderUseDesktopBlend "${RenderUseDesktopBlend_desc}" false)
+else()
+  option( RenderUseDesktopBlend "${RenderUseDesktopBlend_desc}" true)
+endif()
+
+message(" * Direct alphablending with desktop: ${RenderUseDesktopBlend}")
+if(RenderUseDesktopBlend)
+  add_definitions(-DUSE_DESKTOP_BLEND)
+endif()
+
+
 #set interface files
 set( INTERFACE_FILES
   ${LINKS_INCLUDE_DIR}/core.h

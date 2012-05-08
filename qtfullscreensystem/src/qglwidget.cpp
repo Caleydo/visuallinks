@@ -25,8 +25,6 @@
 
 #include <QGLShader>
 
-// Enable alpha blending with desktop (windows doesn't support this...)
-#define USE_DESKTOP_BLEND 0
 #define LOG_ENTER_FUNC() qDebug() << __FUNCTION__
 
 namespace qtfullscreensystem
@@ -59,7 +57,7 @@ ShaderPtr loadShader( QString vert, QString frag )
 
   ShaderPtr program = std::make_shared<Shader>();
   QByteArray defs = "#define USE_DESKTOP_BLEND "
-#if USE_DESKTOP_BLEND
+#ifdef USE_DESKTOP_BLEND
   "1"
 #else
   "0"
@@ -108,7 +106,7 @@ ShaderPtr loadShader( QString vert, QString frag )
       qFatal("OpenGL framebufferobjects not supported!");
 
     // fullscreen
-    setGeometry( QApplication::desktop()->screenGeometry(this) );
+    setGeometry( QApplication::desktop()->screen(-1)->geometry() );
 
     // don't allow user to change the window size
     setFixedSize( size() );
@@ -119,13 +117,13 @@ ShaderPtr loadShader( QString vert, QString frag )
                   | Qt::MSWindowsOwnDC
                   //| Qt::X11BypassWindowManagerHint
                   );
-#if USE_DESKTOP_BLEND
+#ifdef USE_DESKTOP_BLEND
     setAttribute(Qt::WA_TranslucentBackground);
 #else
     setWindowOpacity(0.5);
 #endif
 
-#ifndef _WIN32
+#if defined(WIN32) || defined(_WIN32)
     setMask(QRegion(size().width() - 2, size().height() - 2, 1, 1));
 #else
     setMask(QRegion(-1, -1, 1, 1));
@@ -313,7 +311,7 @@ ShaderPtr loadShader( QString vert, QString frag )
     glActiveTexture(GL_TEXTURE0);
     glBindTexture(GL_TEXTURE_2D, _subscribe_links->_data->id);
 
-#if !USE_DESKTOP_BLEND
+#ifndef USE_DESKTOP_BLEND
     shader_blend->bind();
 
 	glActiveTexture(GL_TEXTURE1);
@@ -409,7 +407,7 @@ ShaderPtr loadShader( QString vert, QString frag )
 //      mask.save(QString("mask%1.png").arg(counter));
     }
     else
-#ifndef _WIN32
+#if defined(WIN32) || defined(_WIN32)
       setMask(QRegion(size().width() - 2, size().height() - 2, 1, 1));
 #else
       setMask(QRegion(-1, -1, 1, 1));
@@ -472,7 +470,7 @@ ShaderPtr loadShader( QString vert, QString frag )
     shader->setUniformValue("screenshot", 0);
     shader->setUniformValue("links", 1);
 
-#if !USE_DESKTOP_BLEND
+#ifndef USE_DESKTOP_BLEND
     glActiveTexture(GL_TEXTURE2);
     glBindTexture(GL_TEXTURE_2D, _slot_desktop->_data->id);
 

@@ -4,8 +4,6 @@
 
 #include <iostream>
 
-#define USE_DESKTOP_BLEND 0
-
 namespace LinksRouting
 {
   // internal helper...
@@ -237,7 +235,7 @@ for( int i = 0; i < 1; ++i )
     _blur_y_shader->begin();
     _blur_y_shader->setUniform1i("inputTex", 0);
     _blur_y_shader->setUniform1f("scale", 1);
-#if USE_DESKTOP_BLEND
+#ifdef USE_DESKTOP_BLEND
     _blur_y_shader->setUniform1i("normalize_color", 0);
 #else
     _blur_y_shader->setUniform1i("normalize_color", 1);
@@ -269,7 +267,14 @@ for( int i = 0; i < 1; ++i )
            segment != fork->outgoing.end();
            ++segment )
       {
-        std::vector<float2> points = smooth(segment->trail, 0.4, 10);
+        if( segment->trail.empty() )
+          continue;
+
+        std::vector<float2> points;
+        points.reserve(segment->trail.size() + 1);
+        points.push_back(fork->position);
+        points.insert(points.end(), segment->trail.begin(), segment->trail.end());
+        points = smooth(points, 0.4, 10);
         line_borders_t region = calcLineBorders(points, 3);
         glBegin(GL_TRIANGLE_STRIP);
         for( auto first = std::begin(region.first),
