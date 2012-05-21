@@ -6,17 +6,17 @@
 <script type="application/x-javascript" src="chrome://mypl/content/myjs.js" />
 
 <toolbarpalette id="BrowserToolbarPalette">
-	<toolbarbutton type="menu-button"
-		             id="vislink"
-		             label="vislink"
-		             tooltiptext="VisLink"
-		             oncommand="onVisLinkButton()"
-		             class="toolbarbutton-1 chromeclass-toolbar-additional vislink">
-		<menupopup>
-      <menuitem label="New Document"/>
-      <menuitem label="New Image" oncommand="alert('test');"/>
+  <toolbarbutton type="menu-button"
+	             id="vislink"
+	             label="vislink"
+	             tooltiptext="VisLink"
+	             oncommand="onVisLinkButton()"
+	             class="toolbarbutton-1 chromeclass-toolbar-additional vislink">
+    <menupopup id="vislink_menu">
+      <menuitem label="Abort all" oncommand="onAbort('', -1)"/>
+      <menuseparator />
     </menupopup>
-	</toolbarbutton>
+  </toolbarbutton>
 </toolbarpalette>
 
 </overlay>

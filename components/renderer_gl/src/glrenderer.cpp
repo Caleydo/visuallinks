@@ -245,6 +245,24 @@ for( int i = 0; i < 1; ++i )
   }
 
   //----------------------------------------------------------------------------
+  bool GlRenderer::setString(const std::string& name, const std::string& val)
+  {
+    if( name != "link-color" )
+      return ComponentArguments::setString(name, val);
+
+    char *end;
+    long int color[3];
+    color[0] = strtol(val.c_str(), &end, 10);
+    color[1] = strtol(end,         &end, 10);
+    color[2] = strtol(end,         0,    10);
+
+    _colors.push_back(Color(color[0], color[1], color[2]));
+    std::cout << "GlRenderer: Added color (" << val << ")" << std::endl;
+
+    return true;
+  }
+
+  //----------------------------------------------------------------------------
   void GlRenderer::renderLinks(const LinkDescription::LinkList& links)
   {
     glColor3f(1.0, 0.2, 0.2);
@@ -260,31 +278,14 @@ for( int i = 0; i < 1; ++i )
         continue;
       }
 
+      if( !_colors.empty() )
+        glColor3fv(_colors[ link->_color_id % _colors.size() ]);
+
       for( auto segment = fork->outgoing.begin();
            segment != fork->outgoing.end();
            ++segment )
       {
-        if( segment->trail.empty() )
-          continue;
-
-        std::vector<float2> points;
-        points.reserve(segment->trail.size() + 1);
-        points.push_back(fork->position);
-        points.insert(points.end(), segment->trail.begin(), segment->trail.end());
-        points = smooth(points, 0.4, 10);
-        line_borders_t region = calcLineBorders(points, 3);
-        glBegin(GL_TRIANGLE_STRIP);
-        for( auto first = std::begin(region.first),
-                  second = std::begin(region.second);
-             first != std::end(region.first);
-             ++first,
-             ++second )
-        {
-          glVertex2f(first->x, first->y);
-          glVertex2f(second->x, second->y);
-        }
-        glEnd();
-
+        // Draw region
         for( auto node = segment->nodes.begin();
              node != segment->nodes.end();
              ++node )
@@ -302,6 +303,28 @@ for( int i = 0; i < 1; ++i )
           }
           glEnd();
         }
+
+        if( segment->trail.empty() )
+          continue;
+
+        // Draw path
+        std::vector<float2> points;
+        points.reserve(segment->trail.size() + 1);
+        points.push_back(fork->position);
+        points.insert(points.end(), segment->trail.begin(), segment->trail.end());
+        points = smooth(points, 0.4, 10);
+        line_borders_t region = calcLineBorders(points, 3);
+        glBegin(GL_TRIANGLE_STRIP);
+        for( auto first = std::begin(region.first),
+                  second = std::begin(region.second);
+             first != std::end(region.first);
+             ++first,
+             ++second )
+        {
+          glVertex2f(first->x, first->y);
+          glVertex2f(second->x, second->y);
+        }
+        glEnd();
       }
     }
   }

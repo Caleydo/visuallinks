@@ -323,19 +323,15 @@ ShaderPtr loadShader( QString vert, QString frag )
 	glBegin( GL_QUADS );
 
       glMultiTexCoord2f(GL_TEXTURE0, 0,1);
-      glMultiTexCoord2f(GL_TEXTURE1, 0,0);
       glVertex2f(-1, -1);
 
       glMultiTexCoord2f(GL_TEXTURE0,1,1);
-      glMultiTexCoord2f(GL_TEXTURE1,1,0);
       glVertex2f(1,-1);
 
       glMultiTexCoord2f(GL_TEXTURE0,1,0);
-      glMultiTexCoord2f(GL_TEXTURE1,1,1);
       glVertex2f(1,1);
 
       glMultiTexCoord2f(GL_TEXTURE0,0,0);
-      glMultiTexCoord2f(GL_TEXTURE1,0,1);
       glVertex2f(-1, 1);
 
     glEnd();
@@ -365,6 +361,7 @@ ShaderPtr loadShader( QString vert, QString frag )
     glDisable(GL_TEXTURE_2D);
 #endif
 
+    glBindTexture(GL_TEXTURE_2D, 0);
     static int counter = 0;
 
     static QImage links(size(), QImage::Format_RGB888);
@@ -391,7 +388,7 @@ ShaderPtr loadShader( QString vert, QString frag )
     };
 
 //    writeTexture(_subscribe_costmap, QString("costmap%1.png").arg(counter));
-//    writeTexture(_slot_desktop, QString("desktop%1.png").arg(counter));
+    writeTexture(_slot_desktop, QString("desktop%1.png").arg(counter));
 //    writeTexture(_core.getSlotSubscriber().getSlot<LinksRouting::SlotType::Image>("/downsampled_desktop"), QString("downsampled_desktop%1.png").arg(counter));
 //    writeTexture(_core.getSlotSubscriber().getSlot<LinksRouting::SlotType::Image>("/featuremap"), QString("featuremap%1.png").arg(counter));
 
@@ -462,7 +459,7 @@ ShaderPtr loadShader( QString vert, QString frag )
     shader->bind();
 
     glActiveTexture(GL_TEXTURE0);
-    bindTexture( _screenshot );
+    GLuint tid = bindTexture(_screenshot, GL_TEXTURE_2D, GL_RGBA, QGLContext::NoBindOption);
 
     glActiveTexture(GL_TEXTURE1);
     glBindTexture(GL_TEXTURE_2D, _subscribe_links->_data->id);
@@ -478,10 +475,10 @@ ShaderPtr loadShader( QString vert, QString frag )
 #endif
 
     float w0x = static_cast<float>(window_offset.x()) / _screenshot.width(),
-          w0y = 1- static_cast<float>(window_end.y()) / _screenshot.height();
+          w0y = static_cast<float>(window_offset.y()) / _screenshot.height();
 
     float w1x = static_cast<float>(window_end.x()) / _screenshot.width(),
-          w1y = 1- static_cast<float>(window_offset.y()) / _screenshot.height();
+          w1y = static_cast<float>(window_end.y()) / _screenshot.height();
 
     //y for opengl and windows are swapped
     //std::swap(w0y,w1y);
@@ -507,6 +504,8 @@ ShaderPtr loadShader( QString vert, QString frag )
     glEnd();
 
     glActiveTexture(GL_TEXTURE0);
+    glBindTexture(GL_TEXTURE_2D, 0);
+    glDeleteTextures(1, &tid);
 
     shader->release();
     _fbo_desktop[_cur_fbo]->release();

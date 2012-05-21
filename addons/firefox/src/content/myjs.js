@@ -7,6 +7,9 @@ var last_stamp = null;
 var offset = [0,0];
 var scale = 1;
 var win = null;
+var menu = document.getElementById("vislink_menu");
+var active_routes = new Object();
+var timeout = null;
 
 /**
  * Set status icon
@@ -39,6 +42,8 @@ function send(data)
 //------------------------------------------------------------------------------
 function onVisLinkButton()
 {
+  menu = document.getElementById("vislink_menu");
+
   if( status == 'active')
     selectVisLink();
   else
@@ -48,9 +53,10 @@ function onVisLinkButton()
     if( register() )
     {
       window.addEventListener('unload', stopVisLinks, false);
-  //    window.addEventListener('scroll', windowChanged, false);
+      window.addEventListener('scroll', windowChanged, false);
+      window.addEventListener("DOMAttrModified", attrModified, false);
   //    window.addEventListener('resize', resize, false);
-      window.addEventListener("DOMContentLoaded", windowChanged, false);
+//      window.addEventListener("DOMContentLoaded", windowChanged, false);
     }
   }
 }
@@ -64,8 +70,46 @@ function selectVisLink()
 
 	if (selectionId	== null	|| selectionId == "") return;
 	window.localSelectionId = selectionId;
-	
+
 	reportVisLinks(selectionId);
+}
+
+//------------------------------------------------------------------------------
+function removeRouteData(id)
+{
+  var route = active_routes[id];
+  
+  if( route )
+  {
+    menu.removeChild(route.menu_item);
+    delete active_routes[id];
+  }
+}
+
+//------------------------------------------------------------------------------
+function onAbort(id, stamp)
+{
+  // TODO
+  last_id = null;
+  last_stamp = null;
+  
+  // abort all
+  if( id == '' && stamp == -1 )
+  {
+    //menu
+    for(var route_id in active_routes)
+      removeRouteData(route_id);
+  }
+  else
+  {
+    removeRouteData(id);
+  }
+  
+  send({
+    'task': 'ABORT',
+    'id': id,
+    'stamp': stamp
+  });
 }
 
 //------------------------------------------------------------------------------
@@ -89,6 +133,10 @@ function reportVisLinks(id, found)
   
 //  alert(offset[0] + "|" + offset[1]);
   
+  var bbs = searchDocument(doc, id);
+  if( !bbs.length )
+    return;
+  
   last_id = id;
   if( !found )
   {
@@ -96,12 +144,26 @@ function reportVisLinks(id, found)
     last_stamp = (d.getHours() * 60 + d.getMinutes()) * 60 + d.getSeconds();
   }
   
+  if( !active_routes[id] )
+  {
+    var item = document.createElement("menuitem");
+    item.setAttribute("label", id);
+    item.setAttribute("tooltiptext", "Remove routing for '"+id+"'");
+    item.setAttribute("oncommand", "onAbort('"+id+"', "+last_stamp+")");
+    menu.appendChild(item);
+    
+    active_routes[id] = {
+      stamp: last_stamp,
+      menu_item: item
+    };
+  }
+  
   send({
     'task': (found ? 'FOUND' : 'INITIATE'),
     // 'name': window.visLinkAppName,
     'id': id,
     'stamp': last_stamp,
-    'regions': searchDocument(doc, id)
+    'regions': bbs
   });
 
 // if( found )
@@ -109,25 +171,20 @@ function reportVisLinks(id, found)
 }
 
 //------------------------------------------------------------------------------
-function pageLoaded()
+function windowChanged()
 {
-	windowChanged(); 
+  if( timeout )
+    clearTimeout(timeout);
+  
+  timeout = setTimeout(reroute, 500);
 }
 
 //------------------------------------------------------------------------------
-function windowChanged()
+function reroute()
 {
-	if (window.localSelectionId != null)
-	{
-		reportWindowChanged(); 
-		//reportVisLinks(window.localSelectionId);
-	}
-	else
-	{
-		reportWindowChanged(); 
-//		clearVisualLinks();
-		//reportVisLinks(window.localSelectionId);
-	}
+  // trigger reroute
+  for(var route_id in active_routes)
+    reportVisLinks(route_id);  
 }
 
 //------------------------------------------------------------------------------
@@ -137,6 +194,7 @@ function stopVisLinks()
 	setStatus('');
 	window.removeEventListener('unload', stopVisLinks, false);
 	window.removeEventListener('scroll', clearVisualLinks, false);
+	window.removeEventListener("DOMAttrModified", attrModified, false);
 	unregister();
 }
 
@@ -227,6 +285,13 @@ function clearVisualLinks()
 		alert("Connection to visdaemon lost, stopping");
 		stopVisLinks();
 	}
+}
+
+//------------------------------------------------------------------------------
+function attrModified(e)
+{
+  if( e.attrName == "screenX" || e.attrName == "screenY" )
+    windowChanged();
 }
 
 //------------------------------------------------------------------------------

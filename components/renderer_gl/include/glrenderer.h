@@ -38,9 +38,27 @@ namespace LinksRouting
 
       void process(Type type);
 
+      virtual bool setString(const std::string& name, const std::string& val);
+
     protected:
 
       bool  _enabled;
+
+      struct Color
+      {
+        float r, g, b;
+
+        Color(int r, int g, int b):
+          r(r/256.f),
+          g(g/256.f),
+          b(b/256.f)
+        {}
+        operator const float*()
+        {
+          return &r;
+        }
+      };
+      std::vector<Color> _colors;
 
       /** Subscribe to the routed links */
       slot_t<LinkDescription::LinkList>::type _subscribe_links;

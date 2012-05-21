@@ -38,7 +38,7 @@
               the clients region can be added in an optional 'regions' filled.
               
               The following example shows a message to initiate a search for the
-              string 'test' with two occurances bounded by one rectangulare and
+              string 'test' with two occurrences bounded by one rectangular and
               one triangular region:
 
               {
@@ -54,10 +54,10 @@
    REQUEST    After the client has issued an INITIATE to the server the server
               sends a REQUEST message to all clients with the new search id
               and timestamp. Every client should send back a FOUND message
-              with all occurences of the requested id inside their region.
+              with all occurrences of the requested id inside their region.
               
               The client which sent the corresponding INITIATE also gets a
-              REQUEST. If he hasn't allready sent the regions with the INITIATE
+              REQUEST. If he hasn't already sent the regions with the INITIATE
               he should now send them back.
               
               The following example shows the REQUEST the server would send
@@ -79,4 +79,17 @@
                              [[12, 34], [112, 34], [112, 64], [12, 64]],
                              [[40, 100], [100, 200], [10, 200]]
                            ]
+              }
+              
+   ABORT	  If a client sends an ABORT to the server then the server forwards
+              the message to all clients and removes every displayed route for
+              the given link id.
+              
+              If all routes should be aborted set id to the empty string and
+              stamp to -1.
+
+   			  {
+                'task': 'ABORT',
+                'id': 'test',
+                'stamp': 123456789
               }
