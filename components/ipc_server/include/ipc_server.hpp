@@ -20,6 +20,8 @@
 
 #include "datatypes.h"
 
+class QMutex;
+
 namespace LinksRouting
 {
   class IPCServer:
@@ -31,7 +33,7 @@ namespace LinksRouting
 
     public:
 
-      IPCServer();
+      IPCServer(QMutex* mutex);
       virtual ~IPCServer();
 
       void publishSlots(SlotCollector& slot_collector);
@@ -63,6 +65,8 @@ namespace LinksRouting
 
       QWsServer          *_server;
       QList<QWsSocket*>   _clients;
+
+      QMutex             *_mutex_slot_links;
 
       /* List of all open searches */
       slot_t<LinkDescription::LinkList>::type _slot_links;

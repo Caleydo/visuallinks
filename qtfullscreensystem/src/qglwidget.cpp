@@ -93,7 +93,8 @@ ShaderPtr loadShader( QString vert, QString frag )
   //----------------------------------------------------------------------------
   GLWidget::GLWidget(int& argc, char *argv[]):
     _render_thread(this),
-    _cur_fbo(0)
+    _cur_fbo(0),
+    _server(&_mutex_slot_links)
   {
     //--------------------------------
     // Setup opengl and window
@@ -300,7 +301,11 @@ ShaderPtr loadShader( QString vert, QString frag )
     glMatrixMode(GL_PROJECTION);
     glOrtho(x, x + w, y, y + h, -1.0, 1.0);
 
-    _core.process();
+
+    {
+      QMutexLocker lock_links(&_mutex_slot_links);
+      _core.process();
+    }
 
     glMatrixMode(GL_PROJECTION);
     glLoadIdentity();

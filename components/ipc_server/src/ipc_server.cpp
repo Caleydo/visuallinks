@@ -9,6 +9,7 @@
 #include "ipc_server.hpp"
 #include "log.hpp"
 
+#include <QMutex>
 #include <QScriptEngine>
 #include <QScriptValueIterator>
 
@@ -121,7 +122,8 @@ namespace LinksRouting
   }
 
   //----------------------------------------------------------------------------
-  IPCServer::IPCServer()
+  IPCServer::IPCServer(QMutex* mutex):
+    _mutex_slot_links(mutex)
   {
     registerArg("DebugRegions", _debug_regions);
   }
@@ -205,6 +207,7 @@ namespace LinksRouting
       QString task = msg.getValue<QString>("task"),
               id = msg.getValue<QString>("id");
       uint32_t stamp = msg.getValue<uint32_t>("stamp");
+      QMutexLocker lock_links(_mutex_slot_links);
 
       const std::string& id_str = id.toStdString();
       auto link = std::find_if

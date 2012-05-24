@@ -13,6 +13,7 @@
 #include "gpurouting.h"
 #include "glrenderer.h"
 
+#include <QMutex>
 #include <QGLWidget>
 #include <QGLFramebufferObject>
 #include <memory>
@@ -89,6 +90,8 @@ namespace qtfullscreensystem
       LinksRouting::GlCostAnalysis  _cost_analysis;
       LinksRouting::GPURouting      _routing;
       LinksRouting::GlRenderer      _renderer;
+
+      QMutex    _mutex_slot_links;
 
       /** Use image from given file instead of desktop screenshot if not empty */
       std::string   _debug_desktop_image;
