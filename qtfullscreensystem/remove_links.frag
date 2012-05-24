@@ -2,7 +2,7 @@ uniform sampler2D screenshot;
 uniform sampler2D links;
 uniform sampler2D desktop;
 
-const float blend_alpha = 0.5;
+const 
 
 void main()
 {
@@ -11,16 +11,22 @@ void main()
 #if !USE_DESKTOP_BLEND
   vec4 desktop_color = texture2D(desktop, gl_TexCoord[1].xy);
 #endif
+  vec4 color;
+  float blend_alpha = 0.5;
 
-  if( link_color.a >= 0.001 && false )
+  if( link_color.a >= 0.001 )
   {
 #if !USE_DESKTOP_BLEND
     float fac = min(2 * link_color.a, 1);
     link_color = fac * link_color + (1 - fac) * desktop_color;
+#else
+    blend_alpha = link_color.a;
 #endif               
-    gl_FragColor = (screenshot_color - blend_alpha * link_color) / (1 - blend_alpha);
+    color = (screenshot_color - blend_alpha * link_color) / (1 - blend_alpha);
   }
   else
-    gl_FragColor = screenshot_color;
-  gl_FragColor.a = 1;
+    color = screenshot_color;
+
+  color.a = 1;
+  gl_FragColor = color;
 }

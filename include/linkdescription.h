@@ -116,15 +116,18 @@ namespace LinkDescription
   {
     LinkDescription( const std::string& id,
                      uint32_t stamp,
-                     const HyperEdge& link ):
+                     const HyperEdge& link,
+                     uint32_t color_id ):
       _id( id ),
       _stamp( stamp ),
-      _link( link )
+      _link( link ),
+      _color_id( color_id )
     {}
 
     const std::string   _id;
     uint32_t            _stamp;
     HyperEdge           _link;
+    uint32_t            _color_id;
   };
 
   typedef std::list<LinkDescription> LinkList;

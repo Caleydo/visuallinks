@@ -1,5 +1,5 @@
 <?xml version="1.0" ?>
-<config>
+<config><!-- 
   <QGLWidget>
     <DebugDesktopImage type="String" val="wikipedia-test.png" />
   </QGLWidget>
@@ -7,11 +7,11 @@
   <QtWebsocketServer>
     <DebugRegions type="String" val="{'task':'INITIATE','id':'Test','stamp':75672,'regions':[[[177,252],[231,252],[231,284],[177,284]],[[427,310],[452,310],[452,326],[427,326]],[[746,310],[771,310],[771,326],[746,326]]]}"/>
   </QtWebsocketServer>
-
+ -->
   <ComponentCostanalysis>
-	<DownsampleCost type="Integer" val="4" />
+	<DownsampleCost type="Integer" val="6" />
   </ComponentCostanalysis>
-  
+
   <GPURouting>
     <enabled type="Bool" val="true" />
     <NoQueue type="Bool" val="true" />
@@ -25,6 +25,11 @@
   </ComponentRenderer> -->
   <GLRenderer>
     <enabled type="Bool" val="true" />
+    <link-color type="String" val="228 26 28" />
+    <link-color type="String" val="55 126 184" />
+    <link-color type="String" val="77 175 74" />
+    <link-color type="String" val="152 78 163" />
+    <link-color type="String" val="255 127 0" />
   </GLRenderer>
   
 </config>

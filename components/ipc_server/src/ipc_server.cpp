@@ -9,6 +9,7 @@
 #include "ipc_server.hpp"
 #include "log.hpp"
 
+#include <QMutex>
 #include <QScriptEngine>
 #include <QScriptValueIterator>
 
@@ -121,7 +122,8 @@ namespace LinksRouting
   }
 
   //----------------------------------------------------------------------------
-  IPCServer::IPCServer()
+  IPCServer::IPCServer(QMutex* mutex):
+    _mutex_slot_links(mutex)
   {
     registerArg("DebugRegions", _debug_regions);
   }
@@ -201,34 +203,57 @@ namespace LinksRouting
     try
     {
       JSON msg(data);
-      QString task = msg.getValue<QString>("task");
+
+      QString task = msg.getValue<QString>("task"),
+              id = msg.getValue<QString>("id");
+      uint32_t stamp = msg.getValue<uint32_t>("stamp");
+      QMutexLocker lock_links(_mutex_slot_links);
+
+      const std::string& id_str = id.toStdString();
+      auto link = std::find_if
+      (
+        _slot_links->_data->begin(),
+        _slot_links->_data->end(),
+        [&id_str](const LinkDescription::LinkDescription& desc)
+        {
+          return desc._id == id_str;
+        }
+      );
 
       if( task == "INITIATE" )
       {
-        QString id = msg.getValue<QString>("id");
-        uint32_t stamp = msg.getValue<uint32_t>("stamp");
-
-        LOG_INFO("Received INITIATE: " << id.toStdString());
+        LOG_INFO("Received INITIATE: " << id_str);
 
         // Remove eventually existing search for same id
-        for( auto it = _slot_links->_data->begin();
-             it != _slot_links->_data->end();
-             ++it )
+        if( link != _slot_links->_data->end() )
         {
-          if( id.toStdString() != it->_id )
-            continue;
-
-          LOG_INFO("Replacing search for " << it->_id);
-          _slot_links->_data->erase(it);
-          break;
+          LOG_INFO("Replacing search for " << link->_id);
+          _slot_links->_data->erase(link);
         }
+
+        // get first available color id
+        uint32_t color_id = 0;
+        while
+        (
+          std::find_if
+          (
+            _slot_links->_data->begin(),
+            _slot_links->_data->end(),
+            [color_id](const LinkDescription::LinkDescription& desc)
+            {
+              return desc._color_id == color_id;
+            }
+          ) != _slot_links->_data->end()
+        )
+          ++color_id;
 
         _slot_links->_data->push_back(
           LinkDescription::LinkDescription
           (
-            id.toStdString(),
+            id_str,
             stamp,
-            LinkDescription::HyperEdge( parseRegions(msg) ) // TODO add props?
+            LinkDescription::HyperEdge( parseRegions(msg) ), // TODO add props?
+            color_id
           )
         );
         _slot_links->setValid(true);
@@ -249,19 +274,6 @@ namespace LinksRouting
       }
       else if( task == "FOUND" )
       {
-        std::string id = msg.getValue<QString>("id").toStdString();
-        uint32_t stamp = msg.getValue<uint32_t>("stamp");
-
-        auto link = std::find_if
-        (
-          _slot_links->_data->begin(),
-          _slot_links->_data->end(),
-          [&id](const LinkDescription::LinkDescription& desc)
-          {
-            return desc._id == id;
-          }
-        );
-
         if( link == _slot_links->_data->end() )
         {
           LOG_WARN("Received FOUND for none existing REQUEST");
@@ -274,9 +286,23 @@ namespace LinksRouting
           return;
         }
 
-        LOG_INFO("Received FOUND: " << id);
+        LOG_INFO("Received FOUND: " << id_str);
 
         link->_link.addNodes( parseRegions(msg) );
+      }
+      else if( task == "ABORT" )
+      {
+        if( id.isEmpty() && stamp == (uint32_t)-1 )
+          _slot_links->_data->clear();
+        else if( link == _slot_links->_data->end() )
+          LOG_WARN("Received ABORT for none existing REQUEST");
+        else
+        {
+          _slot_links->_data->erase(link);
+
+//          for(auto socket = _clients.begin(); socket != _clients.end(); ++socket)
+//            (*socket)->write(request);
+        }
       }
     }
     catch(std::runtime_error& ex)

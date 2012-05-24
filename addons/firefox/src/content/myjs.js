@@ -5,6 +5,11 @@ var status = '';
 var last_id = null;
 var last_stamp = null;
 var offset = [0,0];
+var scale = 1;
+var win = null;
+var menu = document.getElementById("vislink_menu");
+var active_routes = new Object();
+var timeout = null;
 
 /**
  * Set status icon
@@ -35,22 +40,10 @@ function send(data)
 }
 
 //------------------------------------------------------------------------------
-function calibrate(e)
-{
-  // Wait until we leave the ui and get an html element
-  if( e.target instanceof XULElement )
-    return;
-
-  offset[0] = e.screenX - e.clientX;
-  offset[1] = e.screenY - e.clientY;
-  
-  alert("X="+e.screenX+"("+offset[0]+"), Y="+e.screenY+"("+offset[1]+")");
-  window.removeEventListener('mousemove', calibrate, true);
-}
-
-//------------------------------------------------------------------------------
 function onVisLinkButton()
 {
+  menu = document.getElementById("vislink_menu");
+
   if( status == 'active')
     selectVisLink();
   else
@@ -60,11 +53,10 @@ function onVisLinkButton()
     if( register() )
     {
       window.addEventListener('unload', stopVisLinks, false);
-  //    window.addEventListener('scroll', windowChanged, false);
+      window.addEventListener('scroll', windowChanged, false);
+      window.addEventListener("DOMAttrModified", attrModified, false);
   //    window.addEventListener('resize', resize, false);
-      window.addEventListener("DOMContentLoaded", windowChanged, false);
-      window.addEventListener('mousemove', calibrate, true);
-      //setTimeout("triggerSearch()", 500);
+//      window.addEventListener("DOMContentLoaded", windowChanged, false);
     }
   }
 }
@@ -78,8 +70,46 @@ function selectVisLink()
 
 	if (selectionId	== null	|| selectionId == "") return;
 	window.localSelectionId = selectionId;
-	
+
 	reportVisLinks(selectionId);
+}
+
+//------------------------------------------------------------------------------
+function removeRouteData(id)
+{
+  var route = active_routes[id];
+  
+  if( route )
+  {
+    menu.removeChild(route.menu_item);
+    delete active_routes[id];
+  }
+}
+
+//------------------------------------------------------------------------------
+function onAbort(id, stamp)
+{
+  // TODO
+  last_id = null;
+  last_stamp = null;
+  
+  // abort all
+  if( id == '' && stamp == -1 )
+  {
+    //menu
+    for(var route_id in active_routes)
+      removeRouteData(route_id);
+  }
+  else
+  {
+    removeRouteData(id);
+  }
+  
+  send({
+    'task': 'ABORT',
+    'id': id,
+    'stamp': stamp
+  });
 }
 
 //------------------------------------------------------------------------------
@@ -89,49 +119,72 @@ function reportWindowChanged()
 }
 
 //------------------------------------------------------------------------------
-function reportVisLinks(selectionId, found)
+function reportVisLinks(id, found)
 {
-	var	doc	= content.document;
-	var	bbs	= searchDocument(doc, selectionId);
-//	var	xml	= generateBoundingBoxesXML(bbs,	true);
-	
-	last_id = selectionId;
-	if( !found )
-	{
-	  d = new Date();
-	  last_stamp = (d.getHours() * 60 + d.getMinutes()) * 60 + d.getSeconds();
-	}
+  var doc = content.document;
+  win = doc.defaultView;
+  var domWindowUtils =
+    win.QueryInterface(Components.interfaces.nsIInterfaceRequestor)
+       .getInterface(Components.interfaces.nsIDOMWindowUtils);
+  scale = domWindowUtils.screenPixelsPerCSSPixel;
+  
+  offset[0] = win.mozInnerScreenX * scale;
+  offset[1] = win.mozInnerScreenY * scale;
+  
+//  alert(offset[0] + "|" + offset[1]);
+  
+  var bbs = searchDocument(doc, id);
+  if( !bbs.length )
+    return;
+  
+  last_id = id;
+  if( !found )
+  {
+    d = new Date();
+    last_stamp = (d.getHours() * 60 + d.getMinutes()) * 60 + d.getSeconds();
+  }
+  
+  if( !active_routes[id] )
+  {
+    var item = document.createElement("menuitem");
+    item.setAttribute("label", id);
+    item.setAttribute("tooltiptext", "Remove routing for '"+id+"'");
+    item.setAttribute("oncommand", "onAbort('"+id+"', "+last_stamp+")");
+    menu.appendChild(item);
+    
+    active_routes[id] = {
+      stamp: last_stamp,
+      menu_item: item
+    };
+  }
+  
+  send({
+    'task': (found ? 'FOUND' : 'INITIATE'),
+    // 'name': window.visLinkAppName,
+    'id': id,
+    'stamp': last_stamp,
+    'regions': bbs
+  });
 
-	send({ 'task': (found ? 'FOUND' : 'INITIATE'),
-	       //'name': window.visLinkAppName,
-	       'id': selectionId,
-	       'stamp': last_stamp,
-	       'regions': bbs });
-	
-//	if( found )
+// if( found )
 //    alert('send FOUND: '+selectionId);
-}
-
-//------------------------------------------------------------------------------
-function pageLoaded()
-{
-	windowChanged(); 
 }
 
 //------------------------------------------------------------------------------
 function windowChanged()
 {
-	if (window.localSelectionId != null)
-	{
-		reportWindowChanged(); 
-		//reportVisLinks(window.localSelectionId);
-	}
-	else
-	{
-		reportWindowChanged(); 
-//		clearVisualLinks();
-		//reportVisLinks(window.localSelectionId);
-	}
+  if( timeout )
+    clearTimeout(timeout);
+  
+  timeout = setTimeout(reroute, 500);
+}
+
+//------------------------------------------------------------------------------
+function reroute()
+{
+  // trigger reroute
+  for(var route_id in active_routes)
+    reportVisLinks(route_id);  
 }
 
 //------------------------------------------------------------------------------
@@ -141,7 +194,7 @@ function stopVisLinks()
 	setStatus('');
 	window.removeEventListener('unload', stopVisLinks, false);
 	window.removeEventListener('scroll', clearVisualLinks, false);
-	window.removeEventListener('mousemove', calibrate, true);
+	window.removeEventListener("DOMAttrModified", attrModified, false);
 	unregister();
 }
 
@@ -235,6 +288,13 @@ function clearVisualLinks()
 }
 
 //------------------------------------------------------------------------------
+function attrModified(e)
+{
+  if( e.attrName == "screenX" || e.attrName == "screenY" )
+    windowChanged();
+}
+
+//------------------------------------------------------------------------------
 function validateWindowPosition()
 {
 	var oldPos = window.oldPos;
@@ -261,33 +321,6 @@ function resize()
 {
 	register();
 	windowChanged();
-}
-
-//------------------------------------------------------------------------------
-function triggerSearch()
-{
-	validateWindowPosition();
-	if(stopped)
-	  return;
-
-	var	id = getId();
-	if(stopped)
-	  return; // second check, because getId() might have lost connection to daemon
-
-	if( id != null )
-	{
-		window.localSelectionId = id;
-		var	doc	= content.document;
-		var	bbs	= searchDocument(doc, id);
-/*		var	xml	= generateBoundingBoxesXML(bbs,	false);
-		sendBoundingBoxes(xml);*/
-		send({'task': 'report-links',
-          'name': window.visLinkAppName,
-          'pointer': window.lastPointerID,
-          'bounding-boxes': bbs});
-	}
-
-//	setTimeout("triggerSearch()", 200);
 }
 
 //------------------------------------------------------------------------------
@@ -526,39 +559,42 @@ function findAreaBoundingBox(doc, img, areaCoords){
 }
 
 //------------------------------------------------------------------------------
-function findBoundingBox(doc, obj) {
-	var	w =	obj.offsetWidth + 3;
-	var	h =	obj.offsetHeight + 2;
-	var curleft	= -1;
-	var curtop = -2;
+function findBoundingBox(doc, obj)
+{
+  var w = obj.offsetWidth + 3;
+  var h = obj.offsetHeight + 2;
+  var curleft = -1;
+  var curtop = -2;
+  
+  if( obj.offsetParent )
+  {
+  	do
+  	{
+  	  curleft += obj.offsetLeft;
+  	  curtop  += obj.offsetTop;
+  	} while( obj = obj.offsetParent );
+  }
+  
+  x = curleft - win.pageXOffset;     
+  y = curtop - win.pageYOffset;
+  
+  // check if	visible
+  if(    (x + w / 2 < 0) || (x + w / 2 > win.innerWidth)
+      || (y + h / 2 < 0) || (y + h / 2 > win.innerHeight) )
+    return null;
+  
+  x *= scale;
+  y *= scale;
+  w *= scale;
+  h *= scale;
 
-	if (obj.offsetParent) {
-		do {
-			curleft	+= obj.offsetLeft;
-			curtop += obj.offsetTop;
-		} while	(obj = obj.offsetParent);
-	}
-
-	var	body = doc.getElementsByTagName("body")[0];
-	var	win	= body.ownerDocument.defaultView;
-
-	// check if	visible
-	//if (((curtop - win.pageYOffset)	> 0) &&	((curtop - win.pageYOffset)	< win.innerHeight) && 
-	//	((curleft -	win.pageXOffset) > 0) && ((curleft - win.pageXOffset) <	win.innerWidth)) {
-	
-	x = offset[0] + curleft - win.pageXOffset;		
-	y = offset[1] + curtop - win.pageYOffset;
-	
-//		ret	= new Object();
-//		ret.x =	finalleft;
-//		ret.y =	finaltop;
-//		ret.width =	w +	2;
-//		ret.height = h + 2;
-	//}
-	return [ [x,     y],
-	         [x + w, y],
-	         [x + w, y + h],
-	         [x,     y + h] ];
+  x += offset[0];
+  y += offset[1];
+  
+  return [ [x,     y],
+           [x + w, y],
+           [x + w, y + h],
+           [x,     y + h] ];
 }
 
 //------------------------------------------------------------------------------
