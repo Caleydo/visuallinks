@@ -191,7 +191,13 @@ ShaderPtr loadShader( QString vert, QString frag )
   {
     //LOG_ENTER_FUNC();
 
-    _screenshot = QPixmap::grabWindow(QApplication::desktop()->winId());
+    QDesktopWidget *desktop = QApplication::desktop();
+    _screenshot = QPixmap::grabWindow(
+      desktop->winId(),
+      0, 0,
+      desktop->width(),
+      desktop->height()
+    );
   }
 
   //----------------------------------------------------------------------------
