@@ -163,6 +163,7 @@ ShaderPtr loadShader( QString vert, QString frag )
 
     _core.attachComponent(this);
     registerArg("DebugDesktopImage", _debug_desktop_image);
+    registerArg("DumpScreenshot", _dump_screenshot = 0);
 
     _core.init();
 
@@ -399,7 +400,8 @@ ShaderPtr loadShader( QString vert, QString frag )
     };
 
 //    writeTexture(_subscribe_costmap, QString("costmap%1.png").arg(counter));
-    writeTexture(_slot_desktop, QString("desktop%1.png").arg(counter));
+    if( _dump_screenshot && !(counter % _dump_screenshot) )
+      writeTexture(_slot_desktop, QString("desktop%1.png").arg(counter));
 //    writeTexture(_core.getSlotSubscriber().getSlot<LinksRouting::SlotType::Image>("/downsampled_desktop"), QString("downsampled_desktop%1.png").arg(counter));
 //    writeTexture(_core.getSlotSubscriber().getSlot<LinksRouting::SlotType::Image>("/featuremap"), QString("featuremap%1.png").arg(counter));
 
