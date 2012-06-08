@@ -61,9 +61,11 @@ add_subdirectory(${COMPONENTS_DIR}/tools)
 include_directories(
   ${COMPONENTS_DIR}/tools
   libs/qtwebsocket/QtWebSocket
+  libs/libqxt/include
 )
 
 add_subdirectory(libs/qtwebsocket/QtWebSocket)
+add_subdirectory(libs/libqxt)
 
 #TODO we should do that in a better way, so we can get the include directories and libs to link out of the subdirectory..
 #add components

@@ -71,6 +71,7 @@ target_link_libraries( qtfullscreensystem
   ${QT_QTGUI_LIBRARY}
   ${QT_QTOPENGL_LIBRARY}
   ${ADDITIONAL_LIBS}
+  qxt
 )
 use_components(qtfullscreensystem)
 runtime_files(qtfullscreensystem RUNTIME_FILES)

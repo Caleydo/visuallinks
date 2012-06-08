@@ -17,6 +17,7 @@
 
 #include <GL/gl.h>
 
+#include <QxtGui/qxtwindowsystem.h>
 
 #include <QApplication>
 #include <QBitmap>
@@ -170,15 +171,10 @@ ShaderPtr loadShader( QString vert, QString frag )
     LinksRouting::SlotSubscriber subscriber = _core.getSlotSubscriber();
     subscribeSlots(subscriber);
 
-//    foreach (QWidget *widget, QApplication::allWidgets())
-//    {
-//      std::cout << widget->objectName().toStdString() << ": "
-//                << widget->internalWinId() << " - "
-//                << widget->windowTitle().toStdString() << " - "
-//                << widget->window()->objectName().toStdString() << std::endl;
-//    }
+    foreach(WId win_id, QxtWindowSystem::windows())
+      std::cout << win_id << ": " << QxtWindowSystem::windowTitle(win_id).toStdString() << std::endl;
 
-    std::cout << "Is virtual desktop: " << QApplication::desktop()->isVirtualDesktop() << std::endl;
+    //std::cout << "Is virtual desktop: " << QApplication::desktop()->isVirtualDesktop() << std::endl;
   }
 
   //----------------------------------------------------------------------------
