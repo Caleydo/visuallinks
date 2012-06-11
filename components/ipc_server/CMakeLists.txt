@@ -36,5 +36,6 @@ set( HEADER_FILES
 add_library(ipc_server ${HEADER_FILES} ${SOURCE_FILES} ${CL_FILES})
 target_link_libraries( ipc_server
   QtWebSocket
+  qxt
 )
 add_component_data(${COMPONENTINC_DIR} ipc_server)

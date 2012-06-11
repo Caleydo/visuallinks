@@ -668,7 +668,7 @@ namespace LinksRouting
 
         cl::Event shortestpath_Event;
         cl_ulong routing_time = 0;
-        size_t num_iterations = std::max(25/numtargets, 5) * std::max(numBlocks[0], numBlocks[1]);
+        size_t num_iterations = std::max(40/numtargets, 10) * std::max(numBlocks[0], numBlocks[1]);
         if( _noQueue )
           std::cout << "num_iterations=" << num_iterations << std::endl;
         for( int i = 0; i < (_noQueue ? num_iterations : 1); ++i )

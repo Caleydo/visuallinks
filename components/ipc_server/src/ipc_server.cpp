@@ -9,6 +9,8 @@
 #include "ipc_server.hpp"
 #include "log.hpp"
 
+#include <QxtGui/qxtwindowsystem.h>
+
 #include <QMutex>
 #include <QScriptEngine>
 #include <QScriptValueIterator>
@@ -83,6 +85,17 @@ namespace LinksRouting
         return extractValue<T>(prop);
       }
 
+      template <class T>
+      T getValue(const QString& key, const T& def)
+      {
+        QScriptValue prop = _json.property(key);
+
+        if( !prop.isValid() || prop.isUndefined() )
+          return def;
+
+        return extractValue<T>(prop);
+      }
+
       bool isSet(const QString& key)
       {
         QScriptValue prop = _json.property(key);
@@ -122,9 +135,11 @@ namespace LinksRouting
   }
 
   //----------------------------------------------------------------------------
-  IPCServer::IPCServer(QMutex* mutex):
-    _mutex_slot_links(mutex)
+  IPCServer::IPCServer(QMutex* mutex, QWidget* widget):
+    _mutex_slot_links(mutex),
+    _widget(widget)
   {
+    assert(widget);
     registerArg("DebugRegions", _debug_regions);
   }
 
@@ -194,7 +209,7 @@ namespace LinksRouting
              << client_socket->peerAddress().toString().toStdString()
              << ":" << client_socket->peerPort() );
   }
-
+WId cid = 0;
   //----------------------------------------------------------------------------
   void IPCServer::onDataReceived(QString data)
   {
@@ -204,8 +219,22 @@ namespace LinksRouting
     {
       JSON msg(data);
 
-      QString task = msg.getValue<QString>("task"),
-              id = msg.getValue<QString>("id");
+      QString task = msg.getValue<QString>("task");
+      if( task == "REGISTER" )
+      {
+        QVariantList pos = msg.getValue<QVariantList>("pos");
+        if( pos.length() != 2 )
+        {
+          LOG_WARN("Received invalid position (REGISTER)");
+          return;
+        }
+
+        cid = windowAt(QPoint(pos.at(0).toInt(), pos.at(1).toInt()));
+        return;
+      }
+
+      QString id = msg.getValue<QString>("id").toLower(),
+              title = msg.getValue<QString>("title", "");
       uint32_t stamp = msg.getValue<uint32_t>("stamp");
       QMutexLocker lock_links(_mutex_slot_links);
 
@@ -223,36 +252,41 @@ namespace LinksRouting
       if( task == "INITIATE" )
       {
         LOG_INFO("Received INITIATE: " << id_str);
+        uint32_t color_id = 0;
 
         // Remove eventually existing search for same id
         if( link != _slot_links->_data->end() )
         {
+          // keep color
+          color_id = link->_color_id;
+
           LOG_INFO("Replacing search for " << link->_id);
           _slot_links->_data->erase(link);
         }
-
-        // get first available color id
-        uint32_t color_id = 0;
-        while
-        (
-          std::find_if
+        else
+        {
+          // get first unused color
+          while
           (
-            _slot_links->_data->begin(),
-            _slot_links->_data->end(),
-            [color_id](const LinkDescription::LinkDescription& desc)
-            {
-              return desc._color_id == color_id;
-            }
-          ) != _slot_links->_data->end()
-        )
-          ++color_id;
+            std::find_if
+            (
+              _slot_links->_data->begin(),
+              _slot_links->_data->end(),
+              [color_id](const LinkDescription::LinkDescription& desc)
+              {
+                return desc._color_id == color_id;
+              }
+            ) != _slot_links->_data->end()
+          )
+            ++color_id;
+        }
 
         _slot_links->_data->push_back(
           LinkDescription::LinkDescription
           (
             id_str,
             stamp,
-            LinkDescription::HyperEdge( parseRegions(msg) ), // TODO add props?
+            LinkDescription::HyperEdge( parseRegions(msg, title) ), // TODO add props?
             color_id
           )
         );
@@ -288,7 +322,7 @@ namespace LinksRouting
 
         LOG_INFO("Received FOUND: " << id_str);
 
-        link->_link.addNodes( parseRegions(msg) );
+        link->_link.addNodes( parseRegions(msg, title) );
       }
       else if( task == "ABORT" )
       {
@@ -339,8 +373,12 @@ namespace LinksRouting
 
   //----------------------------------------------------------------------------
   std::vector<LinkDescription::Node>
-  IPCServer::parseRegions(IPCServer::JSON& json)
+  IPCServer::parseRegions(IPCServer::JSON& json, const QString& window_title)
   {
+    std::cout << "Parse regions: (" << cid << ") "
+                                    << window_title.toStdString() << std::endl;
+
+    WindowList windows = QxtWindowSystem::windows();
     std::vector<LinkDescription::Node> nodes;
 
     if( !json.isSet("regions") )
@@ -365,10 +403,34 @@ namespace LinksRouting
             continue;
           }
 
-          points.push_back( float2(
+          float2 point(
             coords.at(0).toInt(),
             coords.at(1).toInt()
-          ));
+          );
+
+          WId wid = 0;
+          QPoint pos(point.x, point.y);
+          for (int i = windows.size() - 1; i >= 0; --i)
+          {
+              WId wid_cur = windows.at(i);
+              if( wid_cur == _widget->winId() )
+                // Ignore own window as it's always on top, but transparent
+                continue;
+              else if( QxtWindowSystem::windowGeometry(wid_cur).contains(pos) )
+              {
+                  wid = wid_cur;
+                  break;
+              }
+          }
+
+          if( wid != cid )
+          {
+            // if point is in other window don't show region
+            points.clear();
+            break;
+          }
+
+          points.push_back(point);
         }
         else if( point->type() == QVariant::Map )
         {
@@ -385,6 +447,20 @@ namespace LinksRouting
     }
 
     return nodes;
+  }
+
+  //----------------------------------------------------------------------------
+  WId IPCServer::windowAt(const QPoint& pos) const
+  {
+    WindowList list = QxtWindowSystem::windows();
+    for (int i = list.size() - 1; i >= 0; --i)
+    {
+        WId wid = list.at(i);
+        if(    wid != _widget->winId()
+            && QxtWindowSystem::windowGeometry(wid).contains(pos) )
+          return wid;
+    }
+    return 0;
   }
 
 } // namespace LinksRouting
