@@ -95,6 +95,9 @@ namespace qtfullscreensystem
 
       /** Use image from given file instead of desktop screenshot if not empty */
       std::string   _debug_desktop_image;
+
+      /** Dump screenshot every n frames (Disabled if n == 0) */
+      int           _dump_screenshot;
   };
 } // namespace qtfullscreensystem
 

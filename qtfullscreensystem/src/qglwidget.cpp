@@ -17,6 +17,7 @@
 
 #include <GL/gl.h>
 
+#include <QxtGui/qxtwindowsystem.h>
 
 #include <QApplication>
 #include <QBitmap>
@@ -163,21 +164,17 @@ ShaderPtr loadShader( QString vert, QString frag )
 
     _core.attachComponent(this);
     registerArg("DebugDesktopImage", _debug_desktop_image);
+    registerArg("DumpScreenshot", _dump_screenshot = 0);
 
     _core.init();
 
     LinksRouting::SlotSubscriber subscriber = _core.getSlotSubscriber();
     subscribeSlots(subscriber);
 
-//    foreach (QWidget *widget, QApplication::allWidgets())
-//    {
-//      std::cout << widget->objectName().toStdString() << ": "
-//                << widget->internalWinId() << " - "
-//                << widget->windowTitle().toStdString() << " - "
-//                << widget->window()->objectName().toStdString() << std::endl;
-//    }
+    foreach(WId win_id, QxtWindowSystem::windows())
+      std::cout << win_id << ": " << QxtWindowSystem::windowTitle(win_id).toStdString() << std::endl;
 
-    std::cout << "Is virtual desktop: " << QApplication::desktop()->isVirtualDesktop() << std::endl;
+    //std::cout << "Is virtual desktop: " << QApplication::desktop()->isVirtualDesktop() << std::endl;
   }
 
   //----------------------------------------------------------------------------
@@ -191,7 +188,13 @@ ShaderPtr loadShader( QString vert, QString frag )
   {
     //LOG_ENTER_FUNC();
 
-    _screenshot = QPixmap::grabWindow(QApplication::desktop()->winId());
+    QDesktopWidget *desktop = QApplication::desktop();
+    _screenshot = QPixmap::grabWindow(
+      desktop->winId(),
+      0, 0,
+      desktop->width(),
+      desktop->height()
+    );
   }
 
   //----------------------------------------------------------------------------
@@ -393,7 +396,8 @@ ShaderPtr loadShader( QString vert, QString frag )
     };
 
 //    writeTexture(_subscribe_costmap, QString("costmap%1.png").arg(counter));
-    writeTexture(_slot_desktop, QString("desktop%1.png").arg(counter));
+    if( _dump_screenshot && !(counter % _dump_screenshot) )
+      writeTexture(_slot_desktop, QString("desktop%1.png").arg(counter));
 //    writeTexture(_core.getSlotSubscriber().getSlot<LinksRouting::SlotType::Image>("/downsampled_desktop"), QString("downsampled_desktop%1.png").arg(counter));
 //    writeTexture(_core.getSlotSubscriber().getSlot<LinksRouting::SlotType::Image>("/featuremap"), QString("featuremap%1.png").arg(counter));
 
