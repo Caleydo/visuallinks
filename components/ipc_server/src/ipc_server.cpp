@@ -9,6 +9,8 @@
 #include "ipc_server.hpp"
 #include "log.hpp"
 
+#include <QxtGui/qxtwindowsystem.h>
+
 #include <QMutex>
 #include <QScriptEngine>
 #include <QScriptValueIterator>
@@ -83,6 +85,17 @@ namespace LinksRouting
         return extractValue<T>(prop);
       }
 
+      template <class T>
+      T getValue(const QString& key, const T& def)
+      {
+        QScriptValue prop = _json.property(key);
+
+        if( !prop.isValid() || prop.isUndefined() )
+          return def;
+
+        return extractValue<T>(prop);
+      }
+
       bool isSet(const QString& key)
       {
         QScriptValue prop = _json.property(key);
@@ -122,9 +135,11 @@ namespace LinksRouting
   }
 
   //----------------------------------------------------------------------------
-  IPCServer::IPCServer(QMutex* mutex):
-    _mutex_slot_links(mutex)
+  IPCServer::IPCServer(QMutex* mutex, QWidget* widget):
+    _mutex_slot_links(mutex),
+    _widget(widget)
   {
+    assert(widget);
     registerArg("DebugRegions", _debug_regions);
   }
 
@@ -188,7 +203,7 @@ namespace LinksRouting
     connect(client_object, SIGNAL(disconnected()), this, SLOT(onClientDisconnection()));
     connect(client_object, SIGNAL(pong(quint64)), this, SLOT(onPong(quint64)));
 
-    _clients << client_socket;
+    _clients[ client_socket ] = 0;
 
     LOG_INFO(   "Client connected: "
              << client_socket->peerAddress().toString().toStdString()
@@ -198,14 +213,40 @@ namespace LinksRouting
   //----------------------------------------------------------------------------
   void IPCServer::onDataReceived(QString data)
   {
-    std::cout << "Received: " << data.toStdString() << std::endl;
+    auto client = _clients.find(qobject_cast<QWsSocket*>(sender()));
+    if( client == _clients.end() )
+    {
+      LOG_WARN("Received message from unknown client: " << data.toStdString());
+      return;
+    }
+
+    WId& client_wid = client->second;
+
+    std::cout << "Received (" << client_wid << "): "
+              << data.toStdString()
+              << std::endl;
 
     try
     {
       JSON msg(data);
 
-      QString task = msg.getValue<QString>("task"),
-              id = msg.getValue<QString>("id");
+      QString task = msg.getValue<QString>("task");
+      if( task == "REGISTER" )
+      {
+        QVariantList pos_list = msg.getValue<QVariantList>("pos");
+        if( pos_list.length() != 2 )
+        {
+          LOG_WARN("Received invalid position (REGISTER)");
+          return;
+        }
+
+        QPoint pos(pos_list.at(0).toInt(), pos_list.at(1).toInt());
+        client_wid = windowAt(pos);
+        return;
+      }
+
+      QString id = msg.getValue<QString>("id").toLower(),
+              title = msg.getValue<QString>("title", "");
       uint32_t stamp = msg.getValue<uint32_t>("stamp");
       QMutexLocker lock_links(_mutex_slot_links);
 
@@ -223,36 +264,41 @@ namespace LinksRouting
       if( task == "INITIATE" )
       {
         LOG_INFO("Received INITIATE: " << id_str);
+        uint32_t color_id = 0;
 
         // Remove eventually existing search for same id
         if( link != _slot_links->_data->end() )
         {
+          // keep color
+          color_id = link->_color_id;
+
           LOG_INFO("Replacing search for " << link->_id);
           _slot_links->_data->erase(link);
         }
-
-        // get first available color id
-        uint32_t color_id = 0;
-        while
-        (
-          std::find_if
+        else
+        {
+          // get first unused color
+          while
           (
-            _slot_links->_data->begin(),
-            _slot_links->_data->end(),
-            [color_id](const LinkDescription::LinkDescription& desc)
-            {
-              return desc._color_id == color_id;
-            }
-          ) != _slot_links->_data->end()
-        )
-          ++color_id;
+            std::find_if
+            (
+              _slot_links->_data->begin(),
+              _slot_links->_data->end(),
+              [color_id](const LinkDescription::LinkDescription& desc)
+              {
+                return desc._color_id == color_id;
+              }
+            ) != _slot_links->_data->end()
+          )
+            ++color_id;
+        }
 
         _slot_links->_data->push_back(
           LinkDescription::LinkDescription
           (
             id_str,
             stamp,
-            LinkDescription::HyperEdge( parseRegions(msg) ), // TODO add props?
+            LinkDescription::HyperEdge( parseRegions(msg, client_wid) ), // TODO add props?
             color_id
           )
         );
@@ -270,7 +316,7 @@ namespace LinksRouting
 //        for(QWsSocket* socket: _clients)
 //          socket->write(request);
         for(auto socket = _clients.begin(); socket != _clients.end(); ++socket)
-          (*socket)->write(request);
+          socket->first->write(request);
       }
       else if( task == "FOUND" )
       {
@@ -288,7 +334,7 @@ namespace LinksRouting
 
         LOG_INFO("Received FOUND: " << id_str);
 
-        link->_link.addNodes( parseRegions(msg) );
+        link->_link.addNodes( parseRegions(msg, client_wid) );
       }
       else if( task == "ABORT" )
       {
@@ -331,7 +377,7 @@ namespace LinksRouting
     if( !socket )
       return;
 
-    _clients.removeOne(socket);
+    _clients.erase(socket);
     socket->deleteLater();
 
     LOG_INFO("Client disconnected");
@@ -339,8 +385,11 @@ namespace LinksRouting
 
   //----------------------------------------------------------------------------
   std::vector<LinkDescription::Node>
-  IPCServer::parseRegions(IPCServer::JSON& json)
+  IPCServer::parseRegions(IPCServer::JSON& json, WId client_wid)
   {
+    std::cout << "Parse regions (" << client_wid << ")" << std::endl;
+
+    WindowList windows = QxtWindowSystem::windows();
     std::vector<LinkDescription::Node> nodes;
 
     if( !json.isSet("regions") )
@@ -365,10 +414,30 @@ namespace LinksRouting
             continue;
           }
 
-          points.push_back( float2(
+          float2 point(
             coords.at(0).toInt(),
             coords.at(1).toInt()
-          ));
+          );
+          points.push_back(point);
+
+          WId wid = 0;
+          QPoint pos(point.x, point.y);
+          for (int i = windows.size() - 1; i >= 0; --i)
+          {
+              WId wid_cur = windows.at(i);
+              if( wid_cur == _widget->winId() )
+                // Ignore own window as it's always on top, but transparent
+                continue;
+              else if( QxtWindowSystem::windowGeometry(wid_cur).contains(pos) )
+              {
+                  wid = wid_cur;
+                  break;
+              }
+          }
+
+          if( wid != client_wid )
+            // if point is in other window don't show region
+            props["hidden"] = "true";
         }
         else if( point->type() == QVariant::Map )
         {
@@ -385,6 +454,20 @@ namespace LinksRouting
     }
 
     return nodes;
+  }
+
+  //----------------------------------------------------------------------------
+  WId IPCServer::windowAt(const QPoint& pos) const
+  {
+    WindowList list = QxtWindowSystem::windows();
+    for (int i = list.size() - 1; i >= 0; --i)
+    {
+        WId wid = list.at(i);
+        if(    wid != _widget->winId()
+            && QxtWindowSystem::windowGeometry(wid).contains(pos) )
+          return wid;
+    }
+    return 0;
   }
 
 } // namespace LinksRouting

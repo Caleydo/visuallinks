@@ -53,7 +53,8 @@ namespace LinkDescription
                           const props_t& props = props_t() ):
         _nodes( nodes ),
         _props( props ),
-        _revision( 0 )
+        _revision( 0 ),
+        _fork( 0 )
       {}
 
       const std::vector<Node>& getNodes() const { return _nodes; }
@@ -74,11 +75,11 @@ namespace LinkDescription
 //
         void setHyperEdgeDescription(HyperEdgeDescriptionForkation* desc)
         {
-          fork = desc;
+          _fork = desc;
         }
         const HyperEdgeDescriptionForkation* getHyperEdgeDescription() const
         {
-          return fork;
+          return _fork;
         }
 
     private:
@@ -86,7 +87,7 @@ namespace LinkDescription
       std::vector<Node> _nodes;
       props_t _props;
       uint32_t _revision; ///!< Track modifications
-      HyperEdgeDescriptionForkation *fork;
+      HyperEdgeDescriptionForkation *_fork;
   };
 
   struct HyperEdgeDescriptionForkation

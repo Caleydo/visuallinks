@@ -66,7 +66,7 @@ function onVisLinkButton()
 function selectVisLink()
 {
 	var	selid =	content.getSelection().toString();
-	var	selectionId	= "" + selid +	"";
+	var	selectionId	= ("" + selid +	"").toLowerCase();
 
 	if (selectionId	== null	|| selectionId == "") return;
 	window.localSelectionId = selectionId;
@@ -113,12 +113,6 @@ function onAbort(id, stamp)
 }
 
 //------------------------------------------------------------------------------
-function reportWindowChanged()
-{
-	send({'task': 'window-changed', 'name': window.visLinkAppName});
-}
-
-//------------------------------------------------------------------------------
 function reportVisLinks(id, found)
 {
   var doc = content.document;
@@ -132,7 +126,7 @@ function reportVisLinks(id, found)
   offset[1] = win.mozInnerScreenY * scale;
   
 //  alert(offset[0] + "|" + offset[1]);
-  
+
   var bbs = searchDocument(doc, id);
   if( !bbs.length )
     return;
@@ -160,7 +154,7 @@ function reportVisLinks(id, found)
   
   send({
     'task': (found ? 'FOUND' : 'INITIATE'),
-    // 'name': window.visLinkAppName,
+    'title': document.title,
     'id': id,
     'stamp': last_stamp,
     'regions': bbs
@@ -193,7 +187,7 @@ function stopVisLinks()
 	stopped = true;
 	setStatus('');
 	window.removeEventListener('unload', stopVisLinks, false);
-	window.removeEventListener('scroll', clearVisualLinks, false);
+	window.removeEventListener('scroll', windowChanged, false);
 	window.removeEventListener("DOMAttrModified", attrModified, false);
 	unregister();
 }
@@ -201,54 +195,54 @@ function stopVisLinks()
 //------------------------------------------------------------------------------
 function register()
 {
-	if (window.visLinkAppName == null)
-	{
-		window.visLinkAppName =	"firefox-" + (new Date()).getTime();
-  }
-	window.lastPointerID = null; 
-
-	var win = content.document.defaultView;
-	var x = win.screenX + (win.outerWidth - win.innerWidth) / 2;
-	var y = win.screenY + (win.outerHeight - win.innerHeight);
-	var w = win.innerWidth;
-	var h = win.innerHeight;
+//	window.lastPointerID = null; 
+//
+//	var win = content.document.defaultView;
+//	var x = win.screenX + (win.outerWidth - win.innerWidth) / 2;
+//	var y = win.screenY + (win.outerHeight - win.innerHeight);
+//	var w = win.innerWidth;
+//	var h = win.innerHeight;
+	
+	// Get the box object for the link button to get window handler from the
+	// window at the position of the box
+	var box = document.getElementById("vislink").boxObject;
 
 	try
 	{
-    socket = new WebSocket('ws://localhost:4487', 'VLP');
-    socket.onopen = function(event)
-    {
-      setStatus('active');
-//      send({
-//        'task': 'register',
-//        'name': window.visLinkAppName,
-//        'bounding-box' : {'x': x, 'y': y, 'w': w, 'h': h}
-//      });
-    };
-    socket.onclose = function(event)
-    {
-      setStatus(event.wasClean ? '' : 'error');
-    };
-    socket.onerror = function(event)
-    {
-      setStatus('error');
-    };
-    socket.onmessage = function(event)
-    {
-      msg = JSON.parse(event.data);
-      if( msg.task == 'REQUEST' )
+      socket = new WebSocket('ws://localhost:4487', 'VLP');
+      socket.onopen = function(event)
       {
-        //alert('id='+last_id+"|"+msg.id+"\nstamp="+last_stamp+"|"+msg.stamp);
-        if( msg.id == last_id && msg.stamp == last_stamp )
-          // already handled
-          return;// alert('already handled...');
-
-        last_id = msg.id;
-        last_stamp = msg.stamp;
-
-        setTimeout('reportVisLinks("'+msg.id+'", true)',0);
+        setStatus('active');
+        send({
+          'task': 'REGISTER',
+          'name': "Firefox",
+          'pos': [box.screenX + box.width / 2, box.screenY + box.height / 2]
+        });
+      };
+      socket.onclose = function(event)
+      {
+        setStatus(event.wasClean ? '' : 'error');
+      };
+      socket.onerror = function(event)
+      {
+        setStatus('error');
+      };
+      socket.onmessage = function(event)
+      {
+        msg = JSON.parse(event.data);
+        if( msg.task == 'REQUEST' )
+        {
+          //alert('id='+last_id+"|"+msg.id+"\nstamp="+last_stamp+"|"+msg.stamp);
+          if( msg.id == last_id && msg.stamp == last_stamp )
+            // already handled
+            return;// alert('already handled...');
+  
+          last_id = msg.id;
+          last_stamp = msg.stamp;
+  
+          setTimeout('reportVisLinks("'+msg.id+'", true)',0);
+        }
       }
-    }
 	}
 	catch (err)
 	{
@@ -264,26 +258,11 @@ function unregister()
 {
 	try
 	{
-	  send({'task': 'unregister', 'name': window.visLinkAppName});
+	  // send({'task': 'unregister', 'name': window.visLinkAppName});
 	}
 	catch (err)
 	{
 		// vis link server no reachable, nothing to do
-	}
-}
-
-//------------------------------------------------------------------------------
-function clearVisualLinks()
-{
-	try
-	{
-	  send({'task': 'clear-links',
-	        'name': window.visLinkAppName});
-	}
-	catch (err)
-	{
-		alert("Connection to visdaemon lost, stopping");
-		stopVisLinks();
 	}
 }
 
@@ -328,8 +307,8 @@ function getId()
 {
 	try
 	{
-		send({'task': 'propagation',
-          'name': window.visLinkAppName});
+		//send({'task': 'propagation',
+        //  'name': window.visLinkAppName});
 	}
 	catch (err)
 	{
@@ -419,7 +398,7 @@ function searchDocument(doc, id) {
 	var	result = new Array();
 	while(node = textnodes.iterateNext()) {
 		var	s =	node.nodeValue;
-		var	i =	s.indexOf(id);
+		var	i =	s.toLowerCase().indexOf(id);
 		if (i != -1) {
 			result[result.length] =	node.parentNode;
 		}
@@ -433,7 +412,7 @@ function searchDocument(doc, id) {
 			currentNode	= r.childNodes[j];
 			sourceString = currentNode.nodeValue;
 			if (sourceString !=	null) {
-				var	idx	= sourceString.indexOf(id);
+				var	idx	= sourceString.toLowerCase().indexOf(id);
 				while (idx >= 0) {
 					var	s1 = sourceString.substring(0, idx);
 					var	s2 = sourceString.substring(idx, idx + id.length);
@@ -464,7 +443,7 @@ function searchDocument(doc, id) {
 					r.removeChild(d2);
 					currentNode.nodeValue =	sourceString;
 					
-					var	idx	= sourceString.indexOf(id, id.length + idx);
+					var	idx	= sourceString.toLowerCase().indexOf(id, id.length + idx);
 				};
 			}
 		}
@@ -616,23 +595,3 @@ function generateBoundingBoxesXML(bbs, source) {
 	
 	return xml;
 }
-
-//------------------------------------------------------------------------------
-function sendBoundingBoxes(xml)
-{
-  send({'task': 'report-links',
-        'name': window.visLinkAppName,
-        'pointer': window.lastPointerID,
-        'xml': xml});
-}
-
-// window.addEventListener('load', myjsStart, false);
-/*
-function myjsStart() {
-	alert("myjsStart");
-	var	appcontent = window.document.getElementById("appcontent");
-	if (appcontent)	{
-		appcontent.addEventListener("DOMContentLoaded",	startVisLinks, false);
-	}
-} 
-*/

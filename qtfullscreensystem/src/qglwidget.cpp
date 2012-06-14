@@ -17,8 +17,6 @@
 
 #include <GL/gl.h>
 
-#include <QxtGui/qxtwindowsystem.h>
-
 #include <QApplication>
 #include <QBitmap>
 #include <QDesktopWidget>
@@ -95,7 +93,7 @@ ShaderPtr loadShader( QString vert, QString frag )
   GLWidget::GLWidget(int& argc, char *argv[]):
     _render_thread(this),
     _cur_fbo(0),
-    _server(&_mutex_slot_links)
+    _server(&_mutex_slot_links, this)
   {
     //--------------------------------
     // Setup opengl and window
@@ -158,6 +156,7 @@ ShaderPtr loadShader( QString vert, QString frag )
     _core.startup(argv[1]);
     _core.attachComponent(&_config);
     _core.attachComponent(&_server);
+    _core.attachComponent(&_renderer);
     _core.attachComponent(&_cost_analysis);
     _core.attachComponent(&_routing);
     _core.attachComponent(&_renderer);
@@ -170,9 +169,6 @@ ShaderPtr loadShader( QString vert, QString frag )
 
     LinksRouting::SlotSubscriber subscriber = _core.getSlotSubscriber();
     subscribeSlots(subscriber);
-
-    foreach(WId win_id, QxtWindowSystem::windows())
-      std::cout << win_id << ": " << QxtWindowSystem::windowTitle(win_id).toStdString() << std::endl;
 
     //std::cout << "Is virtual desktop: " << QApplication::desktop()->isVirtualDesktop() << std::endl;
   }

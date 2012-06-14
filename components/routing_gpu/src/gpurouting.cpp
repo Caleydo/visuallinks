@@ -508,6 +508,9 @@ namespace LinksRouting
            node != it->_link.getNodes().end();
            ++node )
       {
+        if( node->getProps().find("hidden") != node->getProps().end() )
+          continue;
+
         //std::cout << "Polygon: (" << node->getVertices().size() << " points)\n";
         //compute min max for poly
         int4Aug<const LinkDescription::Node*> target(width-1, height-1,0,0, &*node);
@@ -544,17 +547,22 @@ namespace LinksRouting
 
       if(h_targets.size() < 2)
       {
-        assert( h_targets.size() == 1 );
-        std::cout << "Only 1 target!" << std::endl;
+        if( h_targets.empty() )
+        {
+          std::cout << "No target!" << std::endl;
+        }
+        else
+        {
+          std::cout << "Only 1 target!" << std::endl;
+          // TODO do we need position?
+//          fork->position.x = startingpoint[0] * downsample;
+//          fork->position.y = startingpoint[1] * downsample;
 
-        // TODO do we need position?
-//        fork->position.x = startingpoint[0] * downsample;
-//        fork->position.y = startingpoint[1] * downsample;
-
-        // copy only the single region
-        fork->outgoing.push_back(LinkDescription::HyperEdgeDescriptionSegment());
-        fork->outgoing.back().parent = fork;
-        fork->outgoing.back().nodes.push_back(h_targets[0].aug);
+          // copy only the single region
+          fork->outgoing.push_back(LinkDescription::HyperEdgeDescriptionSegment());
+          fork->outgoing.back().parent = fork;
+          fork->outgoing.back().nodes.push_back(h_targets[0].aug);
+        }
       }
       else
       {
@@ -668,7 +676,7 @@ namespace LinksRouting
 
         cl::Event shortestpath_Event;
         cl_ulong routing_time = 0;
-        size_t num_iterations = std::max(25/numtargets, 5) * std::max(numBlocks[0], numBlocks[1]);
+        size_t num_iterations = std::max(40/numtargets, 10) * std::max(numBlocks[0], numBlocks[1]);
         if( _noQueue )
           std::cout << "num_iterations=" << num_iterations << std::endl;
         for( int i = 0; i < (_noQueue ? num_iterations : 1); ++i )

@@ -38,7 +38,7 @@ namespace qtfullscreensystem
     _gl_widget->makeCurrent();
     _gl_widget->setupGL();
 
-    int screenshot_counter = 0;
+//    int screenshot_counter = 0;
     do
     {
       if( _do_resize )
@@ -50,13 +50,13 @@ namespace qtfullscreensystem
 
       _gl_widget->render();
       _gl_widget->swapBuffers();
-      msleep(10);
+      msleep(20);
       /*if( --screenshot_counter < 0 )
       {*/
         _gl_widget->captureScreen();
         /*screenshot_counter = 5;
       }*/
-      msleep(5);
+      msleep(10);
     } while( _do_render );
   }
 

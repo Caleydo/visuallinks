@@ -17,6 +17,7 @@
 #include "QWsSocket.h"
 
 #include <QtCore>
+#include <qwindowdefs.h>
 
 #include "datatypes.h"
 
@@ -33,7 +34,7 @@ namespace LinksRouting
 
     public:
 
-      IPCServer(QMutex* mutex);
+      IPCServer(QMutex* mutex, QWidget* widget);
       virtual ~IPCServer();
 
       void publishSlots(SlotCollector& slot_collector);
@@ -64,17 +65,21 @@ namespace LinksRouting
     private:
 
       QWsServer          *_server;
-      QList<QWsSocket*>   _clients;
+      std::map<QWsSocket*, WId> _clients;
 
       QMutex             *_mutex_slot_links;
+      QWidget            *_widget;
 
       /* List of all open searches */
       slot_t<LinkDescription::LinkList>::type _slot_links;
 
       class JSON;
-      std::vector<LinkDescription::Node> parseRegions(JSON& json);
+      std::vector<LinkDescription::Node>
+      parseRegions(JSON& json, WId client_wid);
 
       std::string   _debug_regions;
+
+      WId windowAt(const QPoint& pos) const;
 
   };
 
