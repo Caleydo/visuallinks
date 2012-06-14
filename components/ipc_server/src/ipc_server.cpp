@@ -203,17 +203,28 @@ namespace LinksRouting
     connect(client_object, SIGNAL(disconnected()), this, SLOT(onClientDisconnection()));
     connect(client_object, SIGNAL(pong(quint64)), this, SLOT(onPong(quint64)));
 
-    _clients << client_socket;
+    _clients[ client_socket ] = 0;
 
     LOG_INFO(   "Client connected: "
              << client_socket->peerAddress().toString().toStdString()
              << ":" << client_socket->peerPort() );
   }
-WId cid = 0;
+
   //----------------------------------------------------------------------------
   void IPCServer::onDataReceived(QString data)
   {
-    std::cout << "Received: " << data.toStdString() << std::endl;
+    auto client = _clients.find(qobject_cast<QWsSocket*>(sender()));
+    if( client == _clients.end() )
+    {
+      LOG_WARN("Received message from unknown client: " << data.toStdString());
+      return;
+    }
+
+    WId& client_wid = client->second;
+
+    std::cout << "Received (" << client_wid << "): "
+              << data.toStdString()
+              << std::endl;
 
     try
     {
@@ -222,14 +233,15 @@ WId cid = 0;
       QString task = msg.getValue<QString>("task");
       if( task == "REGISTER" )
       {
-        QVariantList pos = msg.getValue<QVariantList>("pos");
-        if( pos.length() != 2 )
+        QVariantList pos_list = msg.getValue<QVariantList>("pos");
+        if( pos_list.length() != 2 )
         {
           LOG_WARN("Received invalid position (REGISTER)");
           return;
         }
 
-        cid = windowAt(QPoint(pos.at(0).toInt(), pos.at(1).toInt()));
+        QPoint pos(pos_list.at(0).toInt(), pos_list.at(1).toInt());
+        client_wid = windowAt(pos);
         return;
       }
 
@@ -286,7 +298,7 @@ WId cid = 0;
           (
             id_str,
             stamp,
-            LinkDescription::HyperEdge( parseRegions(msg, title) ), // TODO add props?
+            LinkDescription::HyperEdge( parseRegions(msg, client_wid) ), // TODO add props?
             color_id
           )
         );
@@ -304,7 +316,7 @@ WId cid = 0;
 //        for(QWsSocket* socket: _clients)
 //          socket->write(request);
         for(auto socket = _clients.begin(); socket != _clients.end(); ++socket)
-          (*socket)->write(request);
+          socket->first->write(request);
       }
       else if( task == "FOUND" )
       {
@@ -322,7 +334,7 @@ WId cid = 0;
 
         LOG_INFO("Received FOUND: " << id_str);
 
-        link->_link.addNodes( parseRegions(msg, title) );
+        link->_link.addNodes( parseRegions(msg, client_wid) );
       }
       else if( task == "ABORT" )
       {
@@ -365,7 +377,7 @@ WId cid = 0;
     if( !socket )
       return;
 
-    _clients.removeOne(socket);
+    _clients.erase(socket);
     socket->deleteLater();
 
     LOG_INFO("Client disconnected");
@@ -373,10 +385,9 @@ WId cid = 0;
 
   //----------------------------------------------------------------------------
   std::vector<LinkDescription::Node>
-  IPCServer::parseRegions(IPCServer::JSON& json, const QString& window_title)
+  IPCServer::parseRegions(IPCServer::JSON& json, WId client_wid)
   {
-    std::cout << "Parse regions: (" << cid << ") "
-                                    << window_title.toStdString() << std::endl;
+    std::cout << "Parse regions (" << client_wid << ")" << std::endl;
 
     WindowList windows = QxtWindowSystem::windows();
     std::vector<LinkDescription::Node> nodes;
@@ -407,6 +418,7 @@ WId cid = 0;
             coords.at(0).toInt(),
             coords.at(1).toInt()
           );
+          points.push_back(point);
 
           WId wid = 0;
           QPoint pos(point.x, point.y);
@@ -423,14 +435,9 @@ WId cid = 0;
               }
           }
 
-          if( wid != cid )
-          {
+          if( wid != client_wid )
             // if point is in other window don't show region
-            points.clear();
-            break;
-          }
-
-          points.push_back(point);
+            props["hidden"] = "true";
         }
         else if( point->type() == QVariant::Map )
         {

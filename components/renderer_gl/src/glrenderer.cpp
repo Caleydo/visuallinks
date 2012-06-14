@@ -171,6 +171,10 @@ namespace LinksRouting
   //----------------------------------------------------------------------------
   void GlRenderer::initGL()
   {
+    static bool init = false;
+    if( init )
+      return;
+
     GLint vp[4];
     glGetIntegerv(GL_VIEWPORT, vp);
 
@@ -179,6 +183,8 @@ namespace LinksRouting
 
     _blur_x_shader = _shader_manager.loadfromFile(0, "blurX.glsl");
     _blur_y_shader = _shader_manager.loadfromFile(0, "blurY.glsl");
+
+    init = true;
   }
 
   //----------------------------------------------------------------------------
@@ -274,7 +280,23 @@ for( int i = 0; i < 1; ++i )
 
       if( !fork )
       {
-        LOG_ERROR("Missing HyperEdgeDescription for " << link->_id);
+        for( auto node = link->_link.getNodes().begin();
+             node != link->_link.getNodes().end();
+             ++node )
+        {
+          line_borders_t region = calcLineBorders(node->getVertices(), 3, true);
+          glBegin(GL_TRIANGLE_STRIP);
+          for( auto first = std::begin(region.first),
+                    second = std::begin(region.second);
+               first != std::end(region.first);
+               ++first,
+               ++second )
+          {
+            glVertex2f(first->x, first->y);
+            glVertex2f(second->x, second->y);
+          }
+          glEnd();
+        }
         continue;
       }
 
@@ -290,6 +312,11 @@ for( int i = 0; i < 1; ++i )
              node != segment->nodes.end();
              ++node )
         {
+          if( (*node)->getProps().find("hidden") != (*node)->getProps().end() )
+          {
+            if( !_colors.empty() )
+              glColor3fv(_colors[ link->_color_id % _colors.size() ] * 0.3);
+          }
           line_borders_t region = calcLineBorders((*node)->getVertices(), 3, true);
           glBegin(GL_TRIANGLE_STRIP);
           for( auto first = std::begin(region.first),
@@ -302,6 +329,9 @@ for( int i = 0; i < 1; ++i )
             glVertex2f(second->x, second->y);
           }
           glEnd();
+
+          if( !_colors.empty() )
+            glColor3fv(_colors[ link->_color_id % _colors.size() ]);
         }
 
         if( segment->trail.empty() )

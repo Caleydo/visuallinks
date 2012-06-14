@@ -65,7 +65,7 @@ namespace LinksRouting
     private:
 
       QWsServer          *_server;
-      QList<QWsSocket*>   _clients;
+      std::map<QWsSocket*, WId> _clients;
 
       QMutex             *_mutex_slot_links;
       QWidget            *_widget;
@@ -75,7 +75,7 @@ namespace LinksRouting
 
       class JSON;
       std::vector<LinkDescription::Node>
-      parseRegions(JSON& json, const QString& window_title);
+      parseRegions(JSON& json, WId client_wid);
 
       std::string   _debug_regions;
 

@@ -412,7 +412,7 @@ function searchDocument(doc, id) {
 			currentNode	= r.childNodes[j];
 			sourceString = currentNode.nodeValue;
 			if (sourceString !=	null) {
-				var	idx	= sourceString.indexOf(id);
+				var	idx	= sourceString.toLowerCase().indexOf(id);
 				while (idx >= 0) {
 					var	s1 = sourceString.substring(0, idx);
 					var	s2 = sourceString.substring(idx, idx + id.length);
@@ -443,7 +443,7 @@ function searchDocument(doc, id) {
 					r.removeChild(d2);
 					currentNode.nodeValue =	sourceString;
 					
-					var	idx	= sourceString.indexOf(id, id.length + idx);
+					var	idx	= sourceString.toLowerCase().indexOf(id, id.length + idx);
 				};
 			}
 		}
