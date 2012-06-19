@@ -34,7 +34,7 @@ namespace LinksRouting
 
     public:
 
-      IPCServer(QMutex* mutex, QWidget* widget);
+      IPCServer(QMutex* mutex, QWaitCondition* cond_data, QWidget* widget);
       virtual ~IPCServer();
 
       void publishSlots(SlotCollector& slot_collector);
@@ -68,6 +68,7 @@ namespace LinksRouting
       std::map<QWsSocket*, WId> _clients;
 
       QMutex             *_mutex_slot_links;
+      QWaitCondition     *_cond_data_ready;
       QWidget            *_widget;
 
       /* List of all open searches */
