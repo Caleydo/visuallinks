@@ -44,7 +44,7 @@ set(ADDITIONAL_LIBS ${ADDITIONAL_LIBS} ${GLEW_LIBRARIES})
 endif(WIN32)
 
 include(${QT_USE_FILE})
-add_definitions(${QT_DEFINITIONS})
+add_definitions(${QT_DEFINITIONS} -DQXT_STATIC)
 
 set(SYSTEMROOT ${CMAKE_CURRENT_SOURCE_DIR})
 include_directories(

@@ -34,7 +34,7 @@ include_directories(
 )
 include(${QT_USE_FILE})
 
-add_definitions(-DQT_NO_DEBUG)
+add_definitions(-DQT_NO_DEBUG -DQXT_STATIC)
 
 QT4_WRAP_CPP(HEADER_FILES_MOC_GENERATED ${HEADER_FILES_MOC})
 
