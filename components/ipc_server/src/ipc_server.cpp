@@ -135,8 +135,11 @@ namespace LinksRouting
   }
 
   //----------------------------------------------------------------------------
-  IPCServer::IPCServer(QMutex* mutex, QWidget* widget):
+  IPCServer::IPCServer( QMutex* mutex,
+                        QWaitCondition* cond_data,
+                        QWidget* widget ):
     _mutex_slot_links(mutex),
+    _cond_data_ready(cond_data),
     _widget(widget)
   {
     assert(widget);
@@ -362,6 +365,7 @@ namespace LinksRouting
 //      {"y", std::make_tuple("int")},
 //      {"key", std::make_tuple("string")}
 //    };
+    _cond_data_ready->wakeAll();
   }
 
   //----------------------------------------------------------------------------

@@ -93,7 +93,7 @@ ShaderPtr loadShader( QString vert, QString frag )
   GLWidget::GLWidget(int& argc, char *argv[]):
     _render_thread(this),
     _cur_fbo(0),
-    _server(&_mutex_slot_links, this)
+    _server(&_mutex_slot_links, &_cond_render, this)
   {
     //--------------------------------
     // Setup opengl and window
@@ -272,25 +272,7 @@ ShaderPtr loadShader( QString vert, QString frag )
   //----------------------------------------------------------------------------
   void GLWidget::render()
   {
-    // X11: Window decorators add decoration after creating the window.
-    // Win7: may not allow a window on top of the task bar
-    //So we need to get the new frame of the window before drawing...
-    QPoint window_offset = mapToGlobal(QPoint());
-    QPoint window_end = mapToGlobal(QPoint(width(), height()));
-
-    if(    window_offset != _window_offset
-        || window_end != _window_end )
-    {
-      LOG_ENTER_FUNC() << "window frame="
-                       << window_offset
-                       <<" <-> "
-                       <<  window_end;
-
-      _window_offset = window_offset;
-      _window_end = window_end;
-    }
-
-    updateScreenShot(window_offset, window_end);
+    updateScreenShot(_window_offset, _window_end);
 
     float x = _window_offset.x(),
           y = _window_offset.y(),
@@ -430,6 +412,13 @@ ShaderPtr loadShader( QString vert, QString frag )
   }
 
   //----------------------------------------------------------------------------
+  void GLWidget::waitForData()
+  {
+    QMutexLocker lock(&_mutex_slot_links);
+    _cond_render.wait(&_mutex_slot_links, 500);
+  }
+
+  //----------------------------------------------------------------------------
   void GLWidget::resizeEvent(QResizeEvent * event)
   {
     int w = event->size().width(),
@@ -444,8 +433,28 @@ ShaderPtr loadShader( QString vert, QString frag )
   //----------------------------------------------------------------------------
   void GLWidget::moveEvent(QMoveEvent *event)
   {
-    if( event->pos() != QPoint(0,0) )
+    // X11: Window decorators add decoration after creating the window.
+    // Win7: may not allow a window on top of the task bar
+    //So we need to get the new frame of the window before drawing...
+    QPoint window_offset = mapToGlobal(QPoint());
+    QPoint window_end = mapToGlobal(QPoint(width(), height()));
+
+    if(    window_offset != _window_offset
+        || window_end != _window_end )
+    {
+//      LOG_ENTER_FUNC() << "window frame="
+//                       << window_offset
+//                       <<" <-> "
+//                       <<  window_end;
+
+      _window_offset = window_offset;
+      _window_end = window_end;
+
+      // Moves the window to the top- and leftmost position. As long as the
+      // offset changes either the user is moving the window or the window is
+      // being created.
       move( QPoint(0,0) );
+    }
   }
 
   //----------------------------------------------------------------------------

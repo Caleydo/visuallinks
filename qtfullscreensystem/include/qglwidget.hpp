@@ -58,6 +58,11 @@ namespace qtfullscreensystem
        */
       void startRender();
 
+      /**
+       * Wait for new data (Used by render thread to wait for the next frame)
+       */
+      void waitForData();
+
     protected:
 
       void resizeEvent(QResizeEvent * event);
@@ -91,7 +96,8 @@ namespace qtfullscreensystem
       LinksRouting::GPURouting      _routing;
       LinksRouting::GlRenderer      _renderer;
 
-      QMutex    _mutex_slot_links;
+      QMutex            _mutex_slot_links;
+      QWaitCondition    _cond_render;
 
       /** Use image from given file instead of desktop screenshot if not empty */
       std::string   _debug_desktop_image;

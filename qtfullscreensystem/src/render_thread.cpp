@@ -35,12 +35,15 @@ namespace qtfullscreensystem
     assert(_gl_widget);
 
     _do_render = true;
+
     _gl_widget->makeCurrent();
     _gl_widget->setupGL();
 
 //    int screenshot_counter = 0;
     do
     {
+      //std::cout << "render" << std::endl;
+
       if( _do_resize )
       {
         glViewport(0,0,_w,_h);
@@ -50,6 +53,7 @@ namespace qtfullscreensystem
 
       _gl_widget->render();
       _gl_widget->swapBuffers();
+      //_gl_widget->doneCurrent();
       msleep(20);
       /*if( --screenshot_counter < 0 )
       {*/
@@ -57,6 +61,10 @@ namespace qtfullscreensystem
         /*screenshot_counter = 5;
       }*/
       msleep(10);
+
+      _gl_widget->waitForData();
+      //_gl_widget->makeCurrent();
+
     } while( _do_render );
   }
 
