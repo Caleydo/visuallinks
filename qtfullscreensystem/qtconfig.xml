@@ -12,7 +12,8 @@
   </QtWebsocketServer>
  -->
   <ComponentCostanalysis>
-	<DownsampleCost type="Integer" val="6" />
+	<DownsampleSaliency type="Integer" val="2" />
+	<DownsampleCost type="Integer" val="4" />
   </ComponentCostanalysis>
 
   <GPURouting>

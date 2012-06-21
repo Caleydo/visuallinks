@@ -10,7 +10,8 @@ namespace LinksRouting
   GlCostAnalysis::GlCostAnalysis():
     myname("GLCostAnalysis")
   {
-    registerArg("DownsampleCost", _downsample = 2);
+    registerArg("DownsampleSaliency", _downsampleSaliency = 2);
+    registerArg("DownsampleCost", _downsampleCost = 4);
   }
 
   //----------------------------------------------------------------------------
@@ -47,16 +48,25 @@ namespace LinksRouting
   //----------------------------------------------------------------------------
   void GlCostAnalysis::initGL()
   {
-    size_t width = _subscribe_desktop->_data->width / _downsample,
-           height = _subscribe_desktop->_data->height / _downsample;
-    _feature_map_fbo.init(width, height, GL_RGBA32F, 1, false, GL_NEAREST);
-    _saliency_map_fbo.init(width, height, GL_R32F, 3, false, GL_NEAREST);
-    _downsampled_input_fbo.init(width, height, GL_RGBA8, 1, false, GL_NEAREST);
+    size_t widthSaliency = _subscribe_desktop->_data->width / _downsampleSaliency,
+           heightSaliency = _subscribe_desktop->_data->height / _downsampleSaliency;
+    _downsampleSaliencyToCost = std::max(1,_downsampleCost / _downsampleSaliency );
+    size_t widthCost = widthSaliency / _downsampleSaliencyToCost,
+           heightCost = heightSaliency / _downsampleSaliencyToCost;
+
+    _feature_map_fbo.init(widthSaliency, heightSaliency, GL_RGBA32F, 1, false, GL_NEAREST);
+    _saliency_map_fbo.init(widthSaliency, heightSaliency, GL_R32F, 3, false, GL_NEAREST);
+    if(_downsampleSaliencyToCost > 1)
+      _cost_map_fbo.init(widthCost, heightCost, GL_R32F, 1, false, GL_NEAREST);
+    _downsampled_input_fbo.init(widthSaliency, heightSaliency, GL_RGBA8, 1, false, GL_NEAREST);
 
     // TODO
-    *_slot_costmap->_data = SlotType::Image(width, height, _saliency_map_fbo.colorBuffers.at(0));
-    *_slot_downsampledinput->_data = SlotType::Image(width, height, _downsampled_input_fbo.colorBuffers.at(0));
-    *_slot_featuremap->_data = SlotType::Image(width, height, _feature_map_fbo.colorBuffers.at(0));
+    if(_downsampleSaliencyToCost > 1)
+      *_slot_costmap->_data = SlotType::Image(widthCost, heightCost, _cost_map_fbo.colorBuffers.at(0));
+    else
+      *_slot_costmap->_data = SlotType::Image(widthSaliency, heightSaliency, _saliency_map_fbo.colorBuffers.at(0));
+    *_slot_downsampledinput->_data = SlotType::Image(widthSaliency, heightSaliency, _downsampled_input_fbo.colorBuffers.at(0));
+    *_slot_featuremap->_data = SlotType::Image(widthSaliency, heightSaliency, _feature_map_fbo.colorBuffers.at(0));
 
     _feature_map_shader = _shader_manager.loadfromFile(0, "featureMap.glsl");
     _saliency_map_shader = _shader_manager.loadfromFile(0, "saliencyFilter.glsl");
@@ -80,7 +90,7 @@ namespace LinksRouting
     // downsample
     //---------------------------------
 
-    if(_downsample > 0)
+    if(_downsampleSaliency > 0)
     {
       if( !_downsample_shader )
         throw std::runtime_error("Downsample shader not loaded.");
@@ -88,7 +98,7 @@ namespace LinksRouting
       _downsampled_input_fbo.bind();
       _downsample_shader->begin();
       _downsample_shader->setUniform1i("input0", 0);
-      _downsample_shader->setUniform1i("samples", _downsample);
+      _downsample_shader->setUniform1i("samples", _downsampleSaliency);
       _downsample_shader->setUniform2f("texincrease", 1.0f/_subscribe_desktop->_data->width, 1.0f/_subscribe_desktop->_data->height);
 
       glEnable(GL_TEXTURE_2D);
@@ -175,6 +185,30 @@ namespace LinksRouting
 
     _saliency_map_shader->end();
     _saliency_map_fbo.unbind();
+
+    if(_downsampleSaliencyToCost > 1)
+    {
+      if( !_downsample_shader )
+        throw std::runtime_error("Downsample shader not loaded.");
+
+      _cost_map_fbo.bind();
+      _downsample_shader->begin();
+      _downsample_shader->setUniform1i("input0", 0);
+      _downsample_shader->setUniform1i("samples", _downsampleSaliencyToCost);
+      _downsample_shader->setUniform2f("texincrease", 1.0f/width, 1.0f/height);
+
+      glEnable(GL_TEXTURE_2D);
+      _saliency_map_fbo.bindTex(0);
+
+      glColor3f(1,1,1);
+
+      _cost_map_fbo.draw(_cost_map_fbo.width, _cost_map_fbo.height, 0,0, -1, true, true);
+
+      glDisable(GL_TEXTURE_2D);
+
+      _downsample_shader->end();
+      _cost_map_fbo.unbind();
+    }
 
 
     _slot_costmap->setValid(true);

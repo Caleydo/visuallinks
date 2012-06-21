@@ -17,7 +17,9 @@ namespace LinksRouting
   {
     protected:
       std::string myname;
-      int _downsample;
+      int _downsampleSaliency;
+      int _downsampleCost;
+      int _downsampleSaliencyToCost;
 
     public:
       GlCostAnalysis();
@@ -56,6 +58,7 @@ namespace LinksRouting
 
       gl::FBO   _feature_map_fbo;
       gl::FBO   _saliency_map_fbo;
+      gl::FBO   _cost_map_fbo;
       gl::FBO   _downsampled_input_fbo;
 
       cwc::glShaderManager  _shader_manager;
