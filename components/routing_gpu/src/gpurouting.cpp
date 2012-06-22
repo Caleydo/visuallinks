@@ -912,8 +912,7 @@ namespace LinksRouting
       //throw std::runtime_error("Done routing!");
     }
 
-    _cl_command_queue.enqueueReleaseGLObjects(&memory_gl);
-    _cl_command_queue.finish();
+
     }
     catch(cl::Error& err)
     {
@@ -964,7 +963,7 @@ namespace LinksRouting
       
       int boundaryElements = 2*(_blockSize[0] + _blockSize[1] - 2);
 
-      _cl_routeMap_buffer =  cl::Buffer(_cl_context, CL_MEM_READ_WRITE, _blocks[0]*_blocks[1]*boundaryElements*boundaryElements);
+      _cl_routeMap_buffer =  cl::Buffer(_cl_context, CL_MEM_READ_WRITE, _blocks[0]*_blocks[1]*boundaryElements*boundaryElements/2);
       computeAll = true;
     }
     //;
@@ -984,8 +983,16 @@ namespace LinksRouting
        )
     );
 
-    
     _cl_command_queue.enqueueAcquireGLObjects(&memory_gl);
+
+    //update route map
+    //_cl_updateRouteMap_kernel
+
+
+
+
+    _cl_command_queue.enqueueReleaseGLObjects(&memory_gl);
+    _cl_command_queue.finish();
   }
   void GPURouting::createRoutes(LinksRouting::LinkDescription::HyperEdge&)
   {

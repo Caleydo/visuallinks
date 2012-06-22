@@ -1,5 +1,78 @@
 
 
+float getPenalty(read_only image2d_t costmap, int2 pos)
+{
+  const sampler_t sampler = CLK_FILTER_NEAREST
+                          | CLK_NORMALIZED_COORDS_FALSE
+                          | CLK_ADDRESS_CLAMP_TO_EDGE;
+
+  return read_imagef(costmap, sampler, pos).x;
+}
+
+float readLastPenalty(global float* lastCostmap, int2 pos, const int2 size)
+{
+  return lastCostmap[pos.x + pos.y*size.x];
+}
+
+void writeLastPenalty(global float* lastCostmap, int2 pos, const int2 size, float data)
+{
+  lastCostmap[pos.x + pos.y*size.x] = data;
+}
+
+uint borderId(int2 lid, int2 lsize)
+{
+  uint id = lid.x;
+  if(lid.x==lsize.x-1)
+    id += lid.y;
+  else if(lid.y==lsize.y-1)
+    id = lsize.x*2 + lsize.y - 3 - lid.x;
+  else if(lid.x == 0 && lid.y > 0)
+    id = 2*(lsize.x + lsize.y - 2) - lid.y;
+  return id;
+}
+
+__kernel void updateRouteMap(read_only image2d_t costmap,
+                             global float* lastCostmap,
+                             global float* routeMap,
+                             const int2 dim,
+                             local float* l_data)
+{
+  local bool changed;
+  changed = false;
+
+  local float* l_cost = l_data;
+  local float* l_routing_data = l_data + get_local_size(0)*get_local_size(1);
+
+  float newPenalty = MAXFLOAT;
+  if(get_global_id(0) < dim.x && get_global_id(1) < dim.y)
+  {
+    newPenalty = getPenalty(costmap, (int2)(get_global_id(0), get_global_id(1)));
+    float oldPenalty = readLastPenalty(lastCost, (int2)(get_global_id(0), get_global_id(1)), size);
+    if( abs(newPenalty - oldPenalty) > 0.01f )
+    {
+      changed = true;
+      writeLastPenalty(lastCost, (int2)(get_global_id(0), get_global_id(1)), size, newPenalty);
+    }
+  }
+  barrier();
+  if(!changed) return;
+
+  l_cost[get_local_id(0) + get_local_id(1)*get_local_size(0)] = newPenalty;
+  
+  //do the routing
+  for(uint i = 0; i < 4*(get_local_size(0) + get_local_size(1) - 1); ++i)
+  {
+    //init routing data
+    float myinit = MAXFLOAT;
+    int myid = borderId((int2)(get_local_id(0),get_local_id(1)), (int2)(get_local_size(0),get_local_size(1)));
+    if(myid == i) myinit = 0;
+    l_routing_data[get_local_id(1)*get_local_size(0) + get_local_id(0)] = myinit;
+
+    //do routing
+
+  }
+}
+
 
 
 
@@ -46,17 +119,7 @@ __kernel void getMinimum(global const float* routecost,
 }
 
 
-uint borderId(int2 lid, int2 lsize)
-{
-  uint id = lid.x;
-  if(lid.x==lsize.x-1)
-    id += lid.y;
-  else if(lid.y==lsize.y-1)
-    id = lsize.x*2 + lsize.y - 3 - lid.x;
-  else if(lid.x == 0 && lid.y > 0)
-    id = 2*(lsize.x + lsize.y - 2) - lid.y;
-  return id;
-}
+
 
 __kernel void calcInOut(global const float* routecost,
                         global uint* blockroutes,
