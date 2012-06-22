@@ -80,28 +80,12 @@ namespace LinksRouting
       {
         uint32_t    _stamp;
         uint32_t    _revision;
-        LinkInfo()
-        {
-        }
-        LinkInfo(uint32_t  stamp, uint32_t revision) : _stamp(stamp), _revision(revision)
-        {
-        }
+        LinkInfo() { }
+        LinkInfo(uint32_t  stamp, uint32_t revision) : _stamp(stamp), _revision(revision) { }
       };
 
       //structs used in kernel
-      //typedef cl_int4 cl_QueueElement;
-      struct cl_QueueElement
-      {
-        union
-        {
-          cl_int s[4];
-          struct
-          {
-            cl_int x,y,z;
-            cl_uint priority;
-          };
-        };
-      };
+      typedef cl_int4 cl_QueueElement;
       struct cl_QueueGlobal
       {
         cl_uint front;
@@ -109,19 +93,14 @@ namespace LinksRouting
         cl_int filllevel;
         cl_uint activeBlocks;
         cl_uint processedBlocks;
-        cl_uint sortingBarrier;
-        cl_int debug;
         cl_uint mincost;
 
-        cl_QueueGlobal() { }
-        cl_QueueGlobal(cl_uint _sortingBarrier) :
+        cl_QueueGlobal() :
           front(0),
           back(0),
           filllevel(0),
           activeBlocks(0),
           processedBlocks(0),
-          sortingBarrier(_sortingBarrier),
-          debug(0),
           mincost(0xFFFFFFFF)
         {
         }
@@ -133,21 +112,34 @@ namespace LinksRouting
       cl::Device        _cl_device;
       cl::CommandQueue  _cl_command_queue;
       cl::Program       _cl_program;
-      cl::Kernel        _cl_prepare_kernel;
-      cl::Kernel        _cl_shortestpath_kernel;
-      cl::Kernel        _cl_clearQueueLink_kernel;
-      cl::Kernel        _cl_clearQueue_kernel;
-      cl::Kernel        _cl_getMinimum_kernel;
-      cl::Kernel        _cl_routeInOut_kernel;
-      cl::Kernel        _cl_routeInterBlock_kernel;
-      cl::Kernel        _cl_routeConstruct_kernel;
+
+
+      cl::Kernel  _cl_updateRouteMap_kernel;
+      cl::Kernel  _cl_prepareIndividualRouting_kernel;
+      cl::Kernel  _cl_runIndividualRoutings_kernel;
+      cl::Kernel  _cl_fillUpIndividualRoutings_kernel;
+      cl::Kernel  _cl_getMinimum_kernel;
+      cl::Kernel  _cl_routeInOut_kernel;
+      cl::Kernel  _cl_routeInterBlock_kernel;
+      cl::Kernel  _cl_routeConstruct_kernel;
 
       int _blockSize[2];
+      int _blocks[2];
       bool _enabled;
       bool _noQueue;
 
+      size_t _buffer_width, _buffer_height;
+      cl::Buffer  _cl_lastCostMap_buffer;
+      cl::Buffer  _cl_routeMap_buffer;
+      
+      void updateRouteMap();
+      void createRoutes(LinksRouting::LinkDescription::HyperEdge& ld);
+
+      
       friend std::ostream& operator<<( std::ostream&,
                                          const GPURouting::cl_QueueElement& );
+
+
 
   };
 } // namespace LinksRouting

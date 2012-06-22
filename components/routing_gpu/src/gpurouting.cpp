@@ -31,7 +31,9 @@ namespace LinksRouting
 
   //----------------------------------------------------------------------------
   GPURouting::GPURouting() :
-        myname("GPURouting")
+        myname("GPURouting"),
+        _buffer_width(0),
+        _buffer_height(0)
   {
     registerArg("BlockSizeX", _blockSize[0] = 8);
     registerArg("BlockSizeY", _blockSize[1] = 8);
@@ -239,56 +241,15 @@ namespace LinksRouting
               << "\n -- Log: " << _cl_program.getBuildInfo<CL_PROGRAM_BUILD_LOG>(_cl_device)
               << std::endl;
 
-    _cl_clearQueue_kernel  = cl::Kernel(_cl_program, "clearQueue");
-    _cl_clearQueueLink_kernel = cl::Kernel(_cl_program, "clearQueueLink");
-    _cl_prepare_kernel = cl::Kernel(_cl_program, "prepareRouting");
-   	_cl_shortestpath_kernel = cl::Kernel(_cl_program, _noQueue ? "route_no_queue" : "routing");
+
+
+
     _cl_getMinimum_kernel = cl::Kernel(_cl_program, "getMinimum");
     _cl_routeInOut_kernel = cl::Kernel(_cl_program, "calcInOut");
     _cl_routeInterBlock_kernel = cl::Kernel(_cl_program, "calcInterBlockRoute");
     _cl_routeConstruct_kernel = cl::Kernel(_cl_program, "constructRoute");
     
 
-   // //test
-   // int blocksize = 64;
-   // int datasize = 4*blocksize;
-   // cl::Kernel sorting_test = cl::Kernel(_cl_program, "sortTest");
-   // cl::Buffer keys(_cl_context, CL_MEM_READ_WRITE, datasize*sizeof(cl_float));
-   // cl::Buffer values(_cl_context, CL_MEM_READ_WRITE, datasize*sizeof(cl_uint));
-   // std::vector<float> h_keys;
-   // std::vector<int> h_values;
-   // h_keys.reserve(datasize);
-   // h_values.reserve(datasize);
-   // for(int i = 0; i < datasize; ++i)
-   // {
-   //   int v = rand();
-   //   h_keys.push_back(v/1000.0f);
-   //   h_values.push_back(v);
-   // }
-
-   // _cl_command_queue.enqueueWriteBuffer(keys, true, 0, datasize*sizeof(cl_float), &h_keys[0]);
-   // _cl_command_queue.enqueueWriteBuffer(values, true, 0, datasize*sizeof(cl_uint), &h_values[0]);
-
-   // sorting_test.setArg(0, keys);
-   // sorting_test.setArg(1, values);
-   // sorting_test.setArg(2, 2*blocksize*sizeof(cl_float), NULL);
-   // sorting_test.setArg(3, 2*blocksize*sizeof(cl_uint), NULL);
-
-   //_cl_command_queue.enqueueNDRangeKernel
-   // (
-   //   sorting_test,
-   //   cl::NullRange,
-   //   cl::NDRange(datasize/2),
-   //   cl::NDRange(blocksize)
-   // );
-
-   // _cl_command_queue.finish();
-   // _cl_command_queue.enqueueReadBuffer(keys, true, 0, datasize*sizeof(cl_float), &h_keys[0]);
-   // _cl_command_queue.enqueueReadBuffer(values, true, 0, datasize*sizeof(cl_uint), &h_values[0]);
-
-   // for(int i = 0; i < datasize; ++i)
-   //   std::cout <<  "<" << h_keys[i] << "," << h_values[i] << ">,\n";
-   // std::cout << std::endl;
   }
 
   //----------------------------------------------------------------------------
@@ -444,26 +405,15 @@ namespace LinksRouting
       return;
     }
 
+    if( !_enabled ) // This can be set from the config file...
+      return;
+
     try
     {
 
-    //------------------------------
-    // get buffer from opengl
-    std::vector<cl::Memory> memory_gl;
-    memory_gl.push_back
-    (
-      cl::Image2DGL
-      (
-         _cl_context,
-         CL_MEM_READ_ONLY,
-         GL_TEXTURE_2D,
-         0,
-         _subscribe_costmap->_data->id
-       )
-    );
 
-    glFinish();
-    _cl_command_queue.enqueueAcquireGLObjects(&memory_gl);
+
+    updateRouteMap();
 
     // now start analyzing the links
 
@@ -494,9 +444,10 @@ namespace LinksRouting
 
       // --------------------------------------------------------
 
-      if( !_enabled ) // This can be set from the config file...
-        return;
+      createRoutes(it->_link);
 
+#if 0
+      {
       //ROUTING
       cl::Buffer queue_info(_cl_context, CL_MEM_READ_WRITE, sizeof(cl_QueueGlobal));
       cl::Buffer idbuffer(_cl_context, CL_MEM_READ_WRITE, sizeof(cl_ushort2)*256);
@@ -944,6 +895,8 @@ namespace LinksRouting
         routeConstruct_Event.getProfilingInfo(CL_PROFILING_COMMAND_START, &start);
         std::cout << " - route construction: " << (end-start)/1000000.0  << "ms\n";
       }
+      }
+#endif
 
       // --------------------------------------------------------
 
@@ -992,6 +945,51 @@ namespace LinksRouting
   bool GPURouting::removeLinkHierarchy(LinkDescription::HyperEdge* hyperedge)
   {
     return true;
+  }
+
+
+  void GPURouting::updateRouteMap()
+  {
+    glFinish();
+    bool computeAll = false;
+    if(_buffer_width != _subscribe_costmap->_data->width ||
+       _buffer_height != _subscribe_costmap->_data->height)
+    {
+      _buffer_width = _subscribe_costmap->_data->width;
+      _buffer_height = _subscribe_costmap->_data->height;
+
+      _cl_lastCostMap_buffer = cl::Buffer(_cl_context, CL_MEM_READ_WRITE, _buffer_width*_buffer_height*sizeof(cl_float));
+      _blocks[0] = divup<size_t>(_buffer_width, _blockSize[0]);
+      _blocks[1] = divup<size_t>(_buffer_height, _blockSize[1]);
+      
+      int boundaryElements = 2*(_blockSize[0] + _blockSize[1] - 2);
+
+      _cl_routeMap_buffer =  cl::Buffer(_cl_context, CL_MEM_READ_WRITE, _blocks[0]*_blocks[1]*boundaryElements*boundaryElements);
+      computeAll = true;
+    }
+    //;
+
+    //------------------------------
+    // get buffer from opengl
+    std::vector<cl::Memory> memory_gl;
+    memory_gl.push_back
+    (
+      cl::Image2DGL
+      (
+         _cl_context,
+         CL_MEM_READ_ONLY,
+         GL_TEXTURE_2D,
+         0,
+         _subscribe_costmap->_data->id
+       )
+    );
+
+    
+    _cl_command_queue.enqueueAcquireGLObjects(&memory_gl);
+  }
+  void GPURouting::createRoutes(LinksRouting::LinkDescription::HyperEdge&)
+  {
+
   }
 
 }
