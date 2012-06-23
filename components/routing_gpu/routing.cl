@@ -19,11 +19,13 @@ void writeLastPenalty(global float* lastCostmap, int2 pos, const int2 size, floa
   lastCostmap[pos.x + pos.y*size.x] = data;
 }
 
-uint borderId(int2 lid, int2 lsize)
+int borderId(int2 lid, int2 lsize)
 {
-  uint id = lid.x;
-  if(lid.x==lsize.x-1)
-    id += lid.y;
+  int id = -1;
+  if(lid.y == 0)
+    id = lid.x;
+  else if(lid.x==lsize.x-1)
+    id = lid.x + lid.y;
   else if(lid.y==lsize.y-1)
     id = lsize.x*2 + lsize.y - 3 - lid.x;
   else if(lid.x == 0 && lid.y > 0)
@@ -31,45 +33,117 @@ uint borderId(int2 lid, int2 lsize)
   return id;
 }
 
+local float* accessLocalCost(local float* l_costs, int2 id)
+{
+  return l_costs + (id.x+1 + (id.y+1)*(get_local_size(0)+2));
+}
+
+local const float* accessLocalCostConst(local float const * l_costs, int2 id)
+{
+  return l_costs + (id.x+1 + (id.y+1)*(get_local_size(0)+2));
+}
+
+bool route_data(local float const * l_cost,
+                local float* l_route)
+{
+  //route as long as there is change
+  local bool change;
+  change = true;
+  barrier(CLK_LOCAL_MEM_FENCE);
+
+  int2 localid = (int2)(get_local_id(0),get_local_id(1));
+  local float* myval = accessLocalCost(l_route, localid);
+  //iterate over it
+  int counter = -1;
+  while(change)
+  {
+    change = false;
+    barrier(CLK_LOCAL_MEM_FENCE);
+
+    float lastmyval = *myval;
+    
+    int2 offset;
+    for(offset.y = -1; offset.y  <= 1; ++offset.y)
+      for(offset.x = -1; offset.x <= 1; ++offset.x)
+      {
+        //d is either 1 or M_SQRT2 - maybe it is faster to substitute
+        //float d = native_sqrt((float)(offset.x*offset.x+offset.y*offset.y));
+        //by
+        int d2 = offset.x*offset.x+offset.y*offset.y;
+        float d = (d2-1)*M_SQRT2 + (2-d2);
+        float penalty = 0.5f*(*accessLocalCostConst(l_cost, localid) +
+                              *accessLocalCostConst(l_cost, localid + offset));
+        float r_other = *accessLocalCost(l_route, localid + offset);
+        //TODO use custom params here
+        *myval = min(*myval, r_other + 0.01f*d + d*penalty);
+      }
+
+    if(*myval != lastmyval)
+      change = true;    
+    
+    barrier(CLK_LOCAL_MEM_FENCE);
+    ++counter;
+  }
+
+  return counter > 0;
+}
+
 __kernel void updateRouteMap(read_only image2d_t costmap,
                              global float* lastCostmap,
                              global float* routeMap,
                              const int2 dim,
+                             int computeAll,
                              local float* l_data)
 {
   local bool changed;
-  changed = false;
+  changed = computeAll;
 
   local float* l_cost = l_data;
-  local float* l_routing_data = l_data + get_local_size(0)*get_local_size(1);
+  local float* l_routing_data = l_data + (get_local_size(0)+2)*(get_local_size(1)+2);
 
-  float newPenalty = MAXFLOAT;
+  float newPenalty = 0.1f*MAXFLOAT;
   if(get_global_id(0) < dim.x && get_global_id(1) < dim.y)
   {
     newPenalty = getPenalty(costmap, (int2)(get_global_id(0), get_global_id(1)));
-    float oldPenalty = readLastPenalty(lastCost, (int2)(get_global_id(0), get_global_id(1)), size);
-    if( abs(newPenalty - oldPenalty) > 0.01f )
+    float oldPenalty = readLastPenalty(lastCostmap, (int2)(get_global_id(0), get_global_id(1)), dim);
+    if( fabs(newPenalty - oldPenalty) > 0.01f )
     {
       changed = true;
-      writeLastPenalty(lastCost, (int2)(get_global_id(0), get_global_id(1)), size, newPenalty);
+      writeLastPenalty(lastCostmap, (int2)(get_global_id(0), get_global_id(1)), dim, newPenalty);
     }
   }
-  barrier();
+  barrier(CLK_LOCAL_MEM_FENCE);
   if(!changed) return;
 
-  l_cost[get_local_id(0) + get_local_id(1)*get_local_size(0)] = newPenalty;
+  uint lid = get_local_id(0) + get_local_size(0)*get_local_id(1);
+  for( ; lid < 2*(get_local_size(0)+2)*(get_local_size(1)+2); lid += get_local_size(0)*get_local_size(1))
+    l_data[lid] =  0.1f*MAXFLOAT;
+
+  barrier(CLK_LOCAL_MEM_FENCE);
+  *accessLocalCost(l_cost, (int2)(get_local_id(0), get_local_id(1))) = newPenalty;
+
+
   
   //do the routing
-  for(uint i = 0; i < 4*(get_local_size(0) + get_local_size(1) - 1); ++i)
+  int boundaryelements = 4*(get_local_size(0) + get_local_size(1) - 1);
+  int written = 0;
+  int myid = borderId((int2)(get_local_id(0),get_local_id(1)), (int2)(get_local_size(0),get_local_size(1)));
+  for(int i = 0; i < boundaryelements; ++i)
   {
     //init routing data
-    float myinit = MAXFLOAT;
-    int myid = borderId((int2)(get_local_id(0),get_local_id(1)), (int2)(get_local_size(0),get_local_size(1)));
+    float myinit = 0.1f*MAXFLOAT;
+    
     if(myid == i) myinit = 0;
-    l_routing_data[get_local_id(1)*get_local_size(0) + get_local_id(0)] = myinit;
+    *accessLocalCost(l_routing_data, (int2)(get_local_id(0), get_local_id(1))) = myinit;
 
-    //do routing
+    //route
+    route_data(l_cost, l_routing_data);
 
+    //write result
+    int write = boundaryelements - i;
+    if(myid >= 0 && myid < write) 
+      routeMap[boundaryelements*boundaryelements/2*get_group_id(0)+get_group_id(1)*get_num_groups(0) +
+               written + myid] = *accessLocalCost(l_routing_data, (int2)(get_local_id(0), get_local_id(1)));
   }
 }
 
@@ -77,45 +151,45 @@ __kernel void updateRouteMap(read_only image2d_t costmap,
 
 
 __kernel void getMinimum(global const float* routecost,
-                         volatile global QueueGlobal* queueInfo,
+                         //volatile global QueueGlobal* queueInfo,
                          volatile global ushort2* coordinates,
                          const int2 dim,
                          int targets)
 {
-  float cost = 0;
-  for(int i = 0; i < targets; ++i)
-    cost += routecost[dim.x*get_global_id(1) + get_global_id(0) + dim.x*dim.y*i];
+  //float cost = 0;
+  //for(int i = 0; i < targets; ++i)
+  //  cost += routecost[dim.x*get_global_id(1) + get_global_id(0) + dim.x*dim.y*i];
 
-  __local uint localmin;
-  __local uint2 coords;
-  localmin = as_uint(MAXFLOAT);
+  //__local uint localmin;
+  //__local uint2 coords;
+  //localmin = as_uint(MAXFLOAT);
 
-  barrier(CLK_LOCAL_MEM_FENCE);
+  //barrier(CLK_LOCAL_MEM_FENCE);
 
-  atomic_min(&localmin, as_uint(cost));
+  //atomic_min(&localmin, as_uint(cost));
 
-  barrier(CLK_LOCAL_MEM_FENCE);
+  //barrier(CLK_LOCAL_MEM_FENCE);
 
-  if(localmin == as_uint(cost))
-    coords = (uint2)(get_global_id(0), get_global_id(1));
+  //if(localmin == as_uint(cost))
+  //  coords = (uint2)(get_global_id(0), get_global_id(1));
 
-  barrier(CLK_LOCAL_MEM_FENCE);
+  //barrier(CLK_LOCAL_MEM_FENCE);
 
-  if( (get_local_id(0) + get_local_id(1)) == 0 )
-  {
-    uint minv = as_uint(localmin);
-    //compress it
-    minv = (minv << 1) & 0xFFFFFF00;
-    //combine with block id
-    uint groupv = (get_group_id(0) + get_group_id(1)*get_num_groups(0)) & 0xFF;
-    uint combined = minv | groupv;
-    uint old = atomic_min(&queueInfo->mincost, combined);
-    if(old > combined)
-    {
-      //write coords to array entry
-      coordinates[groupv] = (ushort2)(coords.x,coords.y);
-    }
-  }
+  //if( (get_local_id(0) + get_local_id(1)) == 0 )
+  //{
+  //  uint minv = as_uint(localmin);
+  //  //compress it
+  //  minv = (minv << 1) & 0xFFFFFF00;
+  //  //combine with block id
+  //  uint groupv = (get_group_id(0) + get_group_id(1)*get_num_groups(0)) & 0xFF;
+  //  uint combined = minv | groupv;
+  //  uint old = atomic_min(&queueInfo->mincost, combined);
+  //  if(old > combined)
+  //  {
+  //    //write coords to array entry
+  //    coordinates[groupv] = (ushort2)(coords.x,coords.y);
+  //  }
+  //}
 }
 
 

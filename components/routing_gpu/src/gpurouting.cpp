@@ -244,6 +244,8 @@ namespace LinksRouting
 
 
 
+    _cl_updateRouteMap_kernel = cl::Kernel(_cl_program, "updateRouteMap");
+
     _cl_getMinimum_kernel = cl::Kernel(_cl_program, "getMinimum");
     _cl_routeInOut_kernel = cl::Kernel(_cl_program, "calcInOut");
     _cl_routeInterBlock_kernel = cl::Kernel(_cl_program, "calcInterBlockRoute");
@@ -950,7 +952,9 @@ namespace LinksRouting
   void GPURouting::updateRouteMap()
   {
     glFinish();
-    bool computeAll = false;
+    int computeAll = false;
+    
+    //update / create buffers
     if(_buffer_width != _subscribe_costmap->_data->width ||
        _buffer_height != _subscribe_costmap->_data->height)
     {
@@ -966,7 +970,8 @@ namespace LinksRouting
       _cl_routeMap_buffer =  cl::Buffer(_cl_context, CL_MEM_READ_WRITE, _blocks[0]*_blocks[1]*boundaryElements*boundaryElements/2);
       computeAll = true;
     }
-    //;
+
+
 
     //------------------------------
     // get buffer from opengl
@@ -985,14 +990,39 @@ namespace LinksRouting
 
     _cl_command_queue.enqueueAcquireGLObjects(&memory_gl);
 
+    cl_int bufferDim[2] = { _buffer_width, _buffer_height };
+
+
     //update route map
     //_cl_updateRouteMap_kernel
 
+    _cl_updateRouteMap_kernel.setArg(0, memory_gl[0]);
+    _cl_updateRouteMap_kernel.setArg(1, _cl_lastCostMap_buffer);
+    _cl_updateRouteMap_kernel.setArg(2, _cl_routeMap_buffer);
+    _cl_updateRouteMap_kernel.setArg(3, 2 * sizeof(cl_int), bufferDim);
+    _cl_updateRouteMap_kernel.setArg(4, computeAll);
+    _cl_updateRouteMap_kernel.setArg(5, 2*_blockSize[0]*_blockSize[1]*sizeof(float), NULL);
 
 
+    cl::Event updateRouteMap_Event;
+    _cl_command_queue.enqueueNDRangeKernel
+    (
+      _cl_updateRouteMap_kernel,
+      cl::NullRange,
+      cl::NDRange(_blocks[0]*_blockSize[0], _blocks[1]*_blockSize[1]),
+      cl::NDRange(_blockSize[0], _blockSize[1]),
+      0,
+      &updateRouteMap_Event
+    );
 
     _cl_command_queue.enqueueReleaseGLObjects(&memory_gl);
     _cl_command_queue.finish();
+
+    cl_ulong start, end;
+    std::cout << "CLInfo:\n";
+    updateRouteMap_Event.getProfilingInfo(CL_PROFILING_COMMAND_END, &end);
+    updateRouteMap_Event.getProfilingInfo(CL_PROFILING_COMMAND_START, &start);
+    std::cout << " - updateRouteMap: " << (end-start)/1000000.0  << "ms\n";
   }
   void GPURouting::createRoutes(LinksRouting::LinkDescription::HyperEdge&)
   {
