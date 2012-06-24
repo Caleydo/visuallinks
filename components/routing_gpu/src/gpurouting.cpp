@@ -6,6 +6,7 @@
 #include <cmath>
 #include <set>
 #include <algorithm>
+#include <limits>
 #include "datatypes.h"
 
 #define USE_QUEUE_ROUTING 1
@@ -245,6 +246,9 @@ namespace LinksRouting
 
 
     _cl_updateRouteMap_kernel = cl::Kernel(_cl_program, "updateRouteMap");
+    _cl_prepareBorderCostsX_kernel = cl::Kernel(_cl_program, "prepareBorderCostsX");
+    _cl_prepareBorderCostsY_kernel = cl::Kernel(_cl_program, "prepareBorderCostsY");
+    _cl_prepareIndividualRouting_kernel = cl::Kernel(_cl_program, "prepareIndividualRouting");
 
     _cl_getMinimum_kernel = cl::Kernel(_cl_program, "getMinimum");
     _cl_routeInOut_kernel = cl::Kernel(_cl_program, "calcInOut");
@@ -949,6 +953,277 @@ namespace LinksRouting
   }
 
 
+
+
+  //kernel test
+
+struct int2
+{
+  union
+  {
+  int d[2];
+  struct {  int x, y; };
+  };
+  int2() { }
+  int2(int _x, int _y) : x(_x), y(_y) { }
+  int2 operator + (const int2& other)
+  {
+    return int2(x + other.x, y + other.y);
+  }
+  int2 operator - (const int2& other)
+  {
+    return int2(x - other.x, y - other.y);
+  }
+  int& operator [] (int i)
+  {
+    return d[i];
+  }
+  const  int& operator [] (int i) const
+  {
+    return d[i];
+  }
+};
+
+int2 local_size;
+int2 local_id;
+int2 global_id;
+int2 global_size;
+int2 num_groups;
+int2 group_id;
+
+void initKernelData(int2 lsize, int2 groups )
+{
+  local_size = lsize;
+  local_id = int2(0,0);
+  global_size = int2(lsize.x*groups.x, lsize.y*groups.y);
+  global_id = int2(0,0);
+  num_groups = groups;
+  group_id = int2(0,0);
+}
+
+unsigned int get_local_size(int i)
+{
+  return local_size[i];
+}
+unsigned int get_local_id(int i)
+{
+  return local_id[i];
+}
+unsigned int get_global_size(int i)
+{
+  return global_size[i];
+}
+unsigned int get_global_id(int i)
+{
+  return global_id[i];
+}
+unsigned int get_group_id(int i)
+{
+  return group_id[i];
+}
+unsigned int get_num_groups(int i)
+{
+  return num_groups[i];
+}
+bool advanceThread()
+{
+  ++global_id.x;
+  if(++local_id.x >= local_size.x)
+  {
+    global_id.x -= local_size.x;
+    local_id.x = 0;
+    ++global_id.y;
+    if(++local_id.y >= local_size.y)
+    {
+      local_id.y = 0;
+      global_id.y -= local_size.y;
+      return false;
+    }
+  }
+  return true;
+}
+
+
+int2 costmap_dim;
+float getPenalty(float* costmap, int2 pos)
+{
+  return costmap[pos.x + pos.y*costmap_dim.x];
+}
+
+
+float readLastPenalty( float* lastCostmap, int2 pos, const int2 size)
+{
+  return lastCostmap[pos.x + pos.y*size.x];
+}
+
+void writeLastPenalty( float* lastCostmap, int2 pos, const int2 size, float data)
+{
+  lastCostmap[pos.x + pos.y*size.x] = data;
+}
+
+int borderId(int2 lid, int2 lsize)
+{
+  int id = -1;
+  if(lid.y == 0)
+    id = lid.x;
+  else if(lid.x==lsize.x-1)
+    id = lid.x + lid.y;
+  else if(lid.y==lsize.y-1)
+    id = lsize.x*2 + lsize.y - 3 - lid.x;
+  else if(lid.x == 0 && lid.y > 0)
+    id = 2*(lsize.x + lsize.y - 2) - lid.y;
+  return id;
+}
+
+int2 lidForBorderId(int borderId, int2 lsize)
+{
+  if(borderId == -1 || borderId > 2*(lsize.x + lsize.y - 2))
+    return int2(-1,-1);
+  if(borderId <  lsize.x)
+    return int2(borderId, 0);
+  if(borderId < lsize.x + lsize.y - 1)
+    return int2(lsize.x-1, borderId - (lsize.x-1));
+  if(borderId < 2*lsize.x + lsize.y - 2)
+    return int2(2*lsize.x+lsize.y-3-borderId , lsize.y-1);
+  else
+    return int2(0, 2*(lsize.x + lsize.y - 2) - borderId);
+}
+
+float* accessLocalCost(float* l_costs, int2 id)
+{
+  return l_costs + (id.x+1 + (id.y+1)*(get_local_size(0)+2));
+}
+
+const float* accessLocalCostConst(float const * l_costs, int2 id)
+{
+  return l_costs + (id.x+1 + (id.y+1)*(get_local_size(0)+2));
+}
+
+bool route_data(float const * l_cost,
+                float* l_route)
+{
+  //route as long as there is change
+  bool change;
+  change = true;
+
+
+  //iterate over it
+  int counter = -1;
+  while(change)
+  {
+    change = false;
+    do
+    {
+    int2 localid = int2(get_local_id(0),get_local_id(1));
+    float* myval = accessLocalCost(l_route, localid);
+
+    float lastmyval = *myval;
+    
+    int2 offset;
+    for(offset.y = -1; offset.y  <= 1; ++offset.y)
+      for(offset.x = -1; offset.x <= 1; ++offset.x)
+      {
+        //d is either 1 or M_SQRT2 - maybe it is faster to substitute
+        float d = sqrt((float)(offset.x*offset.x+offset.y*offset.y));
+        //by
+        //int d2 = offset.x*offset.x+offset.y*offset.y;
+        //float d = (d2-1)*M_SQRT2 + (2-d2);
+        float penalty = 0.5f*(*accessLocalCostConst(l_cost, localid) +
+                              *accessLocalCostConst(l_cost, localid + offset));
+        float r_other = *accessLocalCost(l_route, localid + offset);
+        //TODO use custom params here
+        *myval = std::min(*myval, r_other + 0.01f*d + d*penalty);
+      }
+
+    if(*myval != lastmyval)
+      change = true;
+    }
+    while(advanceThread());
+    ++counter;
+  }
+
+  return counter > 0;
+}
+
+void updateRouteMapDummy(float * costmap,
+                    float* lastCostmap,
+                    float* routeMap,
+                    const int2 dim,
+                    int computeAll,
+                    float* l_data)
+{
+  const float MAXFLOAT = std::numeric_limits<float>::max();
+  bool changed;
+  changed = computeAll;
+
+  float* l_cost = l_data;
+  float* l_routing_data = l_data + (get_local_size(0)+2)*(get_local_size(1)+2);
+
+  do
+  {
+  int lid = get_local_id(0) + get_local_id(1)*get_local_size(0);
+  for(; lid < (get_local_size(0)+2)*(get_local_size(1)+2); lid += get_local_size(0)*get_local_size(1))
+  {
+    float newPenalty = 0.1f*MAXFLOAT;
+    l_routing_data[lid] = 0.1f*MAXFLOAT;
+    int2 lid2 = int2(lid%(get_local_size(0)+2),  (lid/(get_local_size(0)+2)));
+    int2 gid2 = int2((int)(get_group_id(0)*get_local_size(0)) - 1 + lid2.x,
+                       (int)(get_group_id(1)*get_local_size(1)) - 1 + lid2.y);
+
+    if(gid2.x > 0 && gid2.x < dim.x && gid2.y > 0 && gid2.y < dim.y 
+       && lid2.x <= get_local_size(0) && lid2.y <= get_local_size(1))
+    {
+      newPenalty = getPenalty(costmap, gid2);
+      float oldPenalty = readLastPenalty(lastCostmap, gid2, dim);
+      if( fabs(newPenalty - oldPenalty) > 0.01f )
+      {
+        changed = true;
+        writeLastPenalty(lastCostmap, gid2, dim, newPenalty);
+      }
+    }
+    l_cost[lid] = newPenalty;
+  }
+  } while(advanceThread());
+  if(!changed) return;
+
+
+  //do the routing
+  int boundaryelements = 2*(get_local_size(0) + get_local_size(1));
+  int written = 0;
+  for(int i = 0; i < boundaryelements; ++i)
+  {
+    do
+    {
+    int lid = get_local_id(0) + get_local_id(1)*get_local_size(0);
+    int2 borderId2 = lidForBorderId(lid, int2(get_local_size(0)+1,get_local_size(1)+1)) - int2(1,1);
+    //init routing data    
+    *accessLocalCost(l_routing_data, int2(get_local_id(0), get_local_id(1))) = 0.1f*MAXFLOAT;
+    if(lid == i - 1)
+      *accessLocalCost(l_routing_data, borderId2) = 0.1f*MAXFLOAT;
+    if(lid == i)
+      *accessLocalCost(l_routing_data, borderId2) = 0;
+    } while(advanceThread());
+    //route
+    route_data(l_cost, l_routing_data);
+
+    //write result
+    int write = boundaryelements - i;
+    do
+    {
+    int lid = get_local_id(0) + get_local_id(1)*get_local_size(0);
+    int2 borderId2 = lidForBorderId(lid, int2(get_local_size(0)+1,get_local_size(1)+1)) - int2(1,1);
+    if(lid >= 0 && lid < write) 
+      routeMap[boundaryelements*boundaryelements/2*(get_group_id(0)+get_group_id(1)*get_num_groups(0)) +
+               written + lid] = *accessLocalCost(l_routing_data, borderId2);
+    } while(advanceThread());
+  }
+}
+
+///
+
+
+
+
   void GPURouting::updateRouteMap()
   {
     glFinish();
@@ -962,16 +1237,29 @@ namespace LinksRouting
       _buffer_height = _subscribe_costmap->_data->height;
 
       _cl_lastCostMap_buffer = cl::Buffer(_cl_context, CL_MEM_READ_WRITE, _buffer_width*_buffer_height*sizeof(cl_float));
-      _blocks[0] = divup<size_t>(_buffer_width, _blockSize[0]);
-      _blocks[1] = divup<size_t>(_buffer_height, _blockSize[1]);
+      _blocks[0] = divup<size_t>(_buffer_width, _blockSize[0]-1);
+      _blocks[1] = divup<size_t>(_buffer_height, _blockSize[1]-1);
       
-      int boundaryElements = 2*(_blockSize[0] + _blockSize[1] - 2);
+      int boundaryElements = 2*(_blockSize[0] + _blockSize[1]-2);
 
-      _cl_routeMap_buffer =  cl::Buffer(_cl_context, CL_MEM_READ_WRITE, _blocks[0]*_blocks[1]*boundaryElements*boundaryElements/2);
+      _cl_routeMap_buffer =  cl::Buffer(_cl_context, CL_MEM_READ_WRITE, _blocks[0]*_blocks[1]*boundaryElements*boundaryElements/2*sizeof(cl_float));
       computeAll = true;
     }
 
 
+    ////dummy call
+    //float* costmap = new float[_buffer_width*_buffer_height];
+    //float* lastcostmap = new float[_buffer_width*_buffer_height];
+    //float* routemap = new float[_blocks[0]*_blocks[1]*2*(_blockSize[0] + _blockSize[1])*2*(_blockSize[0] + _blockSize[1])/2];
+    //float* lmem = new float[2*(_blockSize[0]+2)*(_blockSize[1]+2)];
+    //initKernelData(int2(_blockSize[0],_blockSize[1]), int2(_blocks[0], _blocks[1]));
+    //costmap_dim = int2(_buffer_width, _buffer_height);
+
+    //updateRouteMapDummy(costmap, costmap, routemap, int2(_buffer_width, _buffer_height), computeAll, lmem);
+    //delete[] costmap;
+    //delete[] lastcostmap;
+    //delete[] routemap;
+    //delete[] lmem;
 
     //------------------------------
     // get buffer from opengl
@@ -1001,7 +1289,7 @@ namespace LinksRouting
     _cl_updateRouteMap_kernel.setArg(2, _cl_routeMap_buffer);
     _cl_updateRouteMap_kernel.setArg(3, 2 * sizeof(cl_int), bufferDim);
     _cl_updateRouteMap_kernel.setArg(4, computeAll);
-    _cl_updateRouteMap_kernel.setArg(5, 2*_blockSize[0]*_blockSize[1]*sizeof(float), NULL);
+    _cl_updateRouteMap_kernel.setArg(5, 2*(_blockSize[0]+2)*(_blockSize[1]+2)*sizeof(float), NULL);
 
 
     cl::Event updateRouteMap_Event;
@@ -1026,7 +1314,21 @@ namespace LinksRouting
   }
   void GPURouting::createRoutes(LinksRouting::LinkDescription::HyperEdge&)
   {
+    //bottom up routing -> for every level do:
 
+    // _cl_prepareBorderCostsX_kernel
+
+    // _cl_prepareBorderCostsY_kernel
+
+    // _cl_prepareIndividualRouting_kernel
+
+    // _cl_runIndividualRoutings_kernel
+
+    // _cl_fillUpIndividualRoutings_kernel;
+    // _cl_getMinimum_kernel;
+    // _cl_routeInOut_kernel;
+    // _cl_routeInterBlock_kernel;
+    // _cl_routeConstruct_kernel;
   }
 
 }

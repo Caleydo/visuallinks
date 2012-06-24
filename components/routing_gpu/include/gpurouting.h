@@ -93,7 +93,7 @@ namespace LinksRouting
         cl_int filllevel;
         cl_uint activeBlocks;
         cl_uint processedBlocks;
-        cl_uint mincost;
+        cl_int debug;
 
         cl_QueueGlobal() :
           front(0),
@@ -101,7 +101,7 @@ namespace LinksRouting
           filllevel(0),
           activeBlocks(0),
           processedBlocks(0),
-          mincost(0xFFFFFFFF)
+          debug(0)
         {
         }
       };
@@ -115,6 +115,8 @@ namespace LinksRouting
 
 
       cl::Kernel  _cl_updateRouteMap_kernel;
+      cl::Kernel  _cl_prepareBorderCostsX_kernel;
+      cl::Kernel  _cl_prepareBorderCostsY_kernel;
       cl::Kernel  _cl_prepareIndividualRouting_kernel;
       cl::Kernel  _cl_runIndividualRoutings_kernel;
       cl::Kernel  _cl_fillUpIndividualRoutings_kernel;

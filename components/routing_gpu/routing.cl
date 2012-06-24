@@ -1,4 +1,213 @@
 
+//#define KEY_TYPE float
+//#define VALUE_TYPE uint
+//#include "sorting.cl"
+
+
+
+//QUEUE
+typedef struct _QueueElement
+{
+  int blockx,
+      blocky,
+      blockz;
+  int state;
+} QueueElement;
+//typedef int4 QueueElement;
+
+
+#define FIXEDPRECISSIONBITS 7
+#define NOATOMICFLOAT 1
+#define PRECISSIONMULTIPLIER (1 << FIXEDPRECISSIONBITS)
+#define MAGICPRIORITYF 999999.0f
+#define MAGICPRIORITY 0x7FFFFFFF
+
+#define QueueElementCopySteps 3
+
+#define  QueueElementEmpty 0
+#define  QueueElementReady 1
+#define  QueueElementReading 2
+#define  QueueElementRead 0
+void checkAndSetQueueState(volatile global QueueElement* element, uint state, uint expected)
+{
+  //volatile global int* pstate = ((volatile global int*)element) + 3;
+  //while(atomic_cmpxchg(pstate, expected, state) != expected);
+  while(atomic_cmpxchg(&element->state, expected, state) != expected);
+}
+void setQueueState(volatile global QueueElement* element, uint state)
+{
+  //volatile global int* pstate = ((volatile global int*)element) + 3;
+  //uint old = atomic_xchg(pstate, state);
+  atomic_xchg(&element->state, state);
+  //check: old + 1 % (QueueElementReading+1) == state
+}
+uint getQueueState(volatile global QueueElement* element)
+{
+  return element->state;
+  //return element->w;
+}
+void waitForQueueState(volatile global QueueElement* element, uint expected)
+{
+  while(getQueueState(element) != expected);
+}
+
+int3 getBlockId(volatile global QueueElement* element)
+{
+  return (int3)(element->blockx, element->blocky, element->blockz);
+  //return (*element).xyz;
+}
+
+void setBlockId(volatile global QueueElement* element, int3 block)
+{
+  element->blockx = block.x;
+  element->blocky = block.y;
+  element->blockz = block.z;
+  //(*element).xyz = block;
+}
+
+typedef struct _QueueGlobal
+{
+  uint front;
+  uint back;
+  int filllevel;
+  uint activeBlocks;
+  uint processedBlocks;
+  int debug;
+} QueueGlobal;
+
+#define linAccess3D(id, dim) \
+  ((id).x + ( (id).y + (id).z  * (dim.y) )* (dim).x)
+
+float atomic_min_float(volatile global float* p, float val)
+{
+  return as_float(atomic_min((volatile global uint*)(p),as_uint(val)));
+}
+float atomic_min_float_local(volatile local float* p, float val)
+{
+  return as_float(atomic_min((volatile local uint*)(p), as_uint(val)));
+}
+
+void setPriorityEntry(global float* p)
+{
+#if NOATOMICFLOAT
+  *(global uint*)(p) = MAGICPRIORITY;
+#else
+  *p = MAGICPRIORITYF;
+#endif
+}
+void removePriorityEntry(volatile global float* p)
+{
+#if NOATOMICFLOAT
+  atomic_xchg((volatile global uint*)(p), MAGICPRIORITY);
+#else
+  atomic_xchg(p, MAGICPRIORITYF);
+#endif
+}
+bool updatePriority(volatile global float* p, float val)
+{
+#if NOATOMICFLOAT
+  uint nval = val * PRECISSIONMULTIPLIER;
+  uint v = atomic_min((volatile global uint*)(p),nval);
+  return v != MAGICPRIORITY;
+#else
+  float old_priority = atomic_min_float(p, val);
+  return old_priority != MAGICPRIORITYF;
+#endif
+}
+
+
+void Enqueue(volatile global QueueGlobal* queueInfo, 
+             volatile global QueueElement* queue,
+             volatile global float* queuePriority,
+             int3 block,
+             float priority,
+             int2 blocks,
+             uint queueSize)
+{
+  //check if element is already in tehe Queue:
+  
+  volatile global float* myQueuePriority = queuePriority + linAccess3D(block, blocks);
+
+  //update priority:
+  bool hadPriority = updatePriority(myQueuePriority, priority);
+  
+  //if there is a priority, it is in the queue
+  if(hadPriority)
+    return;
+  else
+  {
+    //add to queue
+
+    //inc size 
+    int filllevel = atomic_inc(&queueInfo->filllevel);
+    
+    //make sure there is enough space?
+    //assert(filllevel < queueSize)
+
+    //insert a new element
+    uint pos = atomic_inc(&queueInfo->back)%queueSize;
+
+    //make sure it is free?
+    waitForQueueState(queue + pos, QueueElementEmpty);
+    //queue[pos] == QueueElementEmpty
+
+    //insert the data
+    setBlockId(queue + pos, block);
+    mem_fence(CLK_GLOBAL_MEM_FENCE);
+    
+    //increase the number of active Blocks
+    atomic_inc(&queueInfo->activeBlocks);
+
+    //activate the queue element
+    setQueueState(queue + pos,  QueueElementReady);
+
+  }
+}
+
+bool Dequeue(volatile global QueueGlobal* queueInfo, 
+             volatile global QueueElement* queue,
+             volatile global float* queuePriority,
+             int3* element,
+             int2 blocks,
+             uint queueSize)
+{
+  //is there something to get?
+  if(atomic_dec(&queueInfo->filllevel) <= 0)
+  {
+    atomic_inc(&queueInfo->filllevel);
+    return false;
+  }
+
+  //pop the front of the queue
+  uint pos = atomic_inc(&queueInfo->front)%queueSize;
+
+  //check for barrier
+  uint barrierPos = queueInfo->sortingBarrier;
+  uint back = queueInfo->back%queueSize;
+  while(barrierPos <= pos && barrierPos > back)
+  {
+    barrierPos = queueInfo->sortingBarrier;
+    queueInfo->debug += 100000;
+  }
+  
+  //wait for the element to be written/change to reading
+  checkAndSetQueueState(queue + pos, QueueElementReading, QueueElementReady);
+  
+  //read
+  int3 blockId = getBlockId(queue + pos);
+  read_mem_fence(CLK_GLOBAL_MEM_FENCE);
+  
+  //remove priority (mark as not in queue)
+  volatile global float* myQueuePriority = queuePriority + linAccess3D(blockId, blocks);
+  removePriorityEntry(myQueuePriority);
+
+  //free queue element
+  setQueueState(queue + pos, QueueElementRead);
+  *element = blockId;
+  return true;
+}
+//
+
 
 float getPenalty(read_only image2d_t costmap, int2 pos)
 {
@@ -31,6 +240,20 @@ int borderId(int2 lid, int2 lsize)
   else if(lid.x == 0 && lid.y > 0)
     id = 2*(lsize.x + lsize.y - 2) - lid.y;
   return id;
+}
+
+int2 lidForBorderId(int borderId, int2 lsize)
+{
+  if(borderId == -1 || borderId > 2*(lsize.x + lsize.y - 2))
+    return (int2)(-1,-1);
+  if(borderId <  lsize.x)
+    return (int2)(borderId, 0);
+  if(borderId < lsize.x + lsize.y - 1)
+    return (int2)(lsize.x-1, borderId - (lsize.x-1));
+  if(borderId < 2*lsize.x + lsize.y - 2)
+    return (int2)(2*lsize.x+lsize.y-3-borderId , lsize.y-1);
+  else
+    return (int2)(0, 2*(lsize.x + lsize.y - 2) - borderId);
 }
 
 local float* accessLocalCost(local float* l_costs, int2 id)
@@ -88,6 +311,26 @@ bool route_data(local float const * l_cost,
   return counter > 0;
 }
 
+
+float loadCostToLocalAndSetRoute(const int2 group_id, const int2 dim, const int2 gid, global const float* g_cost, local float* l_cost, local float* l_route)
+{
+  int lid = get_local_id(0) + get_local_id(1)*get_local_size(0);
+  for(; lid < (get_local_size(0)+2)*(get_local_size(1)+2); lid += get_local_size(0)*get_local_size(1))
+  {
+    l_cost[lid] = 0.1f*MAXFLOAT;
+    l_route[lid] = 0.1f*MAXFLOAT;
+  }
+  barrier(CLK_LOCAL_MEM_FENCE);
+
+  float r_in = 0.1f*MAXFLOAT;
+  if(gid2.x < dim.x && gid2.y < dim.y)
+  {
+    r_in = readLastPenalty(g_cost, gid2, dim);
+    *accessLocalCost(l_cost, (int2)(get_local_id(0), get_local_id(1))) = r_in;
+  }
+  barrier(CLK_LOCAL_MEM_FENCE);
+}
+
 __kernel void updateRouteMap(read_only image2d_t costmap,
                              global float* lastCostmap,
                              global float* routeMap,
@@ -101,54 +344,119 @@ __kernel void updateRouteMap(read_only image2d_t costmap,
   local float* l_cost = l_data;
   local float* l_routing_data = l_data + (get_local_size(0)+2)*(get_local_size(1)+2);
 
-  float newPenalty = 0.1f*MAXFLOAT;
-  if(get_global_id(0) < dim.x && get_global_id(1) < dim.y)
+  int2 gid2 = (int2)(get_group_id(0)*(get_local_size(0)-1) + get_local_id(0), get_group_id(1)*(get_local_size(1)-1) + get_local_id(1));
+
+  float last_cost = loadCostToLocalAndSetRoute((int2)(get_group_id(0), get_group_id(1))), gid2, dim, lastCostmap, l_cost, l_routing_data);
+  float newcost = getPenalty(costmap, (int2)(get_global_id(0), get_global_id(1)));
+
+  if(get_global_id(0) < dim.x && get_global_id(1) < dim.y && fabs(last_cost - newcost) > 0.01f ) 
   {
-    newPenalty = getPenalty(costmap, (int2)(get_global_id(0), get_global_id(1)));
-    float oldPenalty = readLastPenalty(lastCostmap, (int2)(get_global_id(0), get_global_id(1)), dim);
-    if( fabs(newPenalty - oldPenalty) > 0.01f )
-    {
-      changed = true;
-      writeLastPenalty(lastCostmap, (int2)(get_global_id(0), get_global_id(1)), dim, newPenalty);
-    }
+    writeLastPenalty(lastCostmap, gid2, dim, newcost);
+    *accessLocalCost(l_cost, (int2)(get_local_id(0), get_local_id(1))) = newcost;
+    changed = true;
   }
+
   barrier(CLK_LOCAL_MEM_FENCE);
   if(!changed) return;
 
-  uint lid = get_local_id(0) + get_local_size(0)*get_local_id(1);
-  for( ; lid < 2*(get_local_size(0)+2)*(get_local_size(1)+2); lid += get_local_size(0)*get_local_size(1))
-    l_data[lid] =  0.1f*MAXFLOAT;
 
-  barrier(CLK_LOCAL_MEM_FENCE);
-  *accessLocalCost(l_cost, (int2)(get_local_id(0), get_local_id(1))) = newPenalty;
-
-
-  
   //do the routing
-  int boundaryelements = 4*(get_local_size(0) + get_local_size(1) - 1);
+  int boundaryelements = 2*(get_local_size(0) + get_local_size(1)-2);
   int written = 0;
-  int myid = borderId((int2)(get_local_id(0),get_local_id(1)), (int2)(get_local_size(0),get_local_size(1)));
+  int myBorderId = borderId((int2)(get_local_id(0), get_local_id(1)), (int2)(get_local_size(0),get_local_size(1)));
   for(int i = 0; i < boundaryelements; ++i)
   {
     //init routing data
-    float myinit = 0.1f*MAXFLOAT;
-    
-    if(myid == i) myinit = 0;
-    *accessLocalCost(l_routing_data, (int2)(get_local_id(0), get_local_id(1))) = myinit;
+    float mydata = 0.1f*MAXFLOAT;
+    if(lid == myBorderId)
+      mydata = 0.0f;
+    *accessLocalCost(l_routing_data, (int2)(get_local_id(0), get_local_id(1))) = mydata;
 
     //route
     route_data(l_cost, l_routing_data);
 
     //write result
     int write = boundaryelements - i;
-    if(myid >= 0 && myid < write) 
-      routeMap[boundaryelements*boundaryelements/2*get_group_id(0)+get_group_id(1)*get_num_groups(0) +
-               written + myid] = *accessLocalCost(l_routing_data, (int2)(get_local_id(0), get_local_id(1)));
+    if(myBorderId >= 0 && myBorderId < write) 
+      routeMap[boundaryelements*boundaryelements/2*(get_group_id(0)+get_group_id(1)*get_num_groups(0)) +
+               written + lid] = *accessLocalCost(l_routing_data, (int2)(get_local_id(0), get_local_id(1)));
   }
 }
 
 
 
+__kernel void prepareBorderCostsX(global float* routedata,
+                             const int2 blockSize,
+                             const int2 dim)
+{
+  int3 id = (int3)(get_global_id(0), get_global_id(1)*(blockSize.y-1), get_global_id(2));
+  routedata[dim.x*id.y+id.x + dim.x*dim.y*id.z] = 0.01f*MAXFLOAT;
+}
+__kernel void prepareBorderCostsY(global float* routedata,
+                             const int2 blockSize,
+                             const int2 dim)
+{
+  int3 id = (int3)(get_global_id(0)*(blockSize.x-1), get_global_id(1), get_global_id(2));
+  routedata[dim.x*id.y+id.x + dim.x*dim.y*id.z] = 0.01f*MAXFLOAT;
+}
+
+__kernel void prepareIndividualRouting(global float* costmap,
+                                       global float* routedata,
+                                       global QueueElement* queue,
+                                       global float* queuePriority,
+                                       global QueueGlobal* queueInfo,
+                                       uint queueSize,
+                                       global uint4* startingPoints,
+                                       const uint numStartingPoints,
+                                       const int2 dim,
+                                       const int2 numBlocks,
+                                       local float* l_data)
+{
+  __local bool hasStartingPoint;
+  
+  int3 id = {get_group_id(0)*(get_local_size(0)-1)+get_local_id(0),
+             get_global_id(1)*(get_local_size(1)-1)+get_local_id(1),, 
+             get_global_id(2)};
+
+  hasStartingPoint = false;
+  barrier(CLK_LOCAL_MEM_FENCE);
+
+  float startcost = 0.01f*MAXFLOAT;
+
+  if(id.x < dim.x && id.y < dim.y)
+  {
+    if(startingPoints[id.z].x <= id.x && id.x <= startingPoints[id.z].z &&
+        startingPoints[id.z].y <= id.y && id.y <= startingPoints[id.z].w)
+    {
+        startcost = 0;
+        hasStartingPoint = true;
+    }
+  }
+  barrier(CLK_LOCAL_MEM_FENCE);
+  if(!hasStartingPoint)
+    return;
+
+  local float* l_cost = l_data;
+  local float* l_route = l_data + (get_local_size(0)+2)*(get_local_size(1)+2);
+
+  //local routing
+  loadCostToLocalAndSetRoute((int2)(get_group_id(0), get_group_id(1))), (int2)(id.x,id.y), dim, costmap, l_cost, l_route);
+  barrier(CLK_LOCAL_MEM_FENCE);
+  *accessLocalCost(l_route, (int2)(get_local_id(0),get_local_id(1)) = startcost;
+  //route
+  route_data(l_cost, l_route);
+  //write out result
+  if(id.x < dim.x && id.y < dim.y)
+    routedata[dim.x*id.y+id.x + dim.x*dim.y*id.z] = *accessLocalCost(l_route, (int2)(get_local_id(0),get_local_id(1));
+  
+  if(get_local_id(0)+get_local_id(1) == 0)
+  {
+    //insert into queue
+    int3 block = (int3)(get_group_id(0), get_group_id(1), id.z);
+    Enqueue(queueInfo, queue, queuePriority, block, 0, numBlocks, queueSize);
+  }
+
+}
 
 __kernel void getMinimum(global const float* routecost,
                          //volatile global QueueGlobal* queueInfo,
