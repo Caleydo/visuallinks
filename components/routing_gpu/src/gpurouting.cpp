@@ -7,6 +7,8 @@
 #include <set>
 #include <algorithm>
 #include <limits>
+#include <sstream>
+
 #include "datatypes.h"
 
 #define USE_QUEUE_ROUTING 1
@@ -1306,29 +1308,113 @@ void updateRouteMapDummy(float * costmap,
     _cl_command_queue.enqueueReleaseGLObjects(&memory_gl);
     _cl_command_queue.finish();
 
+    //static int count = 0;
+    //std::stringstream fname;
+    //fname << "costmap" << count++;
+    //dumpBuffer<float>(_cl_command_queue, _cl_lastCostMap_buffer, _buffer_width, _buffer_height, fname.str());
+
     cl_ulong start, end;
     std::cout << "CLInfo:\n";
     updateRouteMap_Event.getProfilingInfo(CL_PROFILING_COMMAND_END, &end);
     updateRouteMap_Event.getProfilingInfo(CL_PROFILING_COMMAND_START, &start);
     std::cout << " - updateRouteMap: " << (end-start)/1000000.0  << "ms\n";
   }
-  void GPURouting::createRoutes(LinksRouting::LinkDescription::HyperEdge&)
+
+  void checkLevels(std::map<const LinksRouting::LinkDescription::Node*, size_t>& levelMap,  const LinksRouting::LinkDescription::HyperEdge& hedge, size_t level = 0)
   {
+    for(size_t i = 0; i < hedge.getNodes().size(); ++i)
+    {
+      auto found = levelMap.find(&hedge.getNodes()[i]);
+      if(found != levelMap.end())
+        found->second = std::max(found->second, level);
+      else
+        levelMap.insert(std::make_pair(&hedge.getNodes()[i], level));
+      //has child hyperedges
+      if(hedge.getNodes()[i].getChildren().size() > 0)
+      {
+        for(auto it = hedge.getNodes()[i].getChildren().begin();
+            it != hedge.getNodes()[i].getChildren().end(); ++it)
+          checkLevels(levelMap, *(*it), level + 1);
+      }
+    }
+  }
+
+  template<class T>
+  size_t insertLevels(T& collector, const LinksRouting::LinkDescription::HyperEdge& hedge, size_t level = 0)
+  {
+    if(collector.size() < level+1)
+      collector.resize(level+1);
+    size_t offset = collector[level].size();
+    //run through all nodes
+    for(size_t i = 0; i < hedge.getNodes().size(); ++i)
+    {
+      std::vector<size_t> insert_offset;
+      //has child hyperedges
+      if(hedge.getNodes()[i].getChildren().size() > 0)
+      {
+        for(auto it = hedge.getNodes()[i].getChildren().begin();
+            it != hedge.getNodes()[i].getChildren().end(); ++it)
+        {
+          size_t thisoffset = analyseLevels(collector, *(*it), level + 1);
+          insert_offset.push_back(thisoffset);
+        }
+      }
+      collector[level].push_back(std::make_pair(&hedge.getNodes()[i], insert_offset));
+    }
+    return offset;
+  }
+
+  void GPURouting::createRoutes(LinksRouting::LinkDescription::HyperEdge& hedge)
+  {
+    std::vector<std::vector< std::pair<const LinksRouting::LinkDescription::Node*, std::vector<size_t> > > > levelNodes;
+    std::map<const LinksRouting::LinkDescription::Node*, size_t> levelMap;
+    
+    //there can be loops due to hyperedges connecting the same nodes, so we have to avoid double entries
+    //the same way, one node could be put on different levels, so we need to analyse the nodes level first
+
+    checkLevels(levelMap, hedge);
+
+    //TODO include levelMap in insertLevels
+    insertLevels(levelNodes, hedge);
+
+    //allocate memory for all nodes
+    for(size_t i = 0; 
+
     //bottom up routing -> for every level do:
+    for(auto it = levelNodes.rbegin(); it != levelNodes.rend(); ++it)
+    {
 
-    // _cl_prepareBorderCostsX_kernel
+      
+      //init the border costs for all nodes
+      //_cl_prepareBorderCostsX_kernel
+      // _cl_prepareBorderCostsY_kernel
 
-    // _cl_prepareBorderCostsY_kernel
+      // init all nodes with geometry
+      // _cl_prepareIndividualRouting_kernel
 
-    // _cl_prepareIndividualRouting_kernel
+      // init nodes from child routing data
+      // _cl_prepareIndividualRoutingParent_kernel
 
-    // _cl_runIndividualRoutings_kernel
+      //run the routing
+      // _cl_runIndividualRoutings_kernel
 
-    // _cl_fillUpIndividualRoutings_kernel;
+      //fill up results
+      // _cl_fillUpIndividualRoutings_kernel;
+    }
+
+    //top down route construction
+    //get minimum of top node
     // _cl_getMinimum_kernel;
-    // _cl_routeInOut_kernel;
-    // _cl_routeInterBlock_kernel;
-    // _cl_routeConstruct_kernel;
+
+    
+
+    for(auto it = levelNodes.begin(); it != levelNodes.end(); ++it)
+    {
+      // _cl_routeInOut_kernel;
+      // _cl_routeInterBlock_kernel;
+      // _cl_routeConstruct_kernel;
+    }
+    
   }
 
 }

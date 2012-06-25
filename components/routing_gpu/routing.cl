@@ -181,14 +181,13 @@ bool Dequeue(volatile global QueueGlobal* queueInfo,
   //pop the front of the queue
   uint pos = atomic_inc(&queueInfo->front)%queueSize;
 
-  //check for barrier
-  uint barrierPos = queueInfo->sortingBarrier;
-  uint back = queueInfo->back%queueSize;
-  while(barrierPos <= pos && barrierPos > back)
-  {
-    barrierPos = queueInfo->sortingBarrier;
-    queueInfo->debug += 100000;
-  }
+  ////check for barrier
+  //uint back = queueInfo->back%queueSize;
+  //while(barrierPos <= pos && barrierPos > back)
+  //{
+  //  barrierPos = queueInfo->sortingBarrier;
+  //  queueInfo->debug += 100000;
+  //}
   
   //wait for the element to be written/change to reading
   checkAndSetQueueState(queue + pos, QueueElementReading, QueueElementReady);
@@ -218,7 +217,7 @@ float getPenalty(read_only image2d_t costmap, int2 pos)
   return read_imagef(costmap, sampler, pos).x;
 }
 
-float readLastPenalty(global float* lastCostmap, int2 pos, const int2 size)
+float readLastPenalty(global const float* lastCostmap, int2 pos, const int2 size)
 {
   return lastCostmap[pos.x + pos.y*size.x];
 }
@@ -312,7 +311,7 @@ bool route_data(local float const * l_cost,
 }
 
 
-float loadCostToLocalAndSetRoute(const int2 group_id, const int2 dim, const int2 gid, global const float* g_cost, local float* l_cost, local float* l_route)
+float loadCostToLocalAndSetRoute(const int2 group_id, const int2 gid, const int2 dim, global const float* g_cost, local float* l_cost, local float* l_route)
 {
   int lid = get_local_id(0) + get_local_id(1)*get_local_size(0);
   for(; lid < (get_local_size(0)+2)*(get_local_size(1)+2); lid += get_local_size(0)*get_local_size(1))
@@ -323,12 +322,13 @@ float loadCostToLocalAndSetRoute(const int2 group_id, const int2 dim, const int2
   barrier(CLK_LOCAL_MEM_FENCE);
 
   float r_in = 0.1f*MAXFLOAT;
-  if(gid2.x < dim.x && gid2.y < dim.y)
+  if(gid.x < dim.x && gid.y < dim.y)
   {
-    r_in = readLastPenalty(g_cost, gid2, dim);
+    r_in = readLastPenalty(g_cost, gid, dim);
     *accessLocalCost(l_cost, (int2)(get_local_id(0), get_local_id(1))) = r_in;
   }
   barrier(CLK_LOCAL_MEM_FENCE);
+  return r_in;
 }
 
 __kernel void updateRouteMap(read_only image2d_t costmap,
@@ -339,17 +339,17 @@ __kernel void updateRouteMap(read_only image2d_t costmap,
                              local float* l_data)
 {
   local bool changed;
-  changed = computeAll;
+  changed = computeAll>0?true:false;
 
   local float* l_cost = l_data;
   local float* l_routing_data = l_data + (get_local_size(0)+2)*(get_local_size(1)+2);
 
   int2 gid2 = (int2)(get_group_id(0)*(get_local_size(0)-1) + get_local_id(0), get_group_id(1)*(get_local_size(1)-1) + get_local_id(1));
 
-  float last_cost = loadCostToLocalAndSetRoute((int2)(get_group_id(0), get_group_id(1))), gid2, dim, lastCostmap, l_cost, l_routing_data);
-  float newcost = getPenalty(costmap, (int2)(get_global_id(0), get_global_id(1)));
+  float last_cost = loadCostToLocalAndSetRoute((int2)(get_group_id(0), get_group_id(1)), gid2, dim, lastCostmap, l_cost, l_routing_data);
+  float newcost = getPenalty(costmap, (int2)(gid2.x, gid2.y));
 
-  if(get_global_id(0) < dim.x && get_global_id(1) < dim.y && fabs(last_cost - newcost) > 0.01f ) 
+  if(gid2.x < dim.x && gid2.y < dim.y && fabs(last_cost - newcost) > 0.01f ) 
   {
     writeLastPenalty(lastCostmap, gid2, dim, newcost);
     *accessLocalCost(l_cost, (int2)(get_local_id(0), get_local_id(1))) = newcost;
@@ -368,7 +368,7 @@ __kernel void updateRouteMap(read_only image2d_t costmap,
   {
     //init routing data
     float mydata = 0.1f*MAXFLOAT;
-    if(lid == myBorderId)
+    if(i == myBorderId)
       mydata = 0.0f;
     *accessLocalCost(l_routing_data, (int2)(get_local_id(0), get_local_id(1))) = mydata;
 
@@ -379,7 +379,7 @@ __kernel void updateRouteMap(read_only image2d_t costmap,
     int write = boundaryelements - i;
     if(myBorderId >= 0 && myBorderId < write) 
       routeMap[boundaryelements*boundaryelements/2*(get_group_id(0)+get_group_id(1)*get_num_groups(0)) +
-               written + lid] = *accessLocalCost(l_routing_data, (int2)(get_local_id(0), get_local_id(1)));
+               written + myBorderId] = *accessLocalCost(l_routing_data, (int2)(get_local_id(0), get_local_id(1)));
   }
 }
 
@@ -414,9 +414,9 @@ __kernel void prepareIndividualRouting(global float* costmap,
 {
   __local bool hasStartingPoint;
   
-  int3 id = {get_group_id(0)*(get_local_size(0)-1)+get_local_id(0),
-             get_global_id(1)*(get_local_size(1)-1)+get_local_id(1),, 
-             get_global_id(2)};
+  int3 id = (int3)(get_group_id(0)*(get_local_size(0)-1)+get_local_id(0),
+                   get_global_id(1)*(get_local_size(1)-1)+get_local_id(1), 
+                   get_global_id(2));
 
   hasStartingPoint = false;
   barrier(CLK_LOCAL_MEM_FENCE);
@@ -440,14 +440,14 @@ __kernel void prepareIndividualRouting(global float* costmap,
   local float* l_route = l_data + (get_local_size(0)+2)*(get_local_size(1)+2);
 
   //local routing
-  loadCostToLocalAndSetRoute((int2)(get_group_id(0), get_group_id(1))), (int2)(id.x,id.y), dim, costmap, l_cost, l_route);
+  loadCostToLocalAndSetRoute((int2)(get_group_id(0), get_group_id(1)), (int2)(id.x,id.y), dim, costmap, l_cost, l_route);
   barrier(CLK_LOCAL_MEM_FENCE);
-  *accessLocalCost(l_route, (int2)(get_local_id(0),get_local_id(1)) = startcost;
+  *accessLocalCost(l_route, (int2)(get_local_id(0),get_local_id(1))) = startcost;
   //route
   route_data(l_cost, l_route);
   //write out result
   if(id.x < dim.x && id.y < dim.y)
-    routedata[dim.x*id.y+id.x + dim.x*dim.y*id.z] = *accessLocalCost(l_route, (int2)(get_local_id(0),get_local_id(1));
+    routedata[dim.x*id.y+id.x + dim.x*dim.y*id.z] = *accessLocalCost(l_route, (int2)(get_local_id(0),get_local_id(1)));
   
   if(get_local_id(0)+get_local_id(1) == 0)
   {

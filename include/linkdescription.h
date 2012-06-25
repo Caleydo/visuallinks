@@ -23,13 +23,25 @@ namespace LinkDescription
     public:
 
       explicit Node( const std::vector<float2>& points,
-                     const props_t& props = props_t() ):
+                     const props_t& props = props_t(),
+                     HyperEdge* parent = 0):
         _points( points ),
-        _props( props )
+        _props( props ),
+        _parent(parent)
       {}
 
       const std::vector<float2>& getVertices() const { return _points; }
       const props_t& getProps() const { return _props; }
+
+
+      const HyperEdge* getParent() const
+      {
+        return _parent;
+      }
+      const std::vector<HyperEdge*>& getChildren() const
+      {
+        return _children;
+      }
 
 //        virtual float positionDistancePenalty() const = 0;
 //        virtual bool hasFixedColor(Color &color) const = 0;
@@ -43,6 +55,8 @@ namespace LinkDescription
 
       std::vector<float2>  _points;
       std::map<std::string, std::string> _props;
+      HyperEdge* _parent;
+      std::vector<HyperEdge*> _children;
   };
 
   class HyperEdge
