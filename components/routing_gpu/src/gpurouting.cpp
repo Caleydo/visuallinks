@@ -904,8 +904,8 @@ namespace LinksRouting
         _cl_command_queue.enqueueReadBuffer(routes, true, 0, maxpoints*sizeof(cl_int2)*numtargets, &outroutes[0]);
 
         //copy routes to hyperedge
-        fork->position.x = startingpoint[0] * downsample;
-        fork->position.y = startingpoint[1] * downsample;
+        fork->position.x = (startingpoint[0] + 0.5) * downsample;
+        fork->position.y = (startingpoint[1] + 0.5) * downsample;
         for(int i = 0; i < numtargets; ++i)
         {
           fork->outgoing.push_back(LinkDescription::HyperEdgeDescriptionSegment());
@@ -915,8 +915,8 @@ namespace LinksRouting
           {
             fork->outgoing.back().trail.push_back
             (
-              float2( outroutes[i*maxpoints +j].s[0] * downsample,
-                      outroutes[i*maxpoints +j].s[1] * downsample )
+              float2( (outroutes[i*maxpoints +j].s[0] + 0.5) * downsample,
+                      (outroutes[i*maxpoints +j].s[1] + 0.5) * downsample )
             );
           }
           fork->outgoing.back().nodes.push_back(h_targets[i].aug);

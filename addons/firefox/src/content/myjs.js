@@ -128,8 +128,6 @@ function reportVisLinks(id, found)
 //  alert(offset[0] + "|" + offset[1]);
 
   var bbs = searchDocument(doc, id);
-  if( !bbs.length )
-    return;
   
   last_id = id;
   if( !found )
@@ -271,28 +269,6 @@ function attrModified(e)
 {
   if( e.attrName == "screenX" || e.attrName == "screenY" )
     windowChanged();
-}
-
-//------------------------------------------------------------------------------
-function validateWindowPosition()
-{
-	var oldPos = window.oldPos;
-	if (oldPos != null)
-	{
-		if (window.screenX != oldPos.x || window.screenY != oldPos.y)
-		{
-			register();
-			oldPos.x = window.screenX;
-			oldPos.y = window.screenY;
-			windowChanged();
-		}
-	}
-	else
-	{
-		window.oldPos = new Object();
-		window.oldPos.x = window.screenX;
-		window.oldPos.y = window.screenY;
-	}
 }
 
 //------------------------------------------------------------------------------
@@ -574,24 +550,4 @@ function findBoundingBox(doc, obj)
            [x + w, y],
            [x + w, y + h],
            [x,     y + h] ];
-}
-
-//------------------------------------------------------------------------------
-function generateBoundingBoxesXML(bbs, source) {
-	var	xml	= "<boundingBoxList>";
-	for	(var i = 0;	i<bbs.length; i++) {
-		xml	+= "<boundingBox";
-		xml	+= " x=\""+bbs[i].x+"\"";
-		xml	+= " y=\""+bbs[i].y+"\"";
-		xml	+= " width=\""+bbs[i].width+"\"";
-		xml	+= " height=\""+bbs[i].height+"\"";
-		xml	+= " source=\""+source+"\"";
-		xml	+= " />\n";
-		source = false;
-	}
-	xml	+= "</boundingBoxList>\n";
-
-	xml	= escape(xml);
-	
-	return xml;
 }
