@@ -113,6 +113,17 @@ function onAbort(id, stamp)
 }
 
 //------------------------------------------------------------------------------
+function removeAllRouteData()
+{
+  last_id = null;
+  last_stamp = null;
+  
+  // menu
+  for(var route_id in active_routes)
+    removeRouteData(route_id);
+}
+
+//------------------------------------------------------------------------------
 function reportVisLinks(id, found)
 {
   var doc = content.document;
@@ -187,7 +198,6 @@ function stopVisLinks()
 	window.removeEventListener('unload', stopVisLinks, false);
 	window.removeEventListener('scroll', windowChanged, false);
 	window.removeEventListener("DOMAttrModified", attrModified, false);
-	unregister();
 }
 
 //------------------------------------------------------------------------------
@@ -220,10 +230,12 @@ function register()
       socket.onclose = function(event)
       {
         setStatus(event.wasClean ? '' : 'error');
+        removeAllRouteData();
       };
       socket.onerror = function(event)
       {
         setStatus('error');
+        removeAllRouteData();
       };
       socket.onmessage = function(event)
       {
@@ -252,19 +264,6 @@ function register()
 }
 
 //------------------------------------------------------------------------------
-function unregister()
-{
-	try
-	{
-	  // send({'task': 'unregister', 'name': window.visLinkAppName});
-	}
-	catch (err)
-	{
-		// vis link server no reachable, nothing to do
-	}
-}
-
-//------------------------------------------------------------------------------
 function attrModified(e)
 {
   if( e.attrName == "screenX" || e.attrName == "screenY" )
@@ -276,36 +275,6 @@ function resize()
 {
 	register();
 	windowChanged();
-}
-
-//------------------------------------------------------------------------------
-function getId()
-{
-	try
-	{
-		//send({'task': 'propagation',
-        //  'name': window.visLinkAppName});
-	}
-	catch (err)
-	{
-		alert("Connection to visdaemon lost, stopping");
-		stopVisLinks();
-		return null;
-	}
-/* TODO evaluate response
-	var pointers = xmlDoc.getElementsByTagName("pointer"); 
-	var	ids	= xmlDoc.getElementsByTagName("id");
-	if(pointers.length > 0){
-		if(pointers[0].childNodes[0] != null){
-			window.lastPointerID = pointers[0].childNodes[0].nodeValue; 
-		}
-	}
-	if (ids.length > 0)	{
-		if (ids[0].childNodes[0] !=	null) {
-			return ids[0].childNodes[0].nodeValue;
-		}
-	}*/
-	return null;
 }
 
 //------------------------------------------------------------------------------
