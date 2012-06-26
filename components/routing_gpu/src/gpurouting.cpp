@@ -1320,86 +1320,193 @@ void updateRouteMapDummy(float * costmap,
     std::cout << " - updateRouteMap: " << (end-start)/1000000.0  << "ms\n";
   }
 
-  void checkLevels(std::map<const LinksRouting::LinkDescription::Node*, size_t>& levelMap,  const LinksRouting::LinkDescription::HyperEdge& hedge, size_t level = 0)
+  void checkLevels(std::map<const LinkDescription::Node*, size_t>& levelNodeMap, std::map<const LinkDescription::HyperEdge*, size_t>& levelHyperEdgeMap, const LinkDescription::HyperEdge& hedge, size_t level = 0)
   {
+    auto found = levelHyperEdgeMap.find(&hedge);
+    if(found != levelHyperEdgeMap.end())
+      found->second = std::max(found->second,level);
+    else
+      levelHyperEdgeMap.insert(std::make_pair(&hedge, level));
+    ++level;
     for(size_t i = 0; i < hedge.getNodes().size(); ++i)
     {
-      auto found = levelMap.find(&hedge.getNodes()[i]);
-      if(found != levelMap.end())
-        found->second = std::max(found->second, level);
+      if( hedge.getNodes()[i].getProps().find("hidden") != hedge.getNodes()[i].getProps().end() )
+        continue;
+      auto found = levelNodeMap.find(&hedge.getNodes()[i]);
+      if(found != levelNodeMap.end())
+        found->second = std::max(found->second,level);
       else
-        levelMap.insert(std::make_pair(&hedge.getNodes()[i], level));
+        levelNodeMap.insert(std::make_pair(&hedge.getNodes()[i], level));
       //has child hyperedges
-      if(hedge.getNodes()[i].getChildren().size() > 0)
-      {
-        for(auto it = hedge.getNodes()[i].getChildren().begin();
-            it != hedge.getNodes()[i].getChildren().end(); ++it)
-          checkLevels(levelMap, *(*it), level + 1);
-      }
+      for(auto it = hedge.getNodes()[i].getChildren().begin();
+          it != hedge.getNodes()[i].getChildren().end(); ++it)
+        checkLevels(levelNodeMap, levelHyperEdgeMap, *(*it), level + 1);
     }
   }
 
-  template<class T>
-  size_t insertLevels(T& collector, const LinksRouting::LinkDescription::HyperEdge& hedge, size_t level = 0)
-  {
-    if(collector.size() < level+1)
-      collector.resize(level+1);
-    size_t offset = collector[level].size();
-    //run through all nodes
-    for(size_t i = 0; i < hedge.getNodes().size(); ++i)
-    {
-      std::vector<size_t> insert_offset;
-      //has child hyperedges
-      if(hedge.getNodes()[i].getChildren().size() > 0)
-      {
-        for(auto it = hedge.getNodes()[i].getChildren().begin();
-            it != hedge.getNodes()[i].getChildren().end(); ++it)
-        {
-          size_t thisoffset = analyseLevels(collector, *(*it), level + 1);
-          insert_offset.push_back(thisoffset);
-        }
-      }
-      collector[level].push_back(std::make_pair(&hedge.getNodes()[i], insert_offset));
-    }
-    return offset;
-  }
 
   void GPURouting::createRoutes(LinksRouting::LinkDescription::HyperEdge& hedge)
   {
-    std::vector<std::vector< std::pair<const LinksRouting::LinkDescription::Node*, std::vector<size_t> > > > levelNodes;
-    std::map<const LinksRouting::LinkDescription::Node*, size_t> levelMap;
-    
+    std::map<const LinkDescription::Node*, size_t > levelNodeMap;
+    std::map<const LinkDescription::HyperEdge*, size_t > levelHyperEdgeMap;
+
+    std::map<const LinkDescription::Node*, size_t > nodeMemMap;
+    std::map<const LinkDescription::HyperEdge*, size_t > hyperEdgeMemMap;
+    std::vector< std::vector< const LinkDescription::Node* > > levelNodes;
+    std::vector< std::vector< const LinkDescription::HyperEdge* > > levelHyperEdges;
+
     //there can be loops due to hyperedges connecting the same nodes, so we have to avoid double entries
     //the same way, one node could be put on different levels, so we need to analyse the nodes level first
+    checkLevels(levelNodeMap, levelHyperEdgeMap, hedge);
 
-    checkLevels(levelMap, hedge);
+    //compute mem requirement and map
+    size_t slices = 0;
+    for(auto it = levelNodeMap.begin(); it != levelNodeMap.end(); ++it)
+    {
+      if(nodeMemMap.find(it->first) != nodeMemMap.end())
+        continue;
+      nodeMemMap.insert(std::make_pair(it->first, slices++));
+      if(levelNodes.size() < it->second + 1)
+        levelNodes.resize(it->second + 1);
+      levelNodes[it->second].push_back(it->first);
+    }
+    for(auto it = levelHyperEdgeMap.begin(); it != levelHyperEdgeMap.end(); ++it)
+    {
+      if(hyperEdgeMemMap.find(it->first) != hyperEdgeMemMap.end())
+        continue;
+      hyperEdgeMemMap.insert(std::make_pair(it->first, slices++));
+      if(levelHyperEdges.size() < it->second + 1)
+        levelHyperEdges.resize(it->second + 1);
+      levelHyperEdges[it->second].push_back(it->first);
+    }
+        
 
-    //TODO include levelMap in insertLevels
-    insertLevels(levelNodes, hedge);
 
-    //allocate memory for all nodes
-    for(size_t i = 0; 
+
+    //alloc Memory
+    cl_int bufferDim[2] = { _buffer_width, _buffer_height };
+    cl::Buffer routingData(_cl_context, CL_MEM_READ_WRITE, sizeof(cl_float)*_buffer_width*_buffer_height*slices);
+
+    //init the border costs for all nodes
+
+    _cl_prepareBorderCostsX_kernel.setArg(0,routingData);
+    _cl_prepareBorderCostsX_kernel.setArg(1,2*sizeof(int),_blockSize);
+    _cl_prepareBorderCostsX_kernel.setArg(2,2*sizeof(int),bufferDim);
+    _cl_prepareBorderCostsY_kernel.setArg(0,routingData);
+    _cl_prepareBorderCostsY_kernel.setArg(1,2*sizeof(int),_blockSize);
+    _cl_prepareBorderCostsY_kernel.setArg(2,2*sizeof(int),bufferDim);
+
+    cl::Event prepareBorderCostsXEvent, prepareBorderCostsYEvent;
+    _cl_command_queue.enqueueNDRangeKernel
+    (
+      _cl_prepareBorderCostsX_kernel,
+      cl::NullRange,
+      cl::NDRange(_buffer_width, _blocks[1], slices),
+      cl::NullRange,
+      0,
+      &prepareBorderCostsXEvent
+    );
+    _cl_command_queue.enqueueNDRangeKernel
+    (
+      _cl_prepareBorderCostsY_kernel,
+      cl::NullRange,
+      cl::NDRange(_blocks[0], _buffer_height, slices),
+      cl::NullRange,
+      0,
+      &prepareBorderCostsYEvent
+    );
+
 
     //bottom up routing -> for every level do:
-    for(auto it = levelNodes.rbegin(); it != levelNodes.rend(); ++it)
+    auto levelNodesit = levelNodes.rbegin();
+    auto levelHyperEdgesit = levelHyperEdges.rbegin();
+    while(levelNodesit != levelNodes.rend() ||  levelHyperEdgesit != levelHyperEdges.rend())
     {
+      std::vector<int4> routingPoints;
+      std::vector< std::vector<cl_uint> > routingSources;
+      std::vector<cl_uint> routingIds;
+
+      //geometry nodes
+      if(levelNodesit != levelNodes.rend())
+      for(auto nodeit = levelNodesit->begin(); nodeit != levelNodesit->end(); ++nodeit)
+      {
+        //handle non children first
+        if((*nodeit)->getChildren().size() != 0)
+          continue;
+
+        //compute min max for poly
+        int4 target(_buffer_width-1,_buffer_height-1,0,0);
+        for( auto p = (*nodeit)->getVertices().begin();
+              p != (*nodeit)->getVertices().end();
+              ++p )
+        {
+          target.x = std::min<int>(target.x, p->x/downsample);
+          target.y = std::min<int>(target.y, p->y/downsample);
+          target.z = std::max<int>(target.z, p->x/downsample);
+          target.w = std::max<int>(target.w, p->y/downsample);
+        }
+
+        target.x = std::max(target.x, 0);
+        target.y = std::max(target.y, 0);
+        target.z = std::min(target.z, ((int)_buffer_width-1));
+        target.w = std::min(target.w, ((int)_buffer_height-1));
+
+        if(target.z - target.x <= 0 || target.w - target.y <= 0)
+          continue;
+        routingPoints.push_back(target);
+        routingIds.push_back(nodeMemMap.find(*nodeit)->second);
+
+      }
+      //nodes with hyperedges
+      if(levelNodesit != levelNodes.rend())
+      for(auto nodeit = levelNodesit->begin(); nodeit != levelNodesit->end(); ++nodeit)
+      {
+        if((*nodeit)->getChildren().size() == 0)
+          continue;
+        std::vector<cl_uint> thisSources;
+        for(auto childIt = (*nodeit)->getChildren().begin();
+            childIt != (*nodeit)->getChildren().end();
+            ++childIt)
+        {
+          thisSources.push_back(hyperEdgeMemMap.find(*childIt)->second);
+        }
+        routingSources.push_back(thisSources);
+        routingIds.push_back(nodeMemMap.find(*nodeit)->second);
+      }
+      //nodes from hyperedges
+      if(levelHyperEdgesit != levelHyperEdges.rend())
+      for(auto hyperedgeit = levelHyperEdgesit->begin(); hyperedgeit != levelHyperEdgesit->end(); ++hyperedgeit)
+      {
+        std::vector<cl_uint> thisSources;
+        for(auto childIt = (*hyperedgeit)->getNodes().begin();
+            childIt != (*hyperedgeit)->getNodes().end();
+            ++childIt)
+        {
+          thisSources.push_back(nodeMemMap.find(&(*childIt))->second);
+        }
+        routingSources.push_back(thisSources);
+        routingIds.push_back(hyperEdgeMemMap.find(*hyperedgeit)->second);
+      }
 
       
-      //init the border costs for all nodes
-      //_cl_prepareBorderCostsX_kernel
-      // _cl_prepareBorderCostsY_kernel
-
       // init all nodes with geometry
       // _cl_prepareIndividualRouting_kernel
 
       // init nodes from child routing data
       // _cl_prepareIndividualRoutingParent_kernel
 
+
       //run the routing
       // _cl_runIndividualRoutings_kernel
 
       //fill up results
       // _cl_fillUpIndividualRoutings_kernel;
+
+
+      if(levelNodesit != levelNodes.rend())
+        ++levelNodesit;
+      if(levelHyperEdgesit != levelHyperEdges.rend())
+        ++levelHyperEdgesit;
     }
 
     //top down route construction

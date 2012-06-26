@@ -30,6 +30,7 @@ struct int4
       int x,y,z,w;
     };
   };
+  int4() { }
   int4( int _x, int _y, int _z, int _w) : x(_x), y(_y), z(_z), w(_w) { }
   bool operator < (const int4& other) const
   {
