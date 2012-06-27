@@ -1355,6 +1355,8 @@ void updateRouteMapDummy(float * costmap,
     std::vector< std::vector< const LinkDescription::Node* > > levelNodes;
     std::vector< std::vector< const LinkDescription::HyperEdge* > > levelHyperEdges;
 
+    int downsample = _subscribe_desktop->_data->width / _subscribe_costmap->_data->width;
+
     //there can be loops due to hyperedges connecting the same nodes, so we have to avoid double entries
     //the same way, one node could be put on different levels, so we need to analyse the nodes level first
     checkLevels(levelNodeMap, levelHyperEdgeMap, hedge);
@@ -1488,9 +1490,24 @@ void updateRouteMapDummy(float * costmap,
         routingIds.push_back(hyperEdgeMemMap.find(*hyperedgeit)->second);
       }
 
+      //TODO shared mem queue and k workers per block
+      // lock for queue, + insertion sort per warp
+      // -> need to limit blocksize.x + blocksize.y < 18
+      // -> one block per element, can also take care of init right away!
+
+      
+      cl::Buffer d_routingPoints(_cl_context, CL_MEM_READ_ONLY, routingPoints.size()*sizeof(uint4), &routingPoints[0]);
+      std::vector<cl_uint> routingSourcesOffset;
+      std::vector<cl_uint> routingSourcesData;
+      for(auto it = routingSources.begin(); it != routingSources.end(); ++it)
+        routingSourcesOffset.push_back(routingSourcesData.size()),
+        routingSourcesData.insert(routingSourcesData.end(), it->begin(), it->end());
+
+      cl::Buffer d_routingSourcesData(_cl_context, CL_MEM_READ_ONLY, routingSourcesData.size()*sizeof(cl_uint), &routingSourcesData[0]);
+      cl::Buffer d_routingSourcesOffset(_cl_context, CL_MEM_READ_ONLY, routingSourcesOffset.size()*sizeof(cl_uint), &routingSourcesOffset[0]);
       
       // init all nodes with geometry
-      // _cl_prepareIndividualRouting_kernel
+      //_cl_prepareIndividualRouting_kernel
 
       // init nodes from child routing data
       // _cl_prepareIndividualRoutingParent_kernel

@@ -255,6 +255,20 @@ int2 lidForBorderId(int borderId, int2 lsize)
     return (int2)(0, 2*(lsize.x + lsize.y - 2) - borderId);
 }
 
+int dirFromBorderId(int borderId, int2 lsize)
+{
+  if(borderId < 0) return 0;
+  int mask =  (borderId == 0) | 
+              ((borderId < lsize.x) << 1) |
+              ((borderId == lsize.x-1) << 2) |
+              ((borderId >= lsize.x-1 && borderId < lsize.x+lsize.y-1) << 3) |
+              ((borderId ==  lsize.x+lsize.y-2) << 4) |
+              ((borderId >= lsize.x+lsize.y-2 && borderId < 2*lsize.x+lsize.y-2) << 5) |
+              ((borderId == 2*lsize.x+lsize.y-3) << 6) |
+              ((borderId >= lsize.x+lsize.y-3) << 7);
+  return mask;
+}
+
 local float* accessLocalCost(local float* l_costs, int2 id)
 {
   return l_costs + (id.x+1 + (id.y+1)*(get_local_size(0)+2));
@@ -376,10 +390,10 @@ __kernel void updateRouteMap(read_only image2d_t costmap,
     route_data(l_cost, l_routing_data);
 
     //write result
-    int write = boundaryelements - i;
-    if(myBorderId >= 0 && myBorderId < write) 
+    if(myBorderId >= i) 
       routeMap[boundaryelements*boundaryelements/2*(get_group_id(0)+get_group_id(1)*get_num_groups(0)) +
-               written + myBorderId] = *accessLocalCost(l_routing_data, (int2)(get_local_id(0), get_local_id(1)));
+               written + myBorderId - i] = *accessLocalCost(l_routing_data, (int2)(get_local_id(0), get_local_id(1)));
+    written += boundaryelements - i;
   }
 }
 
@@ -458,6 +472,57 @@ __kernel void prepareIndividualRouting(global float* costmap,
 
 }
 
+float getRouteMapCost(global const float* ourRouteMapBlock, int from, int to, const int borderElements)
+{
+  int row = min(from,to);
+  int col = max(from,to);
+  col = col - row;
+  return ourRouteMapBlock[col + row*borderElements];
+}
+
+int routBorder(global const float* routeMap, 
+                global float* routingData,
+                const int2 blockId, 
+                const int2 blockSize,
+                const int2 numBlocks,
+                const int2 dim,
+                local float* routeData,
+                local int* changeData)
+{
+  int lid = get_local_id(0);
+  int lsize = get_local_size(0);
+  int borderElements = 2*(blockSize.x + blockSize.y - 2);
+  int2 gid2 = (int2)(blockId.x*(blockSize.x-1), blockId.y*(blockSize.y-1)) +
+              lidForBorderId(lid, blockSize);
+  changeData = 0;
+  float mycost = 0.01f*MAXFLOAT;
+  global const float* ourRouteMap = routeMap + borderElements*borderElements/2*(blockId.x + blockId.y*numBlocks.x);
+  if(lid < borderElements)
+  {    
+    if(gid2.x < dim.x && gid2.y < dim.y)
+      mycost = routingData[gid2.x + gid2.y*dim.x];
+    routeData[lid] = mycost;
+  }
+  barrier(CLK_LOCAL_MEM_FENCE);
+  if(lid < borderElements)
+  {
+    float origCost = mycost;
+    for(int i = 0; i < borderElements; ++i)
+    {
+      float newcost = routeData[i] + getRouteMapCost(ourRouteMap, i, lid, borderElements);
+      mycost = min(newcost, mycost);
+    }
+    if(gid2.x < dim.x && gid2.y < dim.y)
+      routingData[gid2.x + gid2.y*dim.x] = mycost;
+    //TODO: this is already an extension for opencl 1.0 so maybe do them individually...
+    if(mycost < origCost)
+      atomic_or(changeData,dirFromBorderId(lid, blockSize));
+  }
+  barrier(CLK_LOCAL_MEM_FENCE);
+  return *changeData;
+}
+
+
 __kernel void getMinimum(global const float* routecost,
                          //volatile global QueueGlobal* queueInfo,
                          volatile global ushort2* coordinates,
@@ -499,8 +564,6 @@ __kernel void getMinimum(global const float* routecost,
   //  }
   //}
 }
-
-
 
 
 __kernel void calcInOut(global const float* routecost,
