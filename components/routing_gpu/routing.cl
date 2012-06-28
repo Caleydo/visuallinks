@@ -399,20 +399,11 @@ __kernel void updateRouteMap(read_only image2d_t costmap,
 
 
 
-__kernel void prepareBorderCostsX(global float* routedata,
-                             const int2 blockSize,
-                             const int2 dim)
+__kernel void prepareBorderCosts(global float* routedata)
 {
-  int3 id = (int3)(get_global_id(0), get_global_id(1)*(blockSize.y-1), get_global_id(2));
-  routedata[dim.x*id.y+id.x + dim.x*dim.y*id.z] = 0.01f*MAXFLOAT;
+  routedata[get_global_id(0) + get_global_size(0)*get_global_id(1)] = 0.01f*MAXFLOAT;
 }
-__kernel void prepareBorderCostsY(global float* routedata,
-                             const int2 blockSize,
-                             const int2 dim)
-{
-  int3 id = (int3)(get_global_id(0)*(blockSize.x-1), get_global_id(1), get_global_id(2));
-  routedata[dim.x*id.y+id.x + dim.x*dim.y*id.z] = 0.01f*MAXFLOAT;
-}
+
 
 __kernel void prepareIndividualRouting(global float* costmap,
                                        global float* routedata,
@@ -480,6 +471,69 @@ float getRouteMapCost(global const float* ourRouteMapBlock, int from, int to, co
   return ourRouteMapBlock[col + row*borderElements];
 }
 
+int getCostGlobalId(const int lid, const int2 blockId, const int2 blockSize, const int2 blocks)
+{
+  int borderElements = 2*(blockSize.x + blockSize.y - 2);
+  int full_row_offset = blocks.x*(blockSize.y+2*blockSize.x-4) + blockSize.y;
+  int half_row_offset = (blocks.x+1)*(blockSize.y-2);
+  int myoffset = blockId.y/2*(full_row_offset+half_row_offset);
+  int mycoloffset = blockId.x/2*(borderElements + 2*blockSize.x - 2);
+  if((blockId.x & 0x1) == 0 && (blockId.y & 0x1) == 0)
+  {
+    //full mode
+    //can use lid directly
+    return myoffset + mycoloffset + lid;
+  }
+  if((blockId.y & 0x1) == 0)
+  {
+    //between two full (left and right)
+    myoffset = myoffset + mycoloffset;
+    if(lid == 0)
+      return myoffset + blockSize.x - 1;
+    if(lid < blockSize.x)
+      return myoffset + borderElements + lid - 1;
+    if(lid < blockSize.x + blockSize.y - 1)
+      return myoffset + 2*(borderElements + blockSize[0] - 1) + blockSize[0] - 1 - lid;
+    if(lid < 2*blockSize.x + blockSize.y - 3)
+      return myoffset + borderElements + lid - 1 - blockSize[1];
+    else
+      return myoffset + borderElements - lid + blockSize[0] - 1;
+  }
+  if((blockId.x &0x1) == 0)
+  {
+    //between two full (top and and)
+    int halfcoloffset = blockId.x/2*(2*blockSize.y - 2);
+    if(lid < blockSize.x)
+      return myoffset + mycoloffset + 2*blockSize.x + blockSize.y - 3 - lid;
+    if(lid < blockSize.x + blockSize.y - 2)
+      return myoffset + full_row_offset + halfcoloffset + lid - blockSize.x;
+    if(lid < 2*blockSize.x + blockSize.y - 2)
+      return myoffset + full_row_offset+half_row_offset + mycoloffset + 2*blockSize.x + blockSize.y-3 -lid;
+    else
+      return myoffset + full_row_offset + halfcoloffset + lid - (2*blockSize.x + blockSize.y-4); 
+  }
+  else
+  {
+    //full partial
+    if(lid == 0)
+      return myoffset + mycoloffset + blockSize.x + blockSize.y - 2;
+    if(lid < blockSize.x-1)
+      return myoffst + mycoloffset + borderElements + 2*(blockSize.x-2) - lid;
+    if(lid == blockSize.x-1)
+      return myoffset + mycoloffset + (borderElements + 2*blockSize.x - 2) + 2*blockSize.x + blockSize.y - 3;
+    if(lid < blockSize.x + blockSize.y - 2)
+      return myoffset + full_row_offset + (blockId.x+1)*(blockSize.y - 1) + 2*(blockSize.y-1)-1 -(lid-blockSize.x);
+    if(lid == blockSize.x + blockSize.y - 2)
+      return myoffset + full_row_offset+half_row_offset + mycoloffset + (borderElements + 2*blockSize.x - 2) + 0;
+    if(lid < 2*blockSize.x + blockSize.y - 3)
+      return myoffset + full_row_offset+half_row_offset + mycoloffset + borderElements + 2*blockSize.x+blockSize.y-4 -lid;
+    if(lid == 2*blockSize.x + blockSize.y - 3)
+      return myoffset + full_row_offset+half_row_offset + mycoloffset + blockSize.x-1;
+    else 
+      return myoffset + full_row_offset + blockId.x/2*(2*blockSize.y - 2) + borderElements-1 -lid;
+  }
+}
+
 int routBorder(global const float* routeMap, 
                 global float* routingData,
                 const int2 blockId, 
@@ -492,15 +546,14 @@ int routBorder(global const float* routeMap,
   int lid = get_local_id(0);
   int lsize = get_local_size(0);
   int borderElements = 2*(blockSize.x + blockSize.y - 2);
-  int2 gid2 = (int2)(blockId.x*(blockSize.x-1), blockId.y*(blockSize.y-1)) +
-              lidForBorderId(lid, blockSize);
+  int gid = getCostGlobalId(lid, blockId, blockSize, numBlocks);
+
   changeData = 0;
   float mycost = 0.01f*MAXFLOAT;
   global const float* ourRouteMap = routeMap + borderElements*borderElements/2*(blockId.x + blockId.y*numBlocks.x);
   if(lid < borderElements)
   {    
-    if(gid2.x < dim.x && gid2.y < dim.y)
-      mycost = routingData[gid2.x + gid2.y*dim.x];
+    mycost = routingData[gid];
     routeData[lid] = mycost;
   }
   barrier(CLK_LOCAL_MEM_FENCE);
@@ -512,11 +565,14 @@ int routBorder(global const float* routeMap,
       float newcost = routeData[i] + getRouteMapCost(ourRouteMap, i, lid, borderElements);
       mycost = min(newcost, mycost);
     }
-    if(gid2.x < dim.x && gid2.y < dim.y)
-      routingData[gid2.x + gid2.y*dim.x] = mycost;
-    //TODO: this is already an extension for opencl 1.0 so maybe do them individually...
+    
     if(mycost < origCost)
+    {
+      //TODO: use atomic min for this ones
+      routingData[gid] = mycost;
+      //TODO: this is already an extension for opencl 1.0 so maybe do them individually...
       atomic_or(changeData,dirFromBorderId(lid, blockSize));
+    }
   }
   barrier(CLK_LOCAL_MEM_FENCE);
   return *changeData;

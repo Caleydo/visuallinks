@@ -115,8 +115,7 @@ namespace LinksRouting
 
 
       cl::Kernel  _cl_updateRouteMap_kernel;
-      cl::Kernel  _cl_prepareBorderCostsX_kernel;
-      cl::Kernel  _cl_prepareBorderCostsY_kernel;
+      cl::Kernel  _cl_prepareBorderCosts_kernel;
       cl::Kernel  _cl_prepareIndividualRouting_kernel;
       cl::Kernel  _cl_runIndividualRoutings_kernel;
       cl::Kernel  _cl_fillUpIndividualRoutings_kernel;

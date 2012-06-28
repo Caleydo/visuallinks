@@ -248,8 +248,7 @@ namespace LinksRouting
 
 
     _cl_updateRouteMap_kernel = cl::Kernel(_cl_program, "updateRouteMap");
-    _cl_prepareBorderCostsX_kernel = cl::Kernel(_cl_program, "prepareBorderCostsX");
-    _cl_prepareBorderCostsY_kernel = cl::Kernel(_cl_program, "prepareBorderCostsY");
+    _cl_prepareBorderCosts_kernel = cl::Kernel(_cl_program, "prepareBorderCosts");
     _cl_prepareIndividualRouting_kernel = cl::Kernel(_cl_program, "prepareIndividualRouting");
 
     _cl_getMinimum_kernel = cl::Kernel(_cl_program, "getMinimum");
@@ -1387,36 +1386,24 @@ void updateRouteMapDummy(float * costmap,
 
     //alloc Memory
     cl_int bufferDim[2] = { _buffer_width, _buffer_height };
-    cl::Buffer routingData(_cl_context, CL_MEM_READ_WRITE, sizeof(cl_float)*_buffer_width*_buffer_height*slices);
+    size_t requiredElements = (_blocks[0] + 1)* _blocks[1]*_blockSize[1] + (_blocks[1] + 1)* _blocks[0]*_blockSize[0] - _blocks[0]*_blocks[1];
+    cl::Buffer routingData(_cl_context, CL_MEM_READ_WRITE, sizeof(cl_float)*requiredElements*slices);
 
     //init the border costs for all nodes
 
-    _cl_prepareBorderCostsX_kernel.setArg(0,routingData);
-    _cl_prepareBorderCostsX_kernel.setArg(1,2*sizeof(int),_blockSize);
-    _cl_prepareBorderCostsX_kernel.setArg(2,2*sizeof(int),bufferDim);
-    _cl_prepareBorderCostsY_kernel.setArg(0,routingData);
-    _cl_prepareBorderCostsY_kernel.setArg(1,2*sizeof(int),_blockSize);
-    _cl_prepareBorderCostsY_kernel.setArg(2,2*sizeof(int),bufferDim);
+    _cl_prepareBorderCosts_kernel.setArg(0,routingData);
 
-    cl::Event prepareBorderCostsXEvent, prepareBorderCostsYEvent;
+    cl::Event prepareBorderCostsEvent;
     _cl_command_queue.enqueueNDRangeKernel
     (
-      _cl_prepareBorderCostsX_kernel,
+      _cl_prepareBorderCosts_kernel,
       cl::NullRange,
-      cl::NDRange(_buffer_width, _blocks[1], slices),
-      cl::NullRange,
-      0,
-      &prepareBorderCostsXEvent
-    );
-    _cl_command_queue.enqueueNDRangeKernel
-    (
-      _cl_prepareBorderCostsY_kernel,
-      cl::NullRange,
-      cl::NDRange(_blocks[0], _buffer_height, slices),
+      cl::NDRange(requiredElements, slices),
       cl::NullRange,
       0,
-      &prepareBorderCostsYEvent
+      &prepareBorderCostsEvent
     );
+
 
 
     //bottom up routing -> for every level do:
