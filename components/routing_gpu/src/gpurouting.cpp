@@ -250,6 +250,8 @@ namespace LinksRouting
     _cl_updateRouteMap_kernel = cl::Kernel(_cl_program, "updateRouteMap");
     _cl_prepareBorderCosts_kernel = cl::Kernel(_cl_program, "prepareBorderCosts");
     _cl_prepareIndividualRouting_kernel = cl::Kernel(_cl_program, "prepareIndividualRouting");
+    //_cl_routing_kernel  = cl::Kernel(_cl_program, "routing");
+
 
     _cl_getMinimum_kernel = cl::Kernel(_cl_program, "getMinimum");
     _cl_routeInOut_kernel = cl::Kernel(_cl_program, "calcInOut");
@@ -1386,7 +1388,7 @@ void updateRouteMapDummy(float * costmap,
 
     //alloc Memory
     cl_int bufferDim[2] = { _buffer_width, _buffer_height };
-    size_t requiredElements = (_blocks[0] + 1)* _blocks[1]*_blockSize[1] + (_blocks[1] + 1)* _blocks[0]*_blockSize[0] - _blocks[0]*_blocks[1];
+    int requiredElements = (_blocks[0] + 1)* _blocks[1]*_blockSize[1] + (_blocks[1] + 1)* _blocks[0]*_blockSize[0] - _blocks[0]*_blocks[1];
     cl::Buffer routingData(_cl_context, CL_MEM_READ_WRITE, sizeof(cl_float)*requiredElements*slices);
 
     //init the border costs for all nodes
@@ -1492,19 +1494,52 @@ void updateRouteMapDummy(float * costmap,
 
       cl::Buffer d_routingSourcesData(_cl_context, CL_MEM_READ_ONLY, routingSourcesData.size()*sizeof(cl_uint), &routingSourcesData[0]);
       cl::Buffer d_routingSourcesOffset(_cl_context, CL_MEM_READ_ONLY, routingSourcesOffset.size()*sizeof(cl_uint), &routingSourcesOffset[0]);
+
+      cl::Buffer d_routingIds(_cl_context, CL_MEM_READ_ONLY, routingIds.size()*sizeof(cl_uint), &routingIds[0]);
       
       // init all nodes with geometry
-      //_cl_prepareIndividualRouting_kernel
+      std::vector<cl_int4> startingBlocks;
+      //determine requ. blocks
+      for(int i = 0; i < routingPoints.size(); ++i)
+      {
+        for(int y = routingPoints[i].y/(_blockSize[1]-1); y < divup(routingPoints[i].w,_blockSize[1]-1); ++y)
+        for(int x = routingPoints[i].x/(_blockSize[0]-1); x < divup(routingPoints[i].z,_blockSize[0]-1); ++x)
+          if(x >= 0 && x < _blocks[0] && y >= 0 && y < _blocks[1])
+          {
+            cl_int3 nblock;
+            nblock.s[0] = x; nblock.s[1] = y; nblock.s[2] = i; nblock.s[3] = routingIds[i];
+            startingBlocks.push_back(nblock);
+          }
+      }
+      cl::Buffer d_prepareIndividualRoutingMapping(_cl_context, CL_MEM_READ_ONLY, startingBlocks.size()*sizeof(cl_int4), &startingBlocks[0]);
 
-      // init nodes from child routing data
+
+      _cl_prepareIndividualRouting_kernel.setArg(0, _cl_lastCostMap_buffer);
+      _cl_prepareIndividualRouting_kernel.setArg(1, routingData);
+      _cl_prepareIndividualRouting_kernel.setArg(2, d_routingPoints);
+      _cl_prepareIndividualRouting_kernel.setArg(3, d_prepareIndividualRoutingMapping);
+      _cl_prepareIndividualRouting_kernel.setArg(4, 2 * sizeof(cl_int), bufferDim);
+      _cl_prepareIndividualRouting_kernel.setArg(5, 2 * sizeof(cl_int), _blocks);
+      _cl_prepareIndividualRouting_kernel.setArg(6, sizeof(cl_int), &requiredElements);
+      _cl_prepareIndividualRouting_kernel.setArg(7, 2*(_blockSize[0]+2)*(_blockSize[1]+2)*sizeof(float), NULL);
+
+      cl::Event prepareIndividualRoutingEvent;
+      _cl_command_queue.enqueueNDRangeKernel
+      (
+        _cl_prepareIndividualRouting_kernel,
+        cl::NullRange,
+        cl::NDRange(_blockSize[0]*startingBlocks.size(),_blockSize[1]),
+        cl::NDRange(_blockSize[0],_blockSize[1]),
+        0,
+        &prepareIndividualRoutingEvent
+      );
+
+      //TODO: init nodes from child routing data
       // _cl_prepareIndividualRoutingParent_kernel
 
-
       //run the routing
-      // _cl_runIndividualRoutings_kernel
+      // _cl_routing_kernel
 
-      //fill up results
-      // _cl_fillUpIndividualRoutings_kernel;
 
 
       if(levelNodesit != levelNodes.rend())

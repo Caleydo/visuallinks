@@ -48,6 +48,19 @@ struct int4
     return false;
   }
 };
+struct int3
+{
+  union
+  {
+    int v[3];
+    struct
+    {
+      int x,y,z;
+    };
+  };
+  int3() { }
+  int3(int _x, int _y, int _z) : x(_x), y(_y), z(_z) { }
+};
 template<class T>
 struct int4Aug
 {

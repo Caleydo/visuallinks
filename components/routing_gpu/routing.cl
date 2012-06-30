@@ -269,6 +269,70 @@ int dirFromBorderId(int borderId, int2 lsize)
   return mask;
 }
 
+int getCostGlobalId(const int lid, const int2 blockId, const int2 blockSize, const int2 blocks)
+{
+  int borderElements = 2*(blockSize.x + blockSize.y - 2);
+  int full_row_offset = blocks.x*(blockSize.y+2*blockSize.x-4) + blockSize.y;
+  int half_row_offset = (blocks.x+1)*(blockSize.y-2);
+  int myoffset = blockId.y/2*(full_row_offset+half_row_offset);
+  int mycoloffset = blockId.x/2*(borderElements + 2*blockSize.x - 2);
+  if((blockId.x & 0x1) == 0 && (blockId.y & 0x1) == 0)
+  {
+    //full mode
+    //can use lid directly
+    return myoffset + mycoloffset + lid;
+  }
+  if((blockId.y & 0x1) == 0)
+  {
+    //between two full (left and right)
+    myoffset = myoffset + mycoloffset;
+    if(lid == 0)
+      return myoffset + blockSize.x - 1;
+    if(lid < blockSize.x)
+      return myoffset + borderElements + lid - 1;
+    if(lid < blockSize.x + blockSize.y - 1)
+      return myoffset + 2*(borderElements + blockSize.x - 1) + blockSize.x - 1 - lid;
+    if(lid < 2*blockSize.x + blockSize.y - 3)
+      return myoffset + borderElements + lid - 1 - blockSize.y;
+    else
+      return myoffset + borderElements - lid + blockSize.x - 1;
+  }
+  if((blockId.x &0x1) == 0)
+  {
+    //between two full (top and and)
+    int halfcoloffset = blockId.x/2*(2*blockSize.y - 2);
+    if(lid < blockSize.x)
+      return myoffset + mycoloffset + 2*blockSize.x + blockSize.y - 3 - lid;
+    if(lid < blockSize.x + blockSize.y - 2)
+      return myoffset + full_row_offset + halfcoloffset + lid - blockSize.x;
+    if(lid < 2*blockSize.x + blockSize.y - 2)
+      return myoffset + full_row_offset+half_row_offset + mycoloffset + 2*blockSize.x + blockSize.y-3 -lid;
+    else
+      return myoffset + full_row_offset + halfcoloffset + lid - (2*blockSize.x + blockSize.y-4); 
+  }
+  else
+  {
+    //full partial
+    if(lid == 0)
+      return myoffset + mycoloffset + blockSize.x + blockSize.y - 2;
+    if(lid < blockSize.x-1)
+      return myoffset + mycoloffset + borderElements + 2*(blockSize.x-2) - lid;
+    if(lid == blockSize.x-1)
+      return myoffset + mycoloffset + (borderElements + 2*blockSize.x - 2) + 2*blockSize.x + blockSize.y - 3;
+    if(lid < blockSize.x + blockSize.y - 2)
+      return myoffset + full_row_offset + (blockId.x+1)*(blockSize.y - 1) + 2*(blockSize.y-1)-1 -(lid-blockSize.x);
+    if(lid == blockSize.x + blockSize.y - 2)
+      return myoffset + full_row_offset+half_row_offset + mycoloffset + (borderElements + 2*blockSize.x - 2) + 0;
+    if(lid < 2*blockSize.x + blockSize.y - 3)
+      return myoffset + full_row_offset+half_row_offset + mycoloffset + borderElements + 2*blockSize.x+blockSize.y-4 -lid;
+    if(lid == 2*blockSize.x + blockSize.y - 3)
+      return myoffset + full_row_offset+half_row_offset + mycoloffset + blockSize.x-1;
+    else 
+      return myoffset + full_row_offset + blockId.x/2*(2*blockSize.y - 2) + borderElements-1 -lid;
+  }
+}
+
+
 local float* accessLocalCost(local float* l_costs, int2 id)
 {
   return l_costs + (id.x+1 + (id.y+1)*(get_local_size(0)+2));
@@ -407,60 +471,46 @@ __kernel void prepareBorderCosts(global float* routedata)
 
 __kernel void prepareIndividualRouting(global float* costmap,
                                        global float* routedata,
-                                       global QueueElement* queue,
-                                       global float* queuePriority,
-                                       global QueueGlobal* queueInfo,
-                                       uint queueSize,
                                        global uint4* startingPoints,
-                                       const uint numStartingPoints,
+                                       global uint4* blockToDataMapping,
                                        const int2 dim,
                                        const int2 numBlocks,
+                                       const int routeDataPerNode,
                                        local float* l_data)
 {
-  __local bool hasStartingPoint;
-  
-  int3 id = (int3)(get_group_id(0)*(get_local_size(0)-1)+get_local_id(0),
-                   get_global_id(1)*(get_local_size(1)-1)+get_local_id(1), 
-                   get_global_id(2));
+  uint4 mapping = blockToDataMapping[get_group_id(0)];
 
-  hasStartingPoint = false;
-  barrier(CLK_LOCAL_MEM_FENCE);
+
+  int2 gid = (int2)(mapping.x*(get_local_size(0)-1)+get_local_id(0),
+                    mapping.y*(get_local_size(1)-1)+get_local_id(1));
+
 
   float startcost = 0.01f*MAXFLOAT;
 
-  if(id.x < dim.x && id.y < dim.y)
+  if(gid.x < dim.x && gid.y < dim.y)
   {
-    if(startingPoints[id.z].x <= id.x && id.x <= startingPoints[id.z].z &&
-        startingPoints[id.z].y <= id.y && id.y <= startingPoints[id.z].w)
-    {
+    if(startingPoints[mapping.z].x <= gid.x && gid.x <= startingPoints[mapping.z].z &&
+       startingPoints[mapping.z].y <= gid.y && gid.y <= startingPoints[mapping.z].w)
         startcost = 0;
-        hasStartingPoint = true;
-    }
   }
-  barrier(CLK_LOCAL_MEM_FENCE);
-  if(!hasStartingPoint)
-    return;
 
   local float* l_cost = l_data;
   local float* l_route = l_data + (get_local_size(0)+2)*(get_local_size(1)+2);
 
   //local routing
-  loadCostToLocalAndSetRoute((int2)(get_group_id(0), get_group_id(1)), (int2)(id.x,id.y), dim, costmap, l_cost, l_route);
+  loadCostToLocalAndSetRoute((int2)(mapping.x, mapping.y), gid, dim, costmap, l_cost, l_route);
   barrier(CLK_LOCAL_MEM_FENCE);
   *accessLocalCost(l_route, (int2)(get_local_id(0),get_local_id(1))) = startcost;
   //route
   route_data(l_cost, l_route);
-  //write out result
-  if(id.x < dim.x && id.y < dim.y)
-    routedata[dim.x*id.y+id.x + dim.x*dim.y*id.z] = *accessLocalCost(l_route, (int2)(get_local_id(0),get_local_id(1)));
-  
-  if(get_local_id(0)+get_local_id(1) == 0)
-  {
-    //insert into queue
-    int3 block = (int3)(get_group_id(0), get_group_id(1), id.z);
-    Enqueue(queueInfo, queue, queuePriority, block, 0, numBlocks, queueSize);
-  }
 
+  int lid =  borderId((int2)(get_local_id(0),get_local_id(1)), (int2) (get_local_size(0), get_local_size(1)));
+  if(lid >= 0)
+  {
+    //write out result
+    int offset = getCostGlobalId(lid, (int2)(mapping.x, mapping.y), (int2) (get_local_size(0), get_local_size(1)), numBlocks);
+    routedata[offset + routeDataPerNode*mapping.w] = *accessLocalCost(l_route, (int2)(get_local_id(0),get_local_id(1)));
+  }
 }
 
 float getRouteMapCost(global const float* ourRouteMapBlock, int from, int to, const int borderElements)
@@ -471,70 +521,7 @@ float getRouteMapCost(global const float* ourRouteMapBlock, int from, int to, co
   return ourRouteMapBlock[col + row*borderElements];
 }
 
-int getCostGlobalId(const int lid, const int2 blockId, const int2 blockSize, const int2 blocks)
-{
-  int borderElements = 2*(blockSize.x + blockSize.y - 2);
-  int full_row_offset = blocks.x*(blockSize.y+2*blockSize.x-4) + blockSize.y;
-  int half_row_offset = (blocks.x+1)*(blockSize.y-2);
-  int myoffset = blockId.y/2*(full_row_offset+half_row_offset);
-  int mycoloffset = blockId.x/2*(borderElements + 2*blockSize.x - 2);
-  if((blockId.x & 0x1) == 0 && (blockId.y & 0x1) == 0)
-  {
-    //full mode
-    //can use lid directly
-    return myoffset + mycoloffset + lid;
-  }
-  if((blockId.y & 0x1) == 0)
-  {
-    //between two full (left and right)
-    myoffset = myoffset + mycoloffset;
-    if(lid == 0)
-      return myoffset + blockSize.x - 1;
-    if(lid < blockSize.x)
-      return myoffset + borderElements + lid - 1;
-    if(lid < blockSize.x + blockSize.y - 1)
-      return myoffset + 2*(borderElements + blockSize[0] - 1) + blockSize[0] - 1 - lid;
-    if(lid < 2*blockSize.x + blockSize.y - 3)
-      return myoffset + borderElements + lid - 1 - blockSize[1];
-    else
-      return myoffset + borderElements - lid + blockSize[0] - 1;
-  }
-  if((blockId.x &0x1) == 0)
-  {
-    //between two full (top and and)
-    int halfcoloffset = blockId.x/2*(2*blockSize.y - 2);
-    if(lid < blockSize.x)
-      return myoffset + mycoloffset + 2*blockSize.x + blockSize.y - 3 - lid;
-    if(lid < blockSize.x + blockSize.y - 2)
-      return myoffset + full_row_offset + halfcoloffset + lid - blockSize.x;
-    if(lid < 2*blockSize.x + blockSize.y - 2)
-      return myoffset + full_row_offset+half_row_offset + mycoloffset + 2*blockSize.x + blockSize.y-3 -lid;
-    else
-      return myoffset + full_row_offset + halfcoloffset + lid - (2*blockSize.x + blockSize.y-4); 
-  }
-  else
-  {
-    //full partial
-    if(lid == 0)
-      return myoffset + mycoloffset + blockSize.x + blockSize.y - 2;
-    if(lid < blockSize.x-1)
-      return myoffst + mycoloffset + borderElements + 2*(blockSize.x-2) - lid;
-    if(lid == blockSize.x-1)
-      return myoffset + mycoloffset + (borderElements + 2*blockSize.x - 2) + 2*blockSize.x + blockSize.y - 3;
-    if(lid < blockSize.x + blockSize.y - 2)
-      return myoffset + full_row_offset + (blockId.x+1)*(blockSize.y - 1) + 2*(blockSize.y-1)-1 -(lid-blockSize.x);
-    if(lid == blockSize.x + blockSize.y - 2)
-      return myoffset + full_row_offset+half_row_offset + mycoloffset + (borderElements + 2*blockSize.x - 2) + 0;
-    if(lid < 2*blockSize.x + blockSize.y - 3)
-      return myoffset + full_row_offset+half_row_offset + mycoloffset + borderElements + 2*blockSize.x+blockSize.y-4 -lid;
-    if(lid == 2*blockSize.x + blockSize.y - 3)
-      return myoffset + full_row_offset+half_row_offset + mycoloffset + blockSize.x-1;
-    else 
-      return myoffset + full_row_offset + blockId.x/2*(2*blockSize.y - 2) + borderElements-1 -lid;
-  }
-}
-
-int routBorder(global const float* routeMap, 
+int routeBorder(global const float* routeMap, 
                 global float* routingData,
                 const int2 blockId, 
                 const int2 blockSize,
