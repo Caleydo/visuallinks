@@ -1222,6 +1222,92 @@ void updateRouteMapDummy(float * costmap,
   }
 }
 
+
+int getCostGlobalId(const int lid, const int2 blockId, const int2 blockSize, int2 blocks)
+{
+
+  int rowelements = (blockSize.x - 1) * blocks.x + 1;
+  int colelements = (blockSize.y - 2) * (blocks.x + 1);
+  int myoffset = blockId.y * (rowelements + colelements);
+
+  if(lid < 0)
+    return -1;
+  if(lid < blockSize.x)
+    return myoffset + blockId.x*(blockSize.x - 1) + lid;
+  if(lid < blockSize.x + blockSize.y - 2)
+    return myoffset + rowelements + (blockId.x+1)*(blockSize.y - 2) + lid - blockSize.x;
+  if(lid < 2*blockSize.x + blockSize.y - 2)
+    return myoffset + rowelements + colelements + blockId.x*(blockSize.x - 1)   + 2*blockSize.x+blockSize.y-3 - lid;
+  else
+    return myoffset + rowelements + blockId.x*(blockSize.y - 2)    + 2*(blockSize.x+blockSize.y-2)-1 - lid;
+
+
+
+  //blocks.x = (blocks.x & ~0x1)+1;
+  //blocks.y = (blocks.y & ~0x1)+1;
+  //int borderElements = 2*(blockSize.x + blockSize.y - 2);
+  //int full_row_offset = blocks.x*(blockSize.y+2*blockSize.x-4) + blockSize.y;
+  //int half_row_offset = (blocks.x+1)*(blockSize.y-2);
+  //int myoffset = blockId.y/2*(full_row_offset+half_row_offset);
+  //int mycoloffset = blockId.x/2*(borderElements + 2*blockSize.x - 4);
+  //if((blockId.x & 0x1) == 0 && (blockId.y & 0x1) == 0)
+  //{
+  //  //full mode
+  //  //can use lid directly
+  //  return myoffset + mycoloffset + lid;
+  //}
+  //if((blockId.y & 0x1) == 0)
+  //{
+  //  //between two full (left and right)
+  //  myoffset = myoffset + mycoloffset;
+  //  if(lid == 0)
+  //    return myoffset + blockSize.x - 1;
+  //  if(lid < blockSize.x -1)
+  //    return myoffset + borderElements + lid - 1;
+  //  if(lid == blockSize.x - 1)
+  //    return myoffset + borderElements + 2*blockSize.x - 4;
+  //  if(lid < blockSize.x + blockSize.y - 1)
+  //    return myoffset + 2*(borderElements + blockSize.x - 2) + blockSize.x - 1 - lid;
+  //  if(lid < 2*blockSize.x + blockSize.y - 3)
+  //    return myoffset + borderElements + lid - 1 - blockSize.y;
+  //  else
+  //    return myoffset + borderElements - lid + blockSize.x - 1;
+  //}
+  //if((blockId.x &0x1) == 0)
+  //{
+  //  //between two full (top and and)
+  //  int halfcoloffset = blockId.x/2*(2*blockSize.y - 2);
+  //  if(lid < blockSize.x)
+  //    return myoffset + mycoloffset + 2*blockSize.x + blockSize.y - 3 - lid;
+  //  if(lid < blockSize.x + blockSize.y - 2)
+  //    return myoffset + full_row_offset + halfcoloffset + lid - blockSize.x;
+  //  if(lid < 2*blockSize.x + blockSize.y - 2)
+  //    return myoffset + full_row_offset+half_row_offset + mycoloffset + 2*blockSize.x + blockSize.y-3 -lid;
+  //  else
+  //    return myoffset + full_row_offset + halfcoloffset + lid - 2*blockSize.x; 
+  //}
+  //else
+  //{
+  //  //full partial
+  //  if(lid == 0)
+  //    return myoffset + mycoloffset + blockSize.x + blockSize.y - 2;
+  //  if(lid < blockSize.x-1)
+  //    return myoffset + mycoloffset + borderElements + 2*(blockSize.x-2) - lid;
+  //  if(lid == blockSize.x-1)
+  //    return myoffset + mycoloffset + (borderElements + 2*blockSize.x - 2) + 2*blockSize.x + blockSize.y - 3;
+  //  if(lid < blockSize.x + blockSize.y - 2)
+  //    return myoffset + full_row_offset + (blockId.x+1)*(blockSize.y - 2) + 2*(blockSize.y-2)-1 -(lid-blockSize.x);
+  //  if(lid == blockSize.x + blockSize.y - 2)
+  //    return myoffset + full_row_offset+half_row_offset + mycoloffset + (borderElements + 2*blockSize.x - 4) + 0;
+  //  if(lid < 2*blockSize.x + blockSize.y - 3)
+  //    return myoffset + full_row_offset+half_row_offset + mycoloffset + borderElements + 2*blockSize.x+blockSize.y-4 -lid;
+  //  if(lid == 2*blockSize.x + blockSize.y - 3)
+  //    return myoffset + full_row_offset+half_row_offset + mycoloffset + blockSize.x-1;
+  //  else 
+  //    return myoffset + full_row_offset + blockId.x/2*(2*blockSize.y - 4) + borderElements-1 -lid;
+  //}
+}
+
 ///
 
 
@@ -1388,8 +1474,38 @@ void updateRouteMapDummy(float * costmap,
 
     //alloc Memory
     cl_int bufferDim[2] = { _buffer_width, _buffer_height };
-    int requiredElements = (_blocks[0] + 1)* _blocks[1]*_blockSize[1] + (_blocks[1] + 1)* _blocks[0]*_blockSize[0] - _blocks[0]*_blocks[1];
+    int bx = _blocks[0];
+    int by = _blocks[1];
+    int requiredElements = (bx + 1)* by*_blockSize[1] + (by + 1)* bx*_blockSize[0] - bx*by;
     cl::Buffer routingData(_cl_context, CL_MEM_READ_WRITE, sizeof(cl_float)*requiredElements*slices);
+
+
+    
+    //debug
+    //std::map<int,int> ids;
+    //for(int2 bid(0,0); bid.y < _blocks[1]; ++bid.y)
+    //  for(bid.x = 0; bid.x < _blocks[0]; ++bid.x)
+    //    for(int lid = 0; lid < 2*(_blockSize[0]+_blockSize[1]-2); ++lid)
+    //    {
+    //      int res = getCostGlobalId(lid, bid, int2(_blockSize[0], _blockSize[1]), int2(_blocks[0], _blocks[1]));
+    //      auto found = ids.find(res);
+    //      if(found != ids.end())
+    //      {
+    //        if(lid == 0 || lid == _blockSize[0]-1 || lid == _blockSize[0]+_blockSize[1]-2 || lid == 2*_blockSize[0]+_blockSize[1]-3)
+    //        {
+    //          if(++found->second > 4)
+    //            std::cout << "id already contained more than 4 times: [" << bid.x << "," << bid.y << "]->(" << lid << "): " << res << std::endl;
+    //        }
+    //        else
+    //          if(++found->second > 2)
+    //            std::cout << "id already contained more than 2 times:: [" << bid.x << "," << bid.y << "]->(" << lid << "): " << res << std::endl;
+    //      }
+    //      else
+    //        ids.insert(std::make_pair(res,1));
+    //      if(res >= requiredElements)
+    //        std::cout << "id too large: " << res << "( > " << requiredElements << ")" <<  std::endl;
+    //    }
+
 
     //init the border costs for all nodes
 
@@ -1406,9 +1522,10 @@ void updateRouteMapDummy(float * costmap,
       &prepareBorderCostsEvent
     );
 
-
+    _cl_command_queue.finish();
 
     //bottom up routing -> for every level do:
+    levelHyperEdges.resize(levelNodes.size()); //make same size (always: nodes.size > hyperedges.size)
     auto levelNodesit = levelNodes.rbegin();
     auto levelHyperEdgesit = levelHyperEdges.rbegin();
     while(levelNodesit != levelNodes.rend() ||  levelHyperEdgesit != levelHyperEdges.rend())
@@ -1418,7 +1535,6 @@ void updateRouteMapDummy(float * costmap,
       std::vector<cl_uint> routingIds;
 
       //geometry nodes
-      if(levelNodesit != levelNodes.rend())
       for(auto nodeit = levelNodesit->begin(); nodeit != levelNodesit->end(); ++nodeit)
       {
         //handle non children first
@@ -1449,7 +1565,6 @@ void updateRouteMapDummy(float * costmap,
 
       }
       //nodes with hyperedges
-      if(levelNodesit != levelNodes.rend())
       for(auto nodeit = levelNodesit->begin(); nodeit != levelNodesit->end(); ++nodeit)
       {
         if((*nodeit)->getChildren().size() == 0)
@@ -1465,7 +1580,6 @@ void updateRouteMapDummy(float * costmap,
         routingIds.push_back(nodeMemMap.find(*nodeit)->second);
       }
       //nodes from hyperedges
-      if(levelHyperEdgesit != levelHyperEdges.rend())
       for(auto hyperedgeit = levelHyperEdgesit->begin(); hyperedgeit != levelHyperEdgesit->end(); ++hyperedgeit)
       {
         std::vector<cl_uint> thisSources;
@@ -1479,63 +1593,74 @@ void updateRouteMapDummy(float * costmap,
         routingIds.push_back(hyperEdgeMemMap.find(*hyperedgeit)->second);
       }
 
+      
+      cl::Buffer d_routingIds(_cl_context, CL_MEM_READ_ONLY, routingIds.size()*sizeof(cl_uint), &routingIds[0]);     
+      if(routingPoints.size() > 0)
+      {
+        cl::Buffer d_routingPoints(_cl_context, CL_MEM_READ_ONLY, routingPoints.size()*sizeof(uint4), &routingPoints[0]);
+        // init all nodes with geometry
+        std::vector<cl_int4> startingBlocks;
+        //determine requ. blocks
+        for(int i = 0; i < routingPoints.size(); ++i)
+        {
+          for(int y = routingPoints[i].y/(_blockSize[1]-1); y < divup(routingPoints[i].w,_blockSize[1]-1); ++y)
+          for(int x = routingPoints[i].x/(_blockSize[0]-1); x < divup(routingPoints[i].z,_blockSize[0]-1); ++x)
+            if(x >= 0 && x < _blocks[0] && y >= 0 && y < _blocks[1])
+            {
+              cl_int3 nblock;
+              nblock.s[0] = x; nblock.s[1] = y; nblock.s[2] = i; nblock.s[3] = routingIds[i];
+              startingBlocks.push_back(nblock);
+            }
+        }
+        cl::Buffer d_prepareIndividualRoutingMapping(_cl_context, CL_MEM_READ_ONLY, startingBlocks.size()*sizeof(cl_int4), &startingBlocks[0]);
+
+
+        _cl_prepareIndividualRouting_kernel.setArg(0, _cl_lastCostMap_buffer);
+        _cl_prepareIndividualRouting_kernel.setArg(1, routingData);
+        _cl_prepareIndividualRouting_kernel.setArg(2, d_routingPoints);
+        _cl_prepareIndividualRouting_kernel.setArg(3, d_prepareIndividualRoutingMapping);
+        _cl_prepareIndividualRouting_kernel.setArg(4, 2 * sizeof(cl_int), bufferDim);
+        _cl_prepareIndividualRouting_kernel.setArg(5, 2 * sizeof(cl_int), _blocks);
+        _cl_prepareIndividualRouting_kernel.setArg(6, sizeof(cl_int), &requiredElements);
+        _cl_prepareIndividualRouting_kernel.setArg(7, 2*(_blockSize[0]+2)*(_blockSize[1]+2)*sizeof(float), NULL);
+
+        cl::Event prepareIndividualRoutingEvent;
+        _cl_command_queue.enqueueNDRangeKernel
+        (
+          _cl_prepareIndividualRouting_kernel,
+          cl::NullRange,
+          cl::NDRange(_blockSize[0]*startingBlocks.size(),_blockSize[1]),
+          cl::NDRange(_blockSize[0],_blockSize[1]),
+          0,
+          &prepareIndividualRoutingEvent
+        );
+
+        _cl_command_queue.finish();
+      }
+
+
+
+      if(routingSources.size() > 0)
+      {
+        std::vector<cl_uint> routingSourcesOffset;
+        std::vector<cl_uint> routingSourcesData;
+        for(auto it = routingSources.begin(); it != routingSources.end(); ++it)
+          routingSourcesOffset.push_back(routingSourcesData.size()),
+          routingSourcesData.insert(routingSourcesData.end(), it->begin(), it->end());
+
+        cl::Buffer d_routingSourcesData(_cl_context, CL_MEM_READ_ONLY, routingSourcesData.size()*sizeof(cl_uint), &routingSourcesData[0]);
+        cl::Buffer d_routingSourcesOffset(_cl_context, CL_MEM_READ_ONLY, routingSourcesOffset.size()*sizeof(cl_uint), &routingSourcesOffset[0]);
+
+        //TODO: init nodes from child routing data
+        // _cl_prepareIndividualRoutingParent_kernel
+      }
+
+
       //TODO shared mem queue and k workers per block
       // lock for queue, + insertion sort per warp
       // -> need to limit blocksize.x + blocksize.y < 18
       // -> one block per element, can also take care of init right away!
 
-      
-      cl::Buffer d_routingPoints(_cl_context, CL_MEM_READ_ONLY, routingPoints.size()*sizeof(uint4), &routingPoints[0]);
-      std::vector<cl_uint> routingSourcesOffset;
-      std::vector<cl_uint> routingSourcesData;
-      for(auto it = routingSources.begin(); it != routingSources.end(); ++it)
-        routingSourcesOffset.push_back(routingSourcesData.size()),
-        routingSourcesData.insert(routingSourcesData.end(), it->begin(), it->end());
-
-      cl::Buffer d_routingSourcesData(_cl_context, CL_MEM_READ_ONLY, routingSourcesData.size()*sizeof(cl_uint), &routingSourcesData[0]);
-      cl::Buffer d_routingSourcesOffset(_cl_context, CL_MEM_READ_ONLY, routingSourcesOffset.size()*sizeof(cl_uint), &routingSourcesOffset[0]);
-
-      cl::Buffer d_routingIds(_cl_context, CL_MEM_READ_ONLY, routingIds.size()*sizeof(cl_uint), &routingIds[0]);
-      
-      // init all nodes with geometry
-      std::vector<cl_int4> startingBlocks;
-      //determine requ. blocks
-      for(int i = 0; i < routingPoints.size(); ++i)
-      {
-        for(int y = routingPoints[i].y/(_blockSize[1]-1); y < divup(routingPoints[i].w,_blockSize[1]-1); ++y)
-        for(int x = routingPoints[i].x/(_blockSize[0]-1); x < divup(routingPoints[i].z,_blockSize[0]-1); ++x)
-          if(x >= 0 && x < _blocks[0] && y >= 0 && y < _blocks[1])
-          {
-            cl_int3 nblock;
-            nblock.s[0] = x; nblock.s[1] = y; nblock.s[2] = i; nblock.s[3] = routingIds[i];
-            startingBlocks.push_back(nblock);
-          }
-      }
-      cl::Buffer d_prepareIndividualRoutingMapping(_cl_context, CL_MEM_READ_ONLY, startingBlocks.size()*sizeof(cl_int4), &startingBlocks[0]);
-
-
-      _cl_prepareIndividualRouting_kernel.setArg(0, _cl_lastCostMap_buffer);
-      _cl_prepareIndividualRouting_kernel.setArg(1, routingData);
-      _cl_prepareIndividualRouting_kernel.setArg(2, d_routingPoints);
-      _cl_prepareIndividualRouting_kernel.setArg(3, d_prepareIndividualRoutingMapping);
-      _cl_prepareIndividualRouting_kernel.setArg(4, 2 * sizeof(cl_int), bufferDim);
-      _cl_prepareIndividualRouting_kernel.setArg(5, 2 * sizeof(cl_int), _blocks);
-      _cl_prepareIndividualRouting_kernel.setArg(6, sizeof(cl_int), &requiredElements);
-      _cl_prepareIndividualRouting_kernel.setArg(7, 2*(_blockSize[0]+2)*(_blockSize[1]+2)*sizeof(float), NULL);
-
-      cl::Event prepareIndividualRoutingEvent;
-      _cl_command_queue.enqueueNDRangeKernel
-      (
-        _cl_prepareIndividualRouting_kernel,
-        cl::NullRange,
-        cl::NDRange(_blockSize[0]*startingBlocks.size(),_blockSize[1]),
-        cl::NDRange(_blockSize[0],_blockSize[1]),
-        0,
-        &prepareIndividualRoutingEvent
-      );
-
-      //TODO: init nodes from child routing data
-      // _cl_prepareIndividualRoutingParent_kernel
 
       //run the routing
       // _cl_routing_kernel

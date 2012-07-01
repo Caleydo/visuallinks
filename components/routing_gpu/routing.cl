@@ -271,65 +271,21 @@ int dirFromBorderId(int borderId, int2 lsize)
 
 int getCostGlobalId(const int lid, const int2 blockId, const int2 blockSize, const int2 blocks)
 {
-  int borderElements = 2*(blockSize.x + blockSize.y - 2);
-  int full_row_offset = blocks.x*(blockSize.y+2*blockSize.x-4) + blockSize.y;
-  int half_row_offset = (blocks.x+1)*(blockSize.y-2);
-  int myoffset = blockId.y/2*(full_row_offset+half_row_offset);
-  int mycoloffset = blockId.x/2*(borderElements + 2*blockSize.x - 2);
-  if((blockId.x & 0x1) == 0 && (blockId.y & 0x1) == 0)
-  {
-    //full mode
-    //can use lid directly
-    return myoffset + mycoloffset + lid;
-  }
-  if((blockId.y & 0x1) == 0)
-  {
-    //between two full (left and right)
-    myoffset = myoffset + mycoloffset;
-    if(lid == 0)
-      return myoffset + blockSize.x - 1;
-    if(lid < blockSize.x)
-      return myoffset + borderElements + lid - 1;
-    if(lid < blockSize.x + blockSize.y - 1)
-      return myoffset + 2*(borderElements + blockSize.x - 1) + blockSize.x - 1 - lid;
-    if(lid < 2*blockSize.x + blockSize.y - 3)
-      return myoffset + borderElements + lid - 1 - blockSize.y;
-    else
-      return myoffset + borderElements - lid + blockSize.x - 1;
-  }
-  if((blockId.x &0x1) == 0)
-  {
-    //between two full (top and and)
-    int halfcoloffset = blockId.x/2*(2*blockSize.y - 2);
-    if(lid < blockSize.x)
-      return myoffset + mycoloffset + 2*blockSize.x + blockSize.y - 3 - lid;
-    if(lid < blockSize.x + blockSize.y - 2)
-      return myoffset + full_row_offset + halfcoloffset + lid - blockSize.x;
-    if(lid < 2*blockSize.x + blockSize.y - 2)
-      return myoffset + full_row_offset+half_row_offset + mycoloffset + 2*blockSize.x + blockSize.y-3 -lid;
-    else
-      return myoffset + full_row_offset + halfcoloffset + lid - (2*blockSize.x + blockSize.y-4); 
-  }
+  int rowelements = (blockSize.x - 1) * blocks.x + 1;
+  int colelements = (blockSize.y - 2) * (blocks.x + 1);
+  int myoffset = blockId.y * (rowelements + colelements);
+
+  if(lid < 0)
+    return -1;
+  if(lid < blockSize.x)
+    return myoffset + blockId.x*(blockSize.x - 1) + lid;
+  if(lid < blockSize.x + blockSize.y - 2)
+    return myoffset + rowelements + (blockId.x+1)*(blockSize.y - 2) + lid - blockSize.x;
+  if(lid < 2*blockSize.x + blockSize.y - 2)
+    return myoffset + rowelements + colelements + blockId.x*(blockSize.x - 1)   + 2*blockSize.x+blockSize.y-3 - lid;
   else
-  {
-    //full partial
-    if(lid == 0)
-      return myoffset + mycoloffset + blockSize.x + blockSize.y - 2;
-    if(lid < blockSize.x-1)
-      return myoffset + mycoloffset + borderElements + 2*(blockSize.x-2) - lid;
-    if(lid == blockSize.x-1)
-      return myoffset + mycoloffset + (borderElements + 2*blockSize.x - 2) + 2*blockSize.x + blockSize.y - 3;
-    if(lid < blockSize.x + blockSize.y - 2)
-      return myoffset + full_row_offset + (blockId.x+1)*(blockSize.y - 1) + 2*(blockSize.y-1)-1 -(lid-blockSize.x);
-    if(lid == blockSize.x + blockSize.y - 2)
-      return myoffset + full_row_offset+half_row_offset + mycoloffset + (borderElements + 2*blockSize.x - 2) + 0;
-    if(lid < 2*blockSize.x + blockSize.y - 3)
-      return myoffset + full_row_offset+half_row_offset + mycoloffset + borderElements + 2*blockSize.x+blockSize.y-4 -lid;
-    if(lid == 2*blockSize.x + blockSize.y - 3)
-      return myoffset + full_row_offset+half_row_offset + mycoloffset + blockSize.x-1;
-    else 
-      return myoffset + full_row_offset + blockId.x/2*(2*blockSize.y - 2) + borderElements-1 -lid;
-  }
+    return myoffset + rowelements + blockId.x*(blockSize.y - 2)    + 2*(blockSize.x+blockSize.y-2)-1 - lid;
+
 }
 
 
@@ -469,10 +425,10 @@ __kernel void prepareBorderCosts(global float* routedata)
 }
 
 
-__kernel void prepareIndividualRouting(global float* costmap,
+__kernel void prepareIndividualRouting(const global float* costmap,
                                        global float* routedata,
-                                       global uint4* startingPoints,
-                                       global uint4* blockToDataMapping,
+                                       const global uint4* startingPoints,
+                                       const global uint4* blockToDataMapping,
                                        const int2 dim,
                                        const int2 numBlocks,
                                        const int routeDataPerNode,
@@ -509,7 +465,7 @@ __kernel void prepareIndividualRouting(global float* costmap,
   {
     //write out result
     int offset = getCostGlobalId(lid, (int2)(mapping.x, mapping.y), (int2) (get_local_size(0), get_local_size(1)), numBlocks);
-    routedata[offset + routeDataPerNode*mapping.w] = *accessLocalCost(l_route, (int2)(get_local_id(0),get_local_id(1)));
+    routedata[routeDataPerNode*mapping.w + offset] = *accessLocalCost(l_route, (int2)(get_local_id(0),get_local_id(1)));
   }
 }
 
