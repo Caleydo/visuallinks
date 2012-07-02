@@ -130,6 +130,9 @@ namespace LinksRouting
       int _blocks[2];
       bool _enabled;
       bool _noQueue;
+      int _routingQueueSize;
+      int _routingNumLocalWorkers;
+      int _routingLocalWorkersWarpSize;
 
       size_t _buffer_width, _buffer_height;
       cl::Buffer  _cl_lastCostMap_buffer;

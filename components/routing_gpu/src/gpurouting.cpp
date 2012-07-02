@@ -41,7 +41,9 @@ namespace LinksRouting
     registerArg("BlockSizeX", _blockSize[0] = 8);
     registerArg("BlockSizeY", _blockSize[1] = 8);
     registerArg("enabled", _enabled = true);
-    registerArg("NoQueue", _noQueue = false);
+    registerArg("QueueSize", _routingQueueSize = 512);
+    registerArg("NumLocalWorkers", _routingNumLocalWorkers = 8);
+    registerArg("WorkersWarpSize", _routingLocalWorkersWarpSize = 32);
   }
 
   //------------------------------------------------------------------------------
@@ -250,7 +252,7 @@ namespace LinksRouting
     _cl_updateRouteMap_kernel = cl::Kernel(_cl_program, "updateRouteMap");
     _cl_prepareBorderCosts_kernel = cl::Kernel(_cl_program, "prepareBorderCosts");
     _cl_prepareIndividualRouting_kernel = cl::Kernel(_cl_program, "prepareIndividualRouting");
-    //_cl_routing_kernel  = cl::Kernel(_cl_program, "routing");
+    _cl_routing_kernel  = cl::Kernel(_cl_program, "routeLocal");
 
 
     _cl_getMinimum_kernel = cl::Kernel(_cl_program, "getMinimum");
@@ -1443,6 +1445,8 @@ int getCostGlobalId(const int lid, const int2 blockId, const int2 blockSize, int
     std::vector< std::vector< const LinkDescription::HyperEdge* > > levelHyperEdges;
 
     int downsample = _subscribe_desktop->_data->width / _subscribe_costmap->_data->width;
+    int boundaryElements = 2*(_blockSize[0] + _blockSize[1]-2);
+    cl_ulong start, end;
 
     //there can be loops due to hyperedges connecting the same nodes, so we have to avoid double entries
     //the same way, one node could be put on different levels, so we need to analyse the nodes level first
@@ -1474,10 +1478,11 @@ int getCostGlobalId(const int lid, const int2 blockId, const int2 blockSize, int
 
     //alloc Memory
     cl_int bufferDim[2] = { _buffer_width, _buffer_height };
-    int bx = _blocks[0];
-    int by = _blocks[1];
-    int requiredElements = (bx + 1)* by*_blockSize[1] + (by + 1)* bx*_blockSize[0] - bx*by;
-    cl::Buffer routingData(_cl_context, CL_MEM_READ_WRITE, sizeof(cl_float)*requiredElements*slices);
+    int rowelements = _blocks[0]*(_blockSize[0]-1)+1;
+    int colelements = (_blocks[0]+1)*(_blockSize[1]-2);
+
+    int requiredElements = (_blocks[1]+1)*rowelements + _blocks[1]*colelements;
+    cl::Buffer d_routingData(_cl_context, CL_MEM_READ_WRITE, sizeof(cl_float)*requiredElements*slices);
 
 
     
@@ -1509,7 +1514,7 @@ int getCostGlobalId(const int lid, const int2 blockId, const int2 blockSize, int
 
     //init the border costs for all nodes
 
-    _cl_prepareBorderCosts_kernel.setArg(0,routingData);
+    _cl_prepareBorderCosts_kernel.setArg(0,d_routingData);
 
     cl::Event prepareBorderCostsEvent;
     _cl_command_queue.enqueueNDRangeKernel
@@ -1521,8 +1526,11 @@ int getCostGlobalId(const int lid, const int2 blockId, const int2 blockSize, int
       0,
       &prepareBorderCostsEvent
     );
-
     _cl_command_queue.finish();
+    prepareBorderCostsEvent.getProfilingInfo(CL_PROFILING_COMMAND_END, &end);
+    prepareBorderCostsEvent.getProfilingInfo(CL_PROFILING_COMMAND_START, &start);
+    std::cout << " - prepareBorderCosts: " << (end-start)/1000000.0  << "ms\n";
+
 
     //bottom up routing -> for every level do:
     levelHyperEdges.resize(levelNodes.size()); //make same size (always: nodes.size > hyperedges.size)
@@ -1531,6 +1539,7 @@ int getCostGlobalId(const int lid, const int2 blockId, const int2 blockSize, int
     while(levelNodesit != levelNodes.rend() ||  levelHyperEdgesit != levelHyperEdges.rend())
     {
       std::vector<int4> routingPoints;
+      std::vector<int4> startBlockRange;
       std::vector< std::vector<cl_uint> > routingSources;
       std::vector<cl_uint> routingIds;
 
@@ -1562,7 +1571,10 @@ int getCostGlobalId(const int lid, const int2 blockId, const int2 blockSize, int
           continue;
         routingPoints.push_back(target);
         routingIds.push_back(nodeMemMap.find(*nodeit)->second);
-
+        startBlockRange.push_back(int4(std::max(0,target.x/(_blockSize[0]-1)-1),
+                                       std::max(0,target.y/(_blockSize[1]-1)-1),  
+                                       std::min(_blocks[0]-1,divup(target.z,_blockSize[0]-1)+1),
+                                       std::min(_blocks[1]-1,divup(target.w,_blockSize[1]-1)+1) ) );
       }
       //nodes with hyperedges
       for(auto nodeit = levelNodesit->begin(); nodeit != levelNodesit->end(); ++nodeit)
@@ -1578,6 +1590,7 @@ int getCostGlobalId(const int lid, const int2 blockId, const int2 blockSize, int
         }
         routingSources.push_back(thisSources);
         routingIds.push_back(nodeMemMap.find(*nodeit)->second);
+        startBlockRange.push_back(int4(0,0, _blocks[0], _blocks[1]));
       }
       //nodes from hyperedges
       for(auto hyperedgeit = levelHyperEdgesit->begin(); hyperedgeit != levelHyperEdgesit->end(); ++hyperedgeit)
@@ -1592,12 +1605,12 @@ int getCostGlobalId(const int lid, const int2 blockId, const int2 blockSize, int
         routingSources.push_back(thisSources);
         routingIds.push_back(hyperEdgeMemMap.find(*hyperedgeit)->second);
       }
-
       
-      cl::Buffer d_routingIds(_cl_context, CL_MEM_READ_ONLY, routingIds.size()*sizeof(cl_uint), &routingIds[0]);     
+      cl::Buffer d_routingIds(_cl_context, CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR, routingIds.size()*sizeof(cl_uint), &routingIds[0]);  
+
       if(routingPoints.size() > 0)
       {
-        cl::Buffer d_routingPoints(_cl_context, CL_MEM_READ_ONLY, routingPoints.size()*sizeof(uint4), &routingPoints[0]);
+        cl::Buffer d_routingPoints(_cl_context, CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR, routingPoints.size()*sizeof(uint4), &routingPoints[0]);
         // init all nodes with geometry
         std::vector<cl_int4> startingBlocks;
         //determine requ. blocks
@@ -1612,11 +1625,10 @@ int getCostGlobalId(const int lid, const int2 blockId, const int2 blockSize, int
               startingBlocks.push_back(nblock);
             }
         }
-        cl::Buffer d_prepareIndividualRoutingMapping(_cl_context, CL_MEM_READ_ONLY, startingBlocks.size()*sizeof(cl_int4), &startingBlocks[0]);
-
+        cl::Buffer d_prepareIndividualRoutingMapping(_cl_context, CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR, startingBlocks.size()*sizeof(cl_int4), &startingBlocks[0]);
 
         _cl_prepareIndividualRouting_kernel.setArg(0, _cl_lastCostMap_buffer);
-        _cl_prepareIndividualRouting_kernel.setArg(1, routingData);
+        _cl_prepareIndividualRouting_kernel.setArg(1, d_routingData);
         _cl_prepareIndividualRouting_kernel.setArg(2, d_routingPoints);
         _cl_prepareIndividualRouting_kernel.setArg(3, d_prepareIndividualRoutingMapping);
         _cl_prepareIndividualRouting_kernel.setArg(4, 2 * sizeof(cl_int), bufferDim);
@@ -1636,6 +1648,17 @@ int getCostGlobalId(const int lid, const int2 blockId, const int2 blockSize, int
         );
 
         _cl_command_queue.finish();
+        prepareIndividualRoutingEvent.getProfilingInfo(CL_PROFILING_COMMAND_END, &end);
+        prepareIndividualRoutingEvent.getProfilingInfo(CL_PROFILING_COMMAND_START, &start);
+        std::cout << " - prepareIndividualRouting: " << (end-start)/1000000.0  << "ms\n";
+
+        //debug:
+        std::vector<float> mem(requiredElements*slices);
+         _cl_command_queue.enqueueReadBuffer(d_routingData, true, 0, mem.size() * sizeof(float), &mem[0]);
+         for(size_t i = 0; i < mem.size(); ++i)
+           if(mem[i] < 1000.0f)
+            std::cout << "(" << i/requiredElements << "): " << mem[i] << std::endl;
+        dumpBuffer<float>(_cl_command_queue, d_routingData, requiredElements, slices, "initRouting");
       }
 
 
@@ -1648,29 +1671,73 @@ int getCostGlobalId(const int lid, const int2 blockId, const int2 blockSize, int
           routingSourcesOffset.push_back(routingSourcesData.size()),
           routingSourcesData.insert(routingSourcesData.end(), it->begin(), it->end());
 
-        cl::Buffer d_routingSourcesData(_cl_context, CL_MEM_READ_ONLY, routingSourcesData.size()*sizeof(cl_uint), &routingSourcesData[0]);
-        cl::Buffer d_routingSourcesOffset(_cl_context, CL_MEM_READ_ONLY, routingSourcesOffset.size()*sizeof(cl_uint), &routingSourcesOffset[0]);
+        cl::Buffer d_routingSourcesData(_cl_context, CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR, routingSourcesData.size()*sizeof(cl_uint), &routingSourcesData[0]);
+        cl::Buffer d_routingSourcesOffset(_cl_context, CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR, routingSourcesOffset.size()*sizeof(cl_uint), &routingSourcesOffset[0]);
 
         //TODO: init nodes from child routing data
         // _cl_prepareIndividualRoutingParent_kernel
       }
 
 
-      //TODO shared mem queue and k workers per block
-      // lock for queue, + insertion sort per warp
-      // -> need to limit blocksize.x + blocksize.y < 18
-      // -> one block per element, can also take care of init right away!
+      if(startBlockRange.size() > 0)
+      {
+        //run the routing
+
+        //make sure we dont flood the queue
+        int maxInitDim = sqrt(static_cast<float>(_routingQueueSize))/2;
+        for(auto br_it = startBlockRange.begin(); br_it != startBlockRange.end(); ++br_it)
+        {
+          if(br_it->z-br_it->x > maxInitDim)
+          {
+            int center = (br_it->z+br_it->x)/2;
+            br_it->x = center - maxInitDim/2;
+            br_it->z = center + maxInitDim/2+1;
+          }
+          if(br_it->w-br_it->y > maxInitDim)
+          {
+            int center = (br_it->w+br_it->y)/2;
+            br_it->y = center - maxInitDim/2;
+            br_it->w = center + maxInitDim/2+1;
+          }
+        }
+        cl::Buffer d_startBlockRange(_cl_context, CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR, startBlockRange.size()*sizeof(cl_int4), &startBlockRange[0]);
+        
 
 
-      //run the routing
-      // _cl_routing_kernel
+        _cl_routing_kernel.setArg(0, _cl_routeMap_buffer);
+        _cl_routing_kernel.setArg(1, d_startBlockRange);
+        _cl_routing_kernel.setArg(2, d_routingIds);
+        _cl_routing_kernel.setArg(3, d_routingData);
+        _cl_routing_kernel.setArg(4, requiredElements);
+        _cl_routing_kernel.setArg(5, 2 * sizeof(cl_int), _blockSize);
+        _cl_routing_kernel.setArg(6, 2 * sizeof(cl_int), _blocks);
+        _cl_routing_kernel.setArg(7, _routingNumLocalWorkers*(boundaryElements+1)*sizeof(cl_float), NULL);
+        _cl_routing_kernel.setArg(8, _routingQueueSize * sizeof(cl_int), NULL);
+        _cl_routing_kernel.setArg(9, _routingQueueSize);
+          
+        int localWorkerSize = divup(boundaryElements,_routingLocalWorkersWarpSize)*_routingLocalWorkersWarpSize;
+
+        cl::Event routingRoutingEvent;
+        _cl_command_queue.enqueueNDRangeKernel
+        (
+          _cl_routing_kernel,
+          cl::NullRange,
+          cl::NDRange(startBlockRange.size()*_routingNumLocalWorkers,localWorkerSize),
+          cl::NDRange(_routingNumLocalWorkers,localWorkerSize),
+          0,
+          &routingRoutingEvent
+        );
+        _cl_command_queue.finish();
+        routingRoutingEvent.getProfilingInfo(CL_PROFILING_COMMAND_END, &end);
+        routingRoutingEvent.getProfilingInfo(CL_PROFILING_COMMAND_START, &start);
+        std::cout << " - routingRouting: " << (end-start)/1000000.0  << "ms\n";
+        dumpBuffer<float>(_cl_command_queue, d_routingData, requiredElements, slices, "routingRouting");
+      }
 
 
 
-      if(levelNodesit != levelNodes.rend())
-        ++levelNodesit;
-      if(levelHyperEdgesit != levelHyperEdges.rend())
-        ++levelHyperEdgesit;
+      ++levelNodesit;
+      ++levelHyperEdgesit;
     }
 
     //top down route construction

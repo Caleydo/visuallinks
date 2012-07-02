@@ -255,7 +255,17 @@ int2 lidForBorderId(int borderId, int2 lsize)
     return (int2)(0, 2*(lsize.x + lsize.y - 2) - borderId);
 }
 
-int dirFromBorderId(int borderId, int2 lsize)
+int dir4FromBorderId(int borderId, int2 lsize)
+{
+  if(borderId < 0) return 0;
+  int mask =  (borderId < lsize.x) | 
+              ((borderId >= lsize.x-1 && borderId < lsize.x+lsize.y-1 ) << 1) |
+              ((borderId >= lsize.x+lsize.y-2 && borderId < 2*lsize.x+lsize.y-2 ) << 2) |
+              ((borderId >= 2*lsize.x+lsize.y-3 ) << 3);
+  return mask;
+}
+
+int dir8FromBorderId(int borderId, int2 lsize)
 {
   if(borderId < 0) return 0;
   int mask =  (borderId == 0) | 
@@ -285,7 +295,6 @@ int getCostGlobalId(const int lid, const int2 blockId, const int2 blockSize, con
     return myoffset + rowelements + colelements + blockId.x*(blockSize.x - 1)   + 2*blockSize.x+blockSize.y-3 - lid;
   else
     return myoffset + rowelements + blockId.x*(blockSize.y - 2)    + 2*(blockSize.x+blockSize.y-2)-1 - lid;
-
 }
 
 
@@ -460,6 +469,7 @@ __kernel void prepareIndividualRouting(const global float* costmap,
   //route
   route_data(l_cost, l_route);
 
+
   int lid =  borderId((int2)(get_local_id(0),get_local_id(1)), (int2) (get_local_size(0), get_local_size(1)));
   if(lid >= 0)
   {
@@ -478,11 +488,10 @@ float getRouteMapCost(global const float* ourRouteMapBlock, int from, int to, co
 }
 
 int routeBorder(global const float* routeMap, 
-                global float* routingData,
+                volatile global float* routingData,
                 const int2 blockId, 
                 const int2 blockSize,
                 const int2 numBlocks,
-                const int2 dim,
                 local float* routeData,
                 local int* changeData)
 {
@@ -511,16 +520,163 @@ int routeBorder(global const float* routeMap,
     
     if(mycost < origCost)
     {
-      //TODO: use atomic min for this ones
-      routingData[gid] = mycost;
+      //atomic as multiple might be working on the same
+      atomic_min((volatile global unsigned int*)(routingData + gid), as_uint(mycost));
+
       //TODO: this is already an extension for opencl 1.0 so maybe do them individually...
-      atomic_or(changeData,dirFromBorderId(lid, blockSize));
+      atomic_or(changeData,dir4FromBorderId(lid, blockSize));
     }
   }
   barrier(CLK_LOCAL_MEM_FENCE);
   return *changeData;
 }
 
+uint createDummyQueueEntry()
+{
+  return 0xFFFFFFFF;
+}
+uint createQueueEntry(const int2 block, const float priority)
+{
+  return ((min((uint)(priority*0.1f),0xFFFu)&0xFFFu) << 20) |
+         (block.y << 10) | block.x;
+}
+int2 readQueueEntry(const uint entry)
+{
+  return (int2)(entry & 0x3FFu, (entry >> 10) & 0x3FFu);
+}
+bool compareQueueEntryBlocks(const uint entry1, const uint entry2)
+{
+  return (entry1&0xFFFFFu)==(entry2&0xFFFFFu);
+}
+
+__kernel void routeLocal(global const float* routeMap,
+                         global const int4* seed,
+                         global const int* routingIds,
+                         volatile global float* routingData,
+                         const int routeDataPerNode,
+                         const int2 blockSize,
+                         const int2 numBlocks,
+                         local int* data,
+                         local uint* queue,
+                         const int queueSize)
+{
+  int borderElements = 2*(blockSize.x + blockSize.y - 2);
+  int workerId = get_local_id(1);
+  const int lid = get_local_id(0);
+  const int linId = get_local_id(0) + get_local_size(0)*get_local_id(1);
+  const int workerSize = get_local_size(0);
+  const uint workers = get_local_size(1);
+  int withinWorkerId = get_local_id(0);
+  int elementsPerWorker = borderElements + 1;
+  routingData = routingData + routeDataPerNode*routingIds[get_group_id(0)];
+  
+  local float* l_routeData = (local float*)(data + elementsPerWorker*workerId);
+  local int* l_changedData = (local int*)(l_routeData + borderElements);
+
+  local bool thisRunChange;
+  do
+  {
+    thisRunChange = false;
+    //(re)init queue
+    //TODO: this needs to circle around until we find a block which has changed
+    int4 ourInit = seed[get_group_id(0)];
+    uint queueFront = 0;
+    uint queueElements = (ourInit.w-ourInit.y)*(ourInit.z-ourInit.x);
+    int posoffset = 0;
+    for(int y = ourInit.y + get_local_id(1); y < ourInit.w; y+= get_local_size(1))
+    {
+      for(int x = get_local_id(0); x < (ourInit.z - ourInit.x); x += get_local_size(0))
+      {
+        int pos = posoffset + x;
+        queue[pos] = createQueueEntry((int2)(ourInit.x+x, y), 0);       
+      }
+      posoffset += (ourInit.z-ourInit.x);
+    }
+    barrier(CLK_LOCAL_MEM_FENCE);
+
+    //do the work
+    while(queueElements)
+    {
+      int changed = 0;
+      int2 blockId;
+      if(queueElements > workerId)
+      {
+        //there is work for me to be done
+        blockId = readQueueEntry(queue[(queueFront + workerId)%queueSize]);
+        changed = routeBorder(routeMap, 
+                  routingData, 
+                  blockId,
+                  blockSize,
+                  numBlocks,
+                  l_routeData,
+                  l_changedData);
+        if(changed) thisRunChange = true;
+      }
+      int nowWorked = min(queueElements, workers);
+      queueFront += nowWorked;
+      queueElements -= nowWorked;
+
+      //queue management (one after the other)
+      local uint l_queueElement;
+      local uint hasElements;
+      for(uint w = 0; w < nowWorked; ++w)
+      {
+        if(w == workerId)
+          hasElements = changed;
+        barrier(CLK_LOCAL_MEM_FENCE);
+        if(changed == 0) continue;
+        for(int element = 0; element < 4; ++element)
+        {
+          if((hasElements & (1 << element)) == 0)
+            continue;
+          //generate new entry
+          if(w == workerId && (1 << element) == dir4FromBorderId(lid,blockSize))
+          {
+            int2 offset = (int2)(element<3?element-1:0, element>0?2-element:0);
+            atomic_min(&l_queueElement, createQueueEntry(blockId + offset, l_routeData[lid]));
+          }
+          barrier(CLK_LOCAL_MEM_FENCE);
+
+          //insert new entry
+          if(queueElements == queueSize-1)
+            --queueElements;
+          --queueFront;
+
+          uint newEntry = l_queueElement;
+
+          barrier(CLK_LOCAL_MEM_FENCE);
+          if(linId == 0)
+          {
+            l_queueElement = queueSize;
+            queue[(queueFront)%queueSize] = newEntry;
+          }
+          
+          for(int i=linId; i < queueElements; i+=get_local_size(0)*get_local_size(1))
+          {
+            int thisid = (queueFront + i + 1)%queueSize;
+            uint nextEntry = queue[(queueFront + i + 1)%queueSize];
+            if(compareQueueEntryBlocks(nextEntry, newEntry))
+              l_queueElement = linId;
+            barrier(CLK_LOCAL_MEM_FENCE);
+
+            if(nextEntry < newEntry || linId > l_queueElement)
+              queue[(queueFront + i)%queueSize] = nextEntry;
+            else if(queue[(queueFront + i)%queueSize] < newEntry)
+              queue[(queueFront + i)%queueSize] = newEntry;
+          }
+          //no new element added
+          if(l_queueElement != queueSize)
+            --queueElements;
+          else
+            ++queueElements;
+        }
+      }
+      
+    }
+  } while(thisRunChange);
+
+ 
+}
 
 __kernel void getMinimum(global const float* routecost,
                          //volatile global QueueGlobal* queueInfo,
