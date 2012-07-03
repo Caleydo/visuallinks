@@ -261,7 +261,7 @@ int dir4FromBorderId(int borderId, int2 lsize)
   int mask =  (borderId < lsize.x) | 
               ((borderId >= lsize.x-1 && borderId < lsize.x+lsize.y-1 ) << 1) |
               ((borderId >= lsize.x+lsize.y-2 && borderId < 2*lsize.x+lsize.y-2 ) << 2) |
-              ((borderId >= 2*lsize.x+lsize.y-3 ) << 3);
+              ((borderId >= 2*lsize.x+lsize.y-3 || borderId == 0) << 3);
   return mask;
 }
 
@@ -389,10 +389,11 @@ __kernel void updateRouteMap(read_only image2d_t costmap,
 
   int2 gid2 = (int2)(get_group_id(0)*(get_local_size(0)-1) + get_local_id(0), get_group_id(1)*(get_local_size(1)-1) + get_local_id(1));
 
-  float last_cost = loadCostToLocalAndSetRoute((int2)(get_group_id(0), get_group_id(1)), gid2, dim, lastCostmap, l_cost, l_routing_data);
+  
   float newcost = getPenalty(costmap, (int2)(gid2.x, gid2.y));
+  float last_cost = loadCostToLocalAndSetRoute((int2)(get_group_id(0), get_group_id(1)), gid2, dim, lastCostmap, l_cost, l_routing_data);
 
-  if(gid2.x < dim.x && gid2.y < dim.y && fabs(last_cost - newcost) > 0.01f ) 
+  if(gid2.x < dim.x && gid2.y < dim.y && (computeAll || fabs(last_cost - newcost) > 0.01f) ) 
   {
     writeLastPenalty(lastCostmap, gid2, dim, newcost);
     *accessLocalCost(l_cost, (int2)(get_local_id(0), get_local_id(1))) = newcost;
@@ -500,7 +501,7 @@ int routeBorder(global const float* routeMap,
   int borderElements = 2*(blockSize.x + blockSize.y - 2);
   int gid = getCostGlobalId(lid, blockId, blockSize, numBlocks);
 
-  changeData = 0;
+  *changeData = 0;
   float mycost = 0.01f*MAXFLOAT;
   global const float* ourRouteMap = routeMap + borderElements*borderElements/2*(blockId.x + blockId.y*numBlocks.x);
   if(lid < borderElements)
@@ -574,7 +575,7 @@ __kernel void routeLocal(global const float* routeMap,
   local int* l_changedData = (local int*)(l_routeData + borderElements);
 
   local bool thisRunChange;
-  do
+  //do
   {
     thisRunChange = false;
     //(re)init queue
@@ -616,64 +617,64 @@ __kernel void routeLocal(global const float* routeMap,
       queueFront += nowWorked;
       queueElements -= nowWorked;
 
-      //queue management (one after the other)
-      local uint l_queueElement;
-      local uint hasElements;
-      for(uint w = 0; w < nowWorked; ++w)
-      {
-        if(w == workerId)
-          hasElements = changed;
-        barrier(CLK_LOCAL_MEM_FENCE);
-        if(changed == 0) continue;
-        for(int element = 0; element < 4; ++element)
-        {
-          if((hasElements & (1 << element)) == 0)
-            continue;
-          //generate new entry
-          if(w == workerId && (1 << element) == dir4FromBorderId(lid,blockSize))
-          {
-            int2 offset = (int2)(element<3?element-1:0, element>0?2-element:0);
-            atomic_min(&l_queueElement, createQueueEntry(blockId + offset, l_routeData[lid]));
-          }
-          barrier(CLK_LOCAL_MEM_FENCE);
+      ////queue management (one after the other)
+      //local uint l_queueElement;
+      //local uint hasElements;
+      //for(uint w = 0; w < nowWorked; ++w)
+      //{
+      //  if(w == workerId)
+      //    hasElements = changed;
+      //  barrier(CLK_LOCAL_MEM_FENCE);
+      //  if(changed == 0) continue;
+      //  for(int element = 0; element < 4; ++element)
+      //  {
+      //    if((hasElements & (1 << element)) == 0)
+      //      continue;
+      //    //generate new entry
+      //    if(w == workerId && (1 << element) == dir4FromBorderId(lid,blockSize))
+      //    {
+      //      int2 offset = (int2)(element<3?element-1:0, element>0?2-element:0);
+      //      atomic_min(&l_queueElement, createQueueEntry(blockId + offset, l_routeData[lid]));
+      //    }
+      //    barrier(CLK_LOCAL_MEM_FENCE);
 
-          //insert new entry
-          if(queueElements == queueSize-1)
-            --queueElements;
-          --queueFront;
+      //    //insert new entry
+      //    if(queueElements == queueSize-1)
+      //      --queueElements;
+      //    --queueFront;
 
-          uint newEntry = l_queueElement;
+      //    uint newEntry = l_queueElement;
 
-          barrier(CLK_LOCAL_MEM_FENCE);
-          if(linId == 0)
-          {
-            l_queueElement = queueSize;
-            queue[(queueFront)%queueSize] = newEntry;
-          }
-          
-          for(int i=linId; i < queueElements; i+=get_local_size(0)*get_local_size(1))
-          {
-            int thisid = (queueFront + i + 1)%queueSize;
-            uint nextEntry = queue[(queueFront + i + 1)%queueSize];
-            if(compareQueueEntryBlocks(nextEntry, newEntry))
-              l_queueElement = linId;
-            barrier(CLK_LOCAL_MEM_FENCE);
+      //    barrier(CLK_LOCAL_MEM_FENCE);
+      //    if(linId == 0)
+      //    {
+      //      l_queueElement = queueSize;
+      //      queue[(queueFront)%queueSize] = newEntry;
+      //    }
+      //    
+      //    for(int i=linId; i < queueElements; i+=get_local_size(0)*get_local_size(1))
+      //    {
+      //      int thisid = (queueFront + i + 1)%queueSize;
+      //      uint nextEntry = queue[(queueFront + i + 1)%queueSize];
+      //      if(compareQueueEntryBlocks(nextEntry, newEntry))
+      //        l_queueElement = linId;
+      //      barrier(CLK_LOCAL_MEM_FENCE);
 
-            if(nextEntry < newEntry || linId > l_queueElement)
-              queue[(queueFront + i)%queueSize] = nextEntry;
-            else if(queue[(queueFront + i)%queueSize] < newEntry)
-              queue[(queueFront + i)%queueSize] = newEntry;
-          }
-          //no new element added
-          if(l_queueElement != queueSize)
-            --queueElements;
-          else
-            ++queueElements;
-        }
-      }
+      //      if(nextEntry < newEntry || linId > l_queueElement)
+      //        queue[(queueFront + i)%queueSize] = nextEntry;
+      //      else if(queue[(queueFront + i)%queueSize] < newEntry)
+      //        queue[(queueFront + i)%queueSize] = newEntry;
+      //    }
+      //    //no new element added
+      //    if(l_queueElement != queueSize)
+      //      --queueElements;
+      //    else
+      //      ++queueElements;
+      //  }
+      //}
       
     }
-  } while(thisRunChange);
+  }// while(thisRunChange);
 
  
 }

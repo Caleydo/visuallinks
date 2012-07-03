@@ -310,6 +310,50 @@ namespace LinksRouting
       img << static_cast<int>(std::min(*it - min, 10.f) / range * 8191) << "\n";
 #endif
   }
+  //----------------------------------------------------------------------------
+  template<typename T>
+  void dumpImage( cl::CommandQueue& cl_queue,
+                   const cl::Image& img,
+                   size_t width,
+                   size_t height,
+                   const std::string& file )
+  {
+//            cl_bool blocking,
+//            ::size_t offset,
+//            ::size_t size,
+//            void* ptr
+    cl_queue.finish();
+
+    std::vector<T> mem(width * height);
+    cl::size_t<3> o, r;
+    0[0] = o[1] = o[2] = 0;
+    r[0] = width; r[1] = height; r[2] = 1;
+    cl_queue.enqueueReadImage(img, true, o, r, width*sizeof(T), 0, &mem[0]);
+
+#if 1
+    std::ofstream fimg(file + ".pfm", std::ios_base::out | std::ios_base::binary | std::ios_base::trunc);
+    fimg << "Pf\n";
+    fimg << width << " " << height << '\n';
+    fimg << -1.0f << '\n';
+
+    for(auto it = mem.begin(); it != mem.end(); ++it)
+      fimg.write(reinterpret_cast<char*>(&*it), sizeof(T));
+#else
+    std::ofstream img( (file + ".pgm").c_str(), std::ios_base::trunc);
+    img << "P2\n"
+        << width << " " << height << "\n"
+        << "8191\n";
+
+    auto minmax = std::minmax_element(mem.begin(), mem.end());
+    T min = *minmax.first,
+      range = 10;//*minmax.second - min;
+
+    std::cout << file << "-> min=" << min << ", range=" << range << std::endl;
+
+    for(auto it = mem.begin(); it != mem.end(); ++it)
+      img << static_cast<int>(std::min(*it - min, 10.f) / range * 8191) << "\n";
+#endif
+  }
 
   //----------------------------------------------------------------------------
   template<typename T>
@@ -1157,70 +1201,70 @@ void updateRouteMapDummy(float * costmap,
                     int computeAll,
                     float* l_data)
 {
-  const float MAXFLOAT = std::numeric_limits<float>::max();
   bool changed;
-  changed = computeAll;
+  changed = computeAll>0?true:false;
+  const float MAXFLOAT = std::numeric_limits<float>::max();
 
   float* l_cost = l_data;
   float* l_routing_data = l_data + (get_local_size(0)+2)*(get_local_size(1)+2);
 
   do
   {
-  int lid = get_local_id(0) + get_local_id(1)*get_local_size(0);
-  for(; lid < (get_local_size(0)+2)*(get_local_size(1)+2); lid += get_local_size(0)*get_local_size(1))
-  {
-    float newPenalty = 0.1f*MAXFLOAT;
-    l_routing_data[lid] = 0.1f*MAXFLOAT;
-    int2 lid2 = int2(lid%(get_local_size(0)+2),  (lid/(get_local_size(0)+2)));
-    int2 gid2 = int2((int)(get_group_id(0)*get_local_size(0)) - 1 + lid2.x,
-                       (int)(get_group_id(1)*get_local_size(1)) - 1 + lid2.y);
+    int2 gid = int2(get_group_id(0)*(get_local_size(0)-1) + get_local_id(0), get_group_id(1)*(get_local_size(1)-1) + get_local_id(1));
 
-    if(gid2.x > 0 && gid2.x < dim.x && gid2.y > 0 && gid2.y < dim.y 
-       && lid2.x <= get_local_size(0) && lid2.y <= get_local_size(1))
+    int lid = get_local_id(0) + get_local_id(1)*get_local_size(0);
+    for(; lid < (get_local_size(0)+2)*(get_local_size(1)+2); lid += get_local_size(0)*get_local_size(1))
     {
-      newPenalty = getPenalty(costmap, gid2);
-      float oldPenalty = readLastPenalty(lastCostmap, gid2, dim);
-      if( fabs(newPenalty - oldPenalty) > 0.01f )
+      l_cost[lid] = 0.1f*MAXFLOAT;
+      l_routing_data[lid] = 0.1f*MAXFLOAT;
+    }
+  } while(advanceThread());
+  do
+  {
+    float last_cost = 0.1f*MAXFLOAT;
+    int2 gid = int2(get_group_id(0)*(get_local_size(0)-1) + get_local_id(0), get_group_id(1)*(get_local_size(1)-1) + get_local_id(1));
+    if(gid.x < dim.x && gid.y < dim.y)
+    {
+      float newcost = getPenalty(costmap, gid);
+      last_cost = readLastPenalty(lastCostmap, gid, dim);
+      *accessLocalCost(l_cost, int2(get_local_id(0), get_local_id(1))) = newcost;
+      if(std::abs(last_cost - newcost) > 0.01f )
       {
         changed = true;
-        writeLastPenalty(lastCostmap, gid2, dim, newPenalty);
+        writeLastPenalty(lastCostmap, gid, dim, newcost);
       }
     }
-    l_cost[lid] = newPenalty;
-  }
   } while(advanceThread());
+
   if(!changed) return;
 
 
   //do the routing
-  int boundaryelements = 2*(get_local_size(0) + get_local_size(1));
+  int boundaryelements = 2*(get_local_size(0) + get_local_size(1)-2);
   int written = 0;
   for(int i = 0; i < boundaryelements; ++i)
   {
     do
     {
-    int lid = get_local_id(0) + get_local_id(1)*get_local_size(0);
-    int2 borderId2 = lidForBorderId(lid, int2(get_local_size(0)+1,get_local_size(1)+1)) - int2(1,1);
-    //init routing data    
-    *accessLocalCost(l_routing_data, int2(get_local_id(0), get_local_id(1))) = 0.1f*MAXFLOAT;
-    if(lid == i - 1)
-      *accessLocalCost(l_routing_data, borderId2) = 0.1f*MAXFLOAT;
-    if(lid == i)
-      *accessLocalCost(l_routing_data, borderId2) = 0;
+      int myBorderId = borderId(int2(get_local_id(0), get_local_id(1)), int2(get_local_size(0),get_local_size(1)));
+      //init routing data
+      float mydata = 0.1f*MAXFLOAT;
+      if(i == myBorderId)
+        mydata = 0.0f;
+      *accessLocalCost(l_routing_data, int2(get_local_id(0), get_local_id(1))) = mydata;
     } while(advanceThread());
     //route
     route_data(l_cost, l_routing_data);
 
-    //write result
-    int write = boundaryelements - i;
     do
     {
-    int lid = get_local_id(0) + get_local_id(1)*get_local_size(0);
-    int2 borderId2 = lidForBorderId(lid, int2(get_local_size(0)+1,get_local_size(1)+1)) - int2(1,1);
-    if(lid >= 0 && lid < write) 
-      routeMap[boundaryelements*boundaryelements/2*(get_group_id(0)+get_group_id(1)*get_num_groups(0)) +
-               written + lid] = *accessLocalCost(l_routing_data, borderId2);
+      int myBorderId = borderId(int2(get_local_id(0), get_local_id(1)), int2(get_local_size(0),get_local_size(1)));
+      //write result
+      if(myBorderId >= i) 
+        routeMap[boundaryelements*boundaryelements/2*(get_group_id(0)+get_group_id(1)*get_num_groups(0)) +
+                 written + myBorderId - i] = *accessLocalCost(l_routing_data, int2(get_local_id(0), get_local_id(1)));
     } while(advanceThread());
+    written += boundaryelements - i;
   }
 }
 
@@ -1310,6 +1354,232 @@ int getCostGlobalId(const int lid, const int2 blockId, const int2 blockSize, int
   //}
 }
 
+typedef unsigned int uint;
+float getRouteMapCost(const float* ourRouteMapBlock, int from, int to, const int borderElements)
+{
+  int row = std::min(from,to);
+  int col = std::max(from,to);
+  col = col - row;
+  return ourRouteMapBlock[col + row*borderElements];
+}
+int dir4FromBorderId(int borderId, int2 lsize)
+{
+  if(borderId < 0) return 0;
+  int mask =  (borderId < lsize.x) | 
+              ((borderId >= lsize.x-1 && borderId < lsize.x+lsize.y-1 ) << 1) |
+              ((borderId >= lsize.x+lsize.y-2 && borderId < 2*lsize.x+lsize.y-2 ) << 2) |
+              ((borderId >= 2*lsize.x+lsize.y-3 || borderId == 0) << 3);
+  return mask;
+}
+int routeBorder(std::vector<float>& routeMap, 
+                float* routingData,
+                const int2 blockId, 
+                const int2 blockSize,
+                const int2 numBlocks,
+                 float* routeData,
+                 int* changeData)
+{
+  int lsize = get_local_size(0);
+  int borderElements = 2*(blockSize.x + blockSize.y - 2);
+  const float MAXFLOAT = std::numeric_limits<float>::max();
+
+  *changeData = 0;
+  
+  const float* ourRouteMap = &routeMap[0] + borderElements*borderElements/2*(blockId.x + blockId.y*numBlocks.x);
+  do
+  {
+    float mycost = 0.01f*MAXFLOAT;
+    int lid = get_local_id(0);
+    int gid = getCostGlobalId(lid, blockId, blockSize, numBlocks);
+    if(lid < borderElements)
+    {    
+      mycost = routingData[gid];
+      routeData[lid] = mycost;
+    }
+  }while(advanceThread());
+
+  do
+  {
+    int lid = get_local_id(0);
+    int gid = getCostGlobalId(lid, blockId, blockSize, numBlocks);
+  if(lid < borderElements)
+  {
+    
+    float mycost = 0.01f*MAXFLOAT;
+    if(lid < borderElements)
+      mycost = routingData[gid];
+
+    float origCost = mycost;
+    for(int i = 0; i < borderElements; ++i)
+    {
+      float newcost = routeData[i] + getRouteMapCost(ourRouteMap, i, lid, borderElements);
+      mycost = std::min(newcost, mycost);
+    }
+    
+    if(mycost < origCost)
+    {
+      //atomic as multiple might be working on the same
+      routingData[gid] =std::min(routingData[gid] , mycost);
+
+      //TODO: this is already an extension for opencl 1.0 so maybe do them individually...
+      *changeData |= dir4FromBorderId(lid, blockSize);
+    }
+  }
+  } while(advanceThread());
+  return *changeData;
+}
+
+
+
+uint createDummyQueueEntry()
+{
+  return 0xFFFFFFFF;
+}
+uint createQueueEntry(const int2 block, const float priority)
+{
+  return ((std::min((uint)(priority*0.1f),0xFFFu)&0xFFFu) << 20) |
+         (block.y << 10) | block.x;
+}
+int2 readQueueEntry(const uint entry)
+{
+  return int2(entry & 0x3FFu, (entry >> 10) & 0x3FFu);
+}
+bool compareQueueEntryBlocks(const uint entry1, const uint entry2)
+{
+  return (entry1&0xFFFFFu)==(entry2&0xFFFFFu);
+}
+
+void routeLocal( std::vector<float>& routeMap,
+                 std::vector<int4>& seed,
+                 std::vector<cl_uint>& routingIds,
+                 std::vector<float>& routingData_in,
+                         const int routeDataPerNode,
+                         const int2 blockSize,
+                         const int2 numBlocks,
+                          int* data,
+                          uint* queue,
+                         const int queueSize)
+{
+  int borderElements = 2*(blockSize.x + blockSize.y - 2);
+  int workerId = get_local_id(1);
+  //const int lid = get_local_id(0);
+  //const int linId = get_local_id(0) + get_local_size(0)*get_local_id(1);
+  const int workerSize = get_local_size(0);
+  const uint workers = get_local_size(1);
+  //int withinWorkerId = get_local_id(0);
+  int elementsPerWorker = borderElements + 1;
+  float* routingData = &routingData_in[0] + routeDataPerNode*routingIds[get_group_id(0)];
+  
+   float* l_routeData = ( float*)(data + elementsPerWorker*workerId);
+   int* l_changedData = ( int*)(l_routeData + borderElements);
+
+   bool thisRunChange;
+  //do
+  {
+    thisRunChange = false;
+    //(re)init queue
+    //TODO: this needs to circle around until we find a block which has changed
+    int4 ourInit = seed[get_group_id(0)];
+    uint queueFront = 0;
+    uint queueElements = (ourInit.w-ourInit.y)*(ourInit.z-ourInit.x);
+    do
+    {
+    int posoffset = 0;
+    for(int y = ourInit.y + get_local_id(1); y < ourInit.w; y+= get_local_size(1))
+    {
+      for(int x = get_local_id(0); x < (ourInit.z - ourInit.x); x += get_local_size(0))
+      {
+        int pos = posoffset + x;
+        queue[pos] = createQueueEntry(int2(ourInit.x+x, y), 0);       
+      }
+      posoffset += (ourInit.z-ourInit.x);
+    }
+    } while(advanceThread());
+
+    //do the work
+    while(queueElements)
+    {
+      int changed = 0;
+      int2 blockId;
+      if(queueElements > workerId)
+      {
+        //there is work for me to be done
+        blockId = readQueueEntry(queue[(queueFront + workerId)%queueSize]);
+        changed = routeBorder(routeMap, 
+                  routingData, 
+                  blockId,
+                  blockSize,
+                  numBlocks,
+                  l_routeData,
+                  l_changedData);
+        if(changed) thisRunChange = true;
+      }
+      int nowWorked = std::min(queueElements, workers);
+      queueFront += nowWorked;
+      queueElements -= nowWorked;
+
+      ////queue management (one after the other)
+      //local uint l_queueElement;
+      //local uint hasElements;
+      //for(uint w = 0; w < nowWorked; ++w)
+      //{
+      //  if(w == workerId)
+      //    hasElements = changed;
+      //  barrier(CLK_LOCAL_MEM_FENCE);
+      //  if(changed == 0) continue;
+      //  for(int element = 0; element < 4; ++element)
+      //  {
+      //    if((hasElements & (1 << element)) == 0)
+      //      continue;
+      //    //generate new entry
+      //    if(w == workerId && (1 << element) == dir4FromBorderId(lid,blockSize))
+      //    {
+      //      int2 offset = (int2)(element<3?element-1:0, element>0?2-element:0);
+      //      atomic_min(&l_queueElement, createQueueEntry(blockId + offset, l_routeData[lid]));
+      //    }
+      //    barrier(CLK_LOCAL_MEM_FENCE);
+
+      //    //insert new entry
+      //    if(queueElements == queueSize-1)
+      //      --queueElements;
+      //    --queueFront;
+
+      //    uint newEntry = l_queueElement;
+
+      //    barrier(CLK_LOCAL_MEM_FENCE);
+      //    if(linId == 0)
+      //    {
+      //      l_queueElement = queueSize;
+      //      queue[(queueFront)%queueSize] = newEntry;
+      //    }
+      //    
+      //    for(int i=linId; i < queueElements; i+=get_local_size(0)*get_local_size(1))
+      //    {
+      //      int thisid = (queueFront + i + 1)%queueSize;
+      //      uint nextEntry = queue[(queueFront + i + 1)%queueSize];
+      //      if(compareQueueEntryBlocks(nextEntry, newEntry))
+      //        l_queueElement = linId;
+      //      barrier(CLK_LOCAL_MEM_FENCE);
+
+      //      if(nextEntry < newEntry || linId > l_queueElement)
+      //        queue[(queueFront + i)%queueSize] = nextEntry;
+      //      else if(queue[(queueFront + i)%queueSize] < newEntry)
+      //        queue[(queueFront + i)%queueSize] = newEntry;
+      //    }
+      //    //no new element added
+      //    if(l_queueElement != queueSize)
+      //      --queueElements;
+      //    else
+      //      ++queueElements;
+      //  }
+      //}
+      
+    }
+  }// while(thisRunChange);
+
+ 
+}
+
 ///
 
 
@@ -1338,19 +1608,7 @@ int getCostGlobalId(const int lid, const int2 blockId, const int2 blockSize, int
     }
 
 
-    ////dummy call
-    //float* costmap = new float[_buffer_width*_buffer_height];
-    //float* lastcostmap = new float[_buffer_width*_buffer_height];
-    //float* routemap = new float[_blocks[0]*_blocks[1]*2*(_blockSize[0] + _blockSize[1])*2*(_blockSize[0] + _blockSize[1])/2];
-    //float* lmem = new float[2*(_blockSize[0]+2)*(_blockSize[1]+2)];
-    //initKernelData(int2(_blockSize[0],_blockSize[1]), int2(_blocks[0], _blocks[1]));
-    //costmap_dim = int2(_buffer_width, _buffer_height);
 
-    //updateRouteMapDummy(costmap, costmap, routemap, int2(_buffer_width, _buffer_height), computeAll, lmem);
-    //delete[] costmap;
-    //delete[] lastcostmap;
-    //delete[] routemap;
-    //delete[] lmem;
 
     //------------------------------
     // get buffer from opengl
@@ -1396,6 +1654,26 @@ int getCostGlobalId(const int lid, const int2 blockId, const int2 blockSize, int
 
     _cl_command_queue.enqueueReleaseGLObjects(&memory_gl);
     _cl_command_queue.finish();
+
+
+
+
+    //    //dummy call
+    //float* costmap = new float[_buffer_width*_buffer_height];
+    //_cl_command_queue.enqueueReadBuffer(_cl_lastCostMap_buffer, true, 0, _buffer_width*_buffer_height * sizeof(float), &costmap[0]);
+    //float* lastcostmap = new float[_buffer_width*_buffer_height];
+    //float* routemap = new float[_blocks[0]*_blocks[1]*2*(_blockSize[0] + _blockSize[1])*2*(_blockSize[0] + _blockSize[1])/2];
+    //float* lmem = new float[2*(_blockSize[0]+2)*(_blockSize[1]+2)];
+    //initKernelData(int2(_blockSize[0],_blockSize[1]), int2(_blocks[0], _blocks[1]));
+    //costmap_dim = int2(_buffer_width, _buffer_height);
+
+    //updateRouteMapDummy(costmap, lastcostmap, routemap, int2(_buffer_width, _buffer_height), computeAll, lmem);
+    //delete[] costmap;
+    //delete[] lastcostmap;
+    //delete[] routemap;
+    //delete[] lmem;
+    ////
+
 
     //static int count = 0;
     //std::stringstream fname;
@@ -1703,6 +1981,37 @@ int getCostGlobalId(const int lid, const int2 blockId, const int2 blockSize, int
         cl::Buffer d_startBlockRange(_cl_context, CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR, startBlockRange.size()*sizeof(cl_int4), &startBlockRange[0]);
         
 
+        //debug
+        //dummy call
+
+    //initKernelData(int2(_blockSize[0],_blockSize[1]), int2(_blocks[0], _blocks[1]));
+    //costmap_dim = int2(_buffer_width, _buffer_height);
+
+    //updateRouteMapDummy(costmap, costmap, routemap, int2(_buffer_width, _buffer_height), computeAll, lmem);
+    //delete[] costmap;
+    //delete[] lastcostmap;
+    //delete[] routemap;
+    //delete[] lmem;
+
+
+        size_t size;
+        _cl_routeMap_buffer.getInfo(CL_MEM_SIZE, &size);
+        std::vector<float> h_routeMap_buffer(size/sizeof(float));
+        _cl_command_queue.enqueueReadBuffer(_cl_routeMap_buffer, true, 0, size, &h_routeMap_buffer[0]);
+        std::vector<float> h_routingData(requiredElements*slices);
+        _cl_command_queue.enqueueReadBuffer(d_routingData, true, 0, h_routingData.size() * sizeof(float), &h_routingData[0]);
+
+        int* data = new int[_routingNumLocalWorkers*(boundaryElements+1)];
+        uint* queue = new uint[_routingQueueSize];
+        int localWorkerSize2 = divup(boundaryElements,_routingLocalWorkersWarpSize)*_routingLocalWorkersWarpSize;
+        initKernelData(int2(localWorkerSize2,1), int2(localWorkerSize2,1));
+        routeLocal(h_routeMap_buffer, startBlockRange, routingIds, h_routingData, requiredElements, int2(_blockSize[0], _blockSize[1]), int2(_blocks[0], _blocks[1]), data, queue, _routingQueueSize);
+
+        delete[] data;
+        delete[] queue;
+        //
+
+
 
         _cl_routing_kernel.setArg(0, _cl_routeMap_buffer);
         _cl_routing_kernel.setArg(1, d_startBlockRange);
@@ -1722,8 +2031,8 @@ int getCostGlobalId(const int lid, const int2 blockId, const int2 blockSize, int
         (
           _cl_routing_kernel,
           cl::NullRange,
-          cl::NDRange(startBlockRange.size()*_routingNumLocalWorkers,localWorkerSize),
-          cl::NDRange(_routingNumLocalWorkers,localWorkerSize),
+          cl::NDRange(localWorkerSize*startBlockRange.size(),_routingNumLocalWorkers),
+          cl::NDRange(localWorkerSize,_routingNumLocalWorkers),
           0,
           &routingRoutingEvent
         );
