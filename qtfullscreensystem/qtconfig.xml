@@ -16,8 +16,12 @@
 	<DownsampleCost type="Integer" val="4" />
   </ComponentCostanalysis>
 
-  <GPURouting>
+  <CPURouting>
     <enabled type="Bool" val="true" />
+  </CPURouting>
+
+  <GPURouting>
+    <enabled type="Bool" val="false" />
     <NoQueue type="Bool" val="true" />
     <BlockSizeX type="Integer" val="8" />
     <BlockSizeY type="Integer" val="8" />

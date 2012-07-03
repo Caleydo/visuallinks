@@ -92,7 +92,9 @@ namespace LinkDescription
 
   struct HyperEdgeDescriptionForkation
   {
-      HyperEdgeDescriptionForkation() : parent(0)
+      HyperEdgeDescriptionForkation():
+        position(0,0),
+        parent(0)
       {
       }
 

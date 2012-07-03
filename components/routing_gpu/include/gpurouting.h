@@ -53,17 +53,6 @@ namespace LinksRouting
 
       void process(Type type);
 
-//    bool setCostInput(const Component::MapData& inputmap);
-//    bool setColorCostInput(const Component::MapData& inputmap);
-      void connect(CostAnalysis* costanalysis,
-                   LinksRouting::Renderer *renderer);
-
-      bool addLinkHierarchy(LinkDescription::Node* node, double priority);
-      bool addLinkHierarchy(LinkDescription::HyperEdge* hyperedge,
-                            double priority);
-      bool removeLinkHierarchy(LinkDescription::Node* node);
-      bool removeLinkHierarchy(LinkDescription::HyperEdge* hyperedge);
-
     private:
 
       template<typename T>

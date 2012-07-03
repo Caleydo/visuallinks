@@ -57,6 +57,20 @@ struct float2
   {
     return x * rhs.x + y * rhs.y;
   }
+
+  float2& operator+=(const float2& rhs)
+  {
+    x += rhs.x;
+    y += rhs.y;
+    return *this;
+  }
+
+  float2& operator/=(float rhs)
+  {
+    x /= rhs;
+    y /= rhs;
+    return *this;
+  }
 };
 
 /**

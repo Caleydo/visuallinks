@@ -157,7 +157,8 @@ ShaderPtr loadShader( QString vert, QString frag )
     _core.attachComponent(&_config);
     _core.attachComponent(&_server);
     _core.attachComponent(&_cost_analysis);
-    _core.attachComponent(&_routing);
+    _core.attachComponent(&_routing_cpu);
+    _core.attachComponent(&_routing_gpu);
     _core.attachComponent(&_renderer);
 
     _core.attachComponent(this);

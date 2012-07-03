@@ -10,6 +10,7 @@
 #include "xmlconfig.h"
 #include "ipc_server.hpp"
 #include "glcostanalysis.h"
+#include "cpurouting.h"
 #include "gpurouting.h"
 #include "glrenderer.h"
 
@@ -93,7 +94,8 @@ namespace qtfullscreensystem
       LinksRouting::XmlConfig       _config;
       LinksRouting::IPCServer       _server;
       LinksRouting::GlCostAnalysis  _cost_analysis;
-      LinksRouting::GPURouting      _routing;
+      LinksRouting::CPURouting      _routing_cpu;
+      LinksRouting::GPURouting      _routing_gpu;
       LinksRouting::GlRenderer      _renderer;
 
       QMutex            _mutex_slot_links;

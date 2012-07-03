@@ -31,7 +31,7 @@ namespace LinksRouting
 
   //----------------------------------------------------------------------------
   GPURouting::GPURouting() :
-        myname("GPURouting")
+    myname("GPURouting")
   {
     registerArg("BlockSizeX", _blockSize[0] = 8);
     registerArg("BlockSizeY", _blockSize[1] = 8);
@@ -56,6 +56,7 @@ namespace LinksRouting
       slot_subscriber.getSlot<LinkDescription::LinkList>("/links");
   }
 
+  //----------------------------------------------------------------------------
   bool GPURouting::startup(Core* core, unsigned int type)
   {
     return true;
@@ -410,6 +411,9 @@ namespace LinksRouting
   //----------------------------------------------------------------------------
   void GPURouting::process(Type type)
   {
+    if( !_enabled ) // This can be set from the config file...
+      return;
+
     //----------------------
     // Many sanity checks :)
 
@@ -493,9 +497,6 @@ namespace LinksRouting
                << " queue.");
 
       // --------------------------------------------------------
-
-      if( !_enabled ) // This can be set from the config file...
-        return;
 
       //ROUTING
       cl::Buffer queue_info(_cl_context, CL_MEM_READ_WRITE, sizeof(cl_QueueGlobal));
@@ -968,30 +969,4 @@ namespace LinksRouting
       throw;
     }
   }
-
-  void GPURouting::connect(CostAnalysis* costanalysis,
-                           LinksRouting::Renderer *renderer)
-  {
-
-  }
-
-  bool GPURouting::addLinkHierarchy(LinkDescription::Node* node,
-                                    double priority)
-  {
-    return true;
-  }
-  bool GPURouting::addLinkHierarchy(LinkDescription::HyperEdge* hyperedge,
-                                    double priority)
-  {
-    return true;
-  }
-  bool GPURouting::removeLinkHierarchy(LinkDescription::Node* node)
-  {
-    return true;
-  }
-  bool GPURouting::removeLinkHierarchy(LinkDescription::HyperEdge* hyperedge)
-  {
-    return true;
-  }
-
 }
