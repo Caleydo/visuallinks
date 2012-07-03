@@ -1100,7 +1100,7 @@ float getPenalty(float* costmap, int2 pos)
 }
 
 
-float readLastPenalty( float* lastCostmap, int2 pos, const int2 size)
+float readLastPenalty(const float* lastCostmap, int2 pos, const int2 size)
 {
   return lastCostmap[pos.x + pos.y*size.x];
 }
@@ -1580,6 +1580,81 @@ void routeLocal( std::vector<float>& routeMap,
  
 }
 
+
+
+void prepareIndividualRoutingDummy(const float* costmap,
+                                    float* routedata,
+                                   std::vector<int4>& startingPoints,
+                                   int4* blockToDataMapping,
+                                       const int2 dim,
+                                       const int2 numBlocks,
+                                       const int routeDataPerNode,
+                                       float* l_data)
+{
+  int4 mapping = blockToDataMapping[get_group_id(0)];
+
+
+  
+
+  const float MAXFLOAT = std::numeric_limits<float>::max();
+
+  float* l_cost = l_data;
+  float* l_route = l_data + (get_local_size(0)+2)*(get_local_size(1)+2);
+
+
+  //loadCostToLocalAndSetRoute((int2)(mapping.x, mapping.y), gid, dim, costmap, l_cost, l_route);
+  do
+  {
+      int lid = get_local_id(0) + get_local_id(1)*get_local_size(0);
+    for(; lid < (get_local_size(0)+2)*(get_local_size(1)+2); lid += get_local_size(0)*get_local_size(1))
+    {
+      l_cost[lid] = 0.1f*MAXFLOAT;
+      l_route[lid] = 0.1f*MAXFLOAT;
+    }
+  }while(advanceThread());
+
+  do
+  {
+    float r_in = 0.1f*MAXFLOAT;
+    int2 gid = int2(mapping.x*(get_local_size(0)-1)+get_local_id(0),
+                    mapping.y*(get_local_size(1)-1)+get_local_id(1));
+    if(gid.x < dim.x && gid.y < dim.y)
+    {
+      r_in = readLastPenalty(&costmap[0], gid, dim);
+      *accessLocalCost(l_cost, int2(get_local_id(0), get_local_id(1))) = r_in;
+    }
+  }while(advanceThread());
+
+  do
+  {
+    int2 gid = int2(mapping.x*(get_local_size(0)-1)+get_local_id(0),
+                    mapping.y*(get_local_size(1)-1)+get_local_id(1));
+    float startcost = 0.01f*MAXFLOAT;
+    if(gid.x < dim.x && gid.y < dim.y)
+    {
+      if(startingPoints[mapping.z].x <= gid.x && gid.x <= startingPoints[mapping.z].z &&
+         startingPoints[mapping.z].y <= gid.y && gid.y <= startingPoints[mapping.z].w)
+          startcost = 0;
+    }
+    *accessLocalCost(l_route, int2(get_local_id(0),get_local_id(1))) = startcost;
+  } while(advanceThread());
+  
+  
+  //route
+  route_data(l_cost, l_route);
+
+  do
+  {
+    int lid =  borderId(int2(get_local_id(0),get_local_id(1)), int2(get_local_size(0), get_local_size(1)));
+    if(lid >= 0)
+    {
+      //write out result
+      int offset = getCostGlobalId(lid, int2(mapping.x, mapping.y), int2 (get_local_size(0), get_local_size(1)), numBlocks);
+      routedata[routeDataPerNode*mapping.w + offset] = *accessLocalCost(l_route, int2(get_local_id(0),get_local_id(1)));
+    }
+  } while(advanceThread());
+}
+
 ///
 
 
@@ -1905,6 +1980,25 @@ void routeLocal( std::vector<float>& routeMap,
         }
         cl::Buffer d_prepareIndividualRoutingMapping(_cl_context, CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR, startingBlocks.size()*sizeof(cl_int4), &startingBlocks[0]);
 
+
+        //debug
+        //dummy call
+         float* costmap = new float[_buffer_width*_buffer_height];
+         _cl_command_queue.enqueueReadBuffer(_cl_lastCostMap_buffer, true, 0, _buffer_width*_buffer_height * sizeof(float), &costmap[0]);
+         float* routedata = new float[requiredElements*slices];
+         _cl_command_queue.enqueueReadBuffer(d_routingData, true, 0,_buffer_width*_buffer_height * sizeof(float), &routedata[0]);
+
+
+          float* lmem = new float[2*(_blockSize[0]+2)*(_blockSize[1]+2)];
+          initKernelData(int2(_blockSize[0],_blockSize[1]),int2(startingBlocks.size(),1) );
+
+          prepareIndividualRoutingDummy(costmap, routedata, routingPoints, (int4*)&startingBlocks[0], int2(_buffer_width,_buffer_height), int2(_blocks[0], _blocks[1]), requiredElements, lmem);
+          delete[] costmap;
+          delete[] routedata;
+          delete[] lmem;
+        //
+
+
         _cl_prepareIndividualRouting_kernel.setArg(0, _cl_lastCostMap_buffer);
         _cl_prepareIndividualRouting_kernel.setArg(1, d_routingData);
         _cl_prepareIndividualRouting_kernel.setArg(2, d_routingPoints);
@@ -1983,17 +2077,6 @@ void routeLocal( std::vector<float>& routeMap,
 
         //debug
         //dummy call
-
-    //initKernelData(int2(_blockSize[0],_blockSize[1]), int2(_blocks[0], _blocks[1]));
-    //costmap_dim = int2(_buffer_width, _buffer_height);
-
-    //updateRouteMapDummy(costmap, costmap, routemap, int2(_buffer_width, _buffer_height), computeAll, lmem);
-    //delete[] costmap;
-    //delete[] lastcostmap;
-    //delete[] routemap;
-    //delete[] lmem;
-
-
         size_t size;
         _cl_routeMap_buffer.getInfo(CL_MEM_SIZE, &size);
         std::vector<float> h_routeMap_buffer(size/sizeof(float));
