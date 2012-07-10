@@ -22,7 +22,7 @@
 namespace qtfullscreensystem
 {
   class GLWidget:
-    public QGLWidget,
+    public QWidget,
     public LinksRouting::ComponentArguments
   {
     public:
@@ -52,7 +52,7 @@ namespace qtfullscreensystem
       /**
        * Do actual render (To be called eg. by renderthread)
        */
-      void render();
+      void render(int pass, QGLPixelBuffer* pbuffer);
 
       /**
        * Start rendering thread
@@ -64,16 +64,21 @@ namespace qtfullscreensystem
        */
       void waitForData();
 
+      QImage _image;
+
     protected:
 
+      void paintEvent(QPaintEvent *event);
       void resizeEvent(QResizeEvent * event);
       void moveEvent(QMoveEvent *event);
 
-      void updateScreenShot(QPoint window_offset,  QPoint window_end);
+      void updateScreenShot( QPoint window_offset,
+                             QPoint window_end,
+                             QGLPixelBuffer* pbuffer );
 
     private:
 
-      RenderThread  _render_thread;
+      QSharedPointer<RenderThread> _render_thread;
 
       int _cur_fbo;
       std::unique_ptr<QGLFramebufferObject> _fbo_desktop[2];

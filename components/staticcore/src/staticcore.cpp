@@ -135,10 +135,18 @@ namespace LinksRouting
         c->is = 0;
       }
   }
-  void StaticCore::process()
+  void StaticCore::process(unsigned int type)
   {
     for( auto c = _components.begin(); c != _components.end(); ++c )
-      c->comp->process();
+    {
+      if( c->comp->supports(type) )
+      {
+//        std::cout << "+->" << c->comp->name() << std::endl;
+        c->comp->process(type);
+      }
+//      else
+//        std::cout << "!->" << c->comp->name() << std::endl;
+    }
   }
 
   //----------------------------------------------------------------------------

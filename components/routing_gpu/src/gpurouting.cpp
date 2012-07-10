@@ -409,9 +409,9 @@ namespace LinksRouting
   }
 
   //----------------------------------------------------------------------------
-  void GPURouting::process(Type type)
+  void GPURouting::process(unsigned int type)
   {
-    if( !_enabled ) // This can be set from the config file...
+    if( !_enabled )
       return;
 
     //----------------------
@@ -701,69 +701,72 @@ namespace LinksRouting
 
         dumpBuffer<float>(_cl_command_queue, buf, width, height * numtargets, "shortestpath");
 
-        _cl_command_queue.finish();
-        _cl_command_queue.enqueueReadBuffer(queue_info, true, 0, sizeof(cl_QueueGlobal), &baseQueueInfo);
+        if( !_noQueue )
+        {
+          _cl_command_queue.finish();
+          _cl_command_queue.enqueueReadBuffer(queue_info, true, 0, sizeof(cl_QueueGlobal), &baseQueueInfo);
 
-        std::cout << "front: " << baseQueueInfo.front << " "
-                  << "back: " << baseQueueInfo.back << " "
-                  << "filllevel: " << baseQueueInfo.filllevel << " "
-                  << "activeBlocks: " << baseQueueInfo.activeBlocks << " "
-                  << "processedBlocks: " << baseQueueInfo.processedBlocks << " "
-                  << "debug: " << baseQueueInfo.debug << "\n";
+          std::cout << "front: " << baseQueueInfo.front << " "
+                    << "back: " << baseQueueInfo.back << " "
+                    << "filllevel: " << baseQueueInfo.filllevel << " "
+                    << "activeBlocks: " << baseQueueInfo.activeBlocks << " "
+                    << "processedBlocks: " << baseQueueInfo.processedBlocks << " "
+                    << "debug: " << baseQueueInfo.debug << "\n";
 
 
-        //_cl_command_queue.enqueueReadBuffer(queue_info, true, 0, sizeof(cl_QueueGlobal), &baseQueueInfo);
-        //std::cout << "front: " << baseQueueInfo.front << " "
-        //          << "back: " << baseQueueInfo.back << " "
-        //          << "filllevel: " << baseQueueInfo.filllevel << " "
-        //          << "activeBlocks: " << baseQueueInfo.activeBlocks << " "
-        //          << "processedBlocks: " << baseQueueInfo.processedBlocks << " "
-        //          << "debug: " << baseQueueInfo.debug << "\n";
-        std::cout << "overAllBlocks=" << overAllBlocks << std::endl;
+          //_cl_command_queue.enqueueReadBuffer(queue_info, true, 0, sizeof(cl_QueueGlobal), &baseQueueInfo);
+          //std::cout << "front: " << baseQueueInfo.front << " "
+          //          << "back: " << baseQueueInfo.back << " "
+          //          << "filllevel: " << baseQueueInfo.filllevel << " "
+          //          << "activeBlocks: " << baseQueueInfo.activeBlocks << " "
+          //          << "processedBlocks: " << baseQueueInfo.processedBlocks << " "
+          //          << "debug: " << baseQueueInfo.debug << "\n";
+          std::cout << "overAllBlocks=" << overAllBlocks << std::endl;
 
-        std::vector<cl_QueueElement> queue_data =
-          dumpRingBuffer<cl_QueueElement>
+          std::vector<cl_QueueElement> queue_data =
+            dumpRingBuffer<cl_QueueElement>
+            (
+              _cl_command_queue,
+              queue,
+              baseQueueInfo.front,
+              baseQueueInfo.back,
+              overAllBlocks,
+              "queue.txt"
+            );
+          dumpRingBuffer<cl_float>
           (
             _cl_command_queue,
-            queue,
+            queue_priority,
             baseQueueInfo.front,
             baseQueueInfo.back,
             overAllBlocks,
-            "queue.txt"
+            "queue_priorities.txt"
           );
-        dumpRingBuffer<cl_float>
-        (
-          _cl_command_queue,
-          queue_priority,
-          baseQueueInfo.front,
-          baseQueueInfo.back,
-          overAllBlocks,
-          "queue_priorities.txt"
-        );
-        dumpRingBuffer<cl_float>
-        (
-          _cl_command_queue,
-          queue_priority,
-          0,
-          overAllBlocks - 1,
-          overAllBlocks,
-          "queue_priorities_all.txt"
-        );
+          dumpRingBuffer<cl_float>
+          (
+            _cl_command_queue,
+            queue_priority,
+            0,
+            overAllBlocks - 1,
+            overAllBlocks,
+            "queue_priorities_all.txt"
+          );
 
-        for(size_t i = 0; i < h_targets.size(); ++i)
-          std::cout << h_targets[i].x/_blockSize[0] << "->" <<  h_targets[i].z/_blockSize[0]
-                    << " " << h_targets[i].y/_blockSize[1] << "->" <<  h_targets[i].w/_blockSize[1]
-                    << std::endl;
+          for(size_t i = 0; i < h_targets.size(); ++i)
+            std::cout << h_targets[i].x/_blockSize[0] << "->" <<  h_targets[i].z/_blockSize[0]
+                      << " " << h_targets[i].y/_blockSize[1] << "->" <<  h_targets[i].w/_blockSize[1]
+                      << std::endl;
 
-        std::set<int4> cleanup;
-        for(unsigned int i = 0; i < queue_data.size(); ++i)
-          if(!cleanup.insert(int4(queue_data[i].s[0],queue_data[i].s[1],queue_data[i].s[2],0)).second)
-          {
-            std::cout << "duplicated queue entry: ";
-            for(int j = 0; j < 4; ++j)
-            std::cout << queue_data[i].s[j] << " ";
-            std::cout << "\n";
-          }
+          std::set<int4> cleanup;
+          for(unsigned int i = 0; i < queue_data.size(); ++i)
+            if(!cleanup.insert(int4(queue_data[i].s[0],queue_data[i].s[1],queue_data[i].s[2],0)).second)
+            {
+              std::cout << "duplicated queue entry: ";
+              for(int j = 0; j < 4; ++j)
+              std::cout << queue_data[i].s[j] << " ";
+              std::cout << "\n";
+            }
+        }
 
         //search for minimum
         _cl_command_queue.finish();

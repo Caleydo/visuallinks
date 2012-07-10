@@ -44,7 +44,7 @@ namespace LinksRouting
   }
 
   //----------------------------------------------------------------------------
-  void CPURouting::process(Type type)
+  void CPURouting::process(unsigned int type)
   {
     if( !_enabled )
       return;

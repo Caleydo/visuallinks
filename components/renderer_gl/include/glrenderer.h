@@ -27,16 +27,16 @@ namespace LinksRouting
       void init();
       void initGL();
       void shutdown();
-      bool supports(Type type) const
+      bool supports(unsigned int type) const
       {
-        return type == Component::Renderer;
+        return (type & Component::Renderer);
       }
       const std::string& name() const
       {
         return myname;
       }
 
-      void process(Type type);
+      void process(unsigned int type);
 
       virtual bool setString(const std::string& name, const std::string& val);
 

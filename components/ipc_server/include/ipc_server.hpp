@@ -43,9 +43,9 @@ namespace LinksRouting
       bool startup(Core* core, unsigned int type);
       void init();
       void shutdown();
-      bool supports(Type type) const
+      bool supports(unsigned int type) const
       {
-        return type == Component::DataServer;
+        return (type & Component::DataServer);
       }
       const std::string& name() const
       {
@@ -53,7 +53,7 @@ namespace LinksRouting
         return name;
       }
 
-      void process(Type type);
+      void process(unsigned int type);
 
     private slots:
 

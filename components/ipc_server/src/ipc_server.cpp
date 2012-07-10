@@ -187,7 +187,7 @@ namespace LinksRouting
   }
 
   //----------------------------------------------------------------------------
-  void IPCServer::process(Type type)
+  void IPCServer::process(unsigned int type)
   {
     if( !_debug_regions.empty() )
     {

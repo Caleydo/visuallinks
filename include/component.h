@@ -75,10 +75,10 @@ namespace LinksRouting
       virtual void init() {};
       virtual void initGL() {};
       virtual void shutdown() {};
-      virtual bool supports(Type type) const { return false; };
+      virtual bool supports(unsigned int type) const { return false; };
       virtual const std::string& name() const = 0;
 
-      virtual void process(Type type = None) {};
+      virtual void process(unsigned int type) {};
 
       virtual bool setFlag(const std::string& name, bool val) = 0;
       virtual bool getFlag(const std::string& name, bool& val) const = 0;

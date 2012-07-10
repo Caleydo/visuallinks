@@ -26,16 +26,16 @@ namespace LinksRouting
       bool startup(Core* core, unsigned int type);
       void init();
       void shutdown();
-      bool supports(Type type) const
+      bool supports(unsigned int type) const
       {
-        return type == Component::Routing;
+        return (type & Component::Routing);
       }
       const std::string& name() const
       {
         return myname;
       }
 
-      void process(Type type);
+      void process(unsigned int type);
 
     private:
 

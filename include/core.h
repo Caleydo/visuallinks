@@ -14,7 +14,7 @@ namespace LinksRouting
       virtual Component* getComponent(Component::Type type) = 0;
       virtual bool init() = 0;
       virtual void shutdown() = 0;
-      virtual void process() = 0;
+      virtual void process(unsigned int type) = 0;
 
       virtual Config* getConfig() = 0;
 

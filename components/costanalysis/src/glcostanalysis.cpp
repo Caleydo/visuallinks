@@ -78,7 +78,8 @@ namespace LinksRouting
 
   }
 
-  void GlCostAnalysis::process(Type type)
+  //----------------------------------------------------------------------------
+  void GlCostAnalysis::process(unsigned int type)
   {
     _slot_costmap->setValid(false);
 

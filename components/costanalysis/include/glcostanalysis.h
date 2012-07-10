@@ -32,16 +32,16 @@ namespace LinksRouting
       void init();
       void initGL();
       void shutdown();
-      bool supports(Type type) const
+      bool supports(unsigned int type) const
       {
-        return type == Component::Costanalysis;
+        return (type & Component::Costanalysis);
       }
       const std::string& name() const
       {
         return myname;
       }
 
-      void process(Type type);
+      void process(unsigned int type);
 
 //      bool setSceneInput(const Component::MapData& inputmap);
 //      bool setCostreductionInput(const Component::MapData& inputmap);

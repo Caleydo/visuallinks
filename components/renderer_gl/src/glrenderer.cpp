@@ -197,7 +197,7 @@ namespace LinksRouting
   }
 
   //----------------------------------------------------------------------------
-  void GlRenderer::process(Type type)
+  void GlRenderer::process(unsigned int type)
   {
     if( !_enabled )
       return;
