@@ -42,7 +42,7 @@ namespace LinksRouting
     registerArg("BlockSizeY", _blockSize[1] = 8);
     registerArg("enabled", _enabled = true);
     registerArg("QueueSize", _routingQueueSize = 512);
-    registerArg("NumLocalWorkers", _routingNumLocalWorkers = 8);
+    registerArg("NumLocalWorkers", _routingNumLocalWorkers = 16);
     registerArg("WorkersWarpSize", _routingLocalWorkersWarpSize = 32);
   }
 
@@ -1360,7 +1360,7 @@ float getRouteMapCost(const float* ourRouteMapBlock, int from, int to, const int
   int row = std::min(from,to);
   int col = std::max(from,to);
   col = col - row;
-  return ourRouteMapBlock[col + row*borderElements];
+  return ourRouteMapBlock[col + row*borderElements - row*(row-1)/2];
 }
 int dir4FromBorderId(int borderId, int2 lsize)
 {
@@ -1460,8 +1460,9 @@ void routeLocal( std::vector<float>& routeMap,
                           uint* queue,
                          const int queueSize)
 {
+  std::vector<uint> changed_data(get_local_size(0)*get_local_size(1));
   int borderElements = 2*(blockSize.x + blockSize.y - 2);
-  int workerId = get_local_id(1);
+  //int workerId = get_local_id(1);
   //const int lid = get_local_id(0);
   //const int linId = get_local_id(0) + get_local_size(0)*get_local_id(1);
   const int workerSize = get_local_size(0);
@@ -1470,8 +1471,6 @@ void routeLocal( std::vector<float>& routeMap,
   int elementsPerWorker = borderElements + 1;
   float* routingData = &routingData_in[0] + routeDataPerNode*routingIds[get_group_id(0)];
   
-   float* l_routeData = ( float*)(data + elementsPerWorker*workerId);
-   int* l_changedData = ( int*)(l_routeData + borderElements);
 
    bool thisRunChange;
   //do
@@ -1501,6 +1500,11 @@ void routeLocal( std::vector<float>& routeMap,
     {
       int changed = 0;
       int2 blockId;
+
+      //todo iterate over workers
+      int workerId = get_local_id(1);
+      float* l_routeData = ( float*)(data + elementsPerWorker*workerId);
+      int* l_changedData = ( int*)(l_routeData + borderElements);
       if(queueElements > workerId)
       {
         //there is work for me to be done
@@ -1512,67 +1516,85 @@ void routeLocal( std::vector<float>& routeMap,
                   numBlocks,
                   l_routeData,
                   l_changedData);
+        do {
+          changed_data[get_local_id(0) + get_local_size(0)*get_local_id(1)] = changed;
+        } while(advanceThread());
         if(changed) thisRunChange = true;
       }
       int nowWorked = std::min(queueElements, workers);
       queueFront += nowWorked;
       queueElements -= nowWorked;
 
-      ////queue management (one after the other)
-      //local uint l_queueElement;
-      //local uint hasElements;
-      //for(uint w = 0; w < nowWorked; ++w)
-      //{
-      //  if(w == workerId)
-      //    hasElements = changed;
-      //  barrier(CLK_LOCAL_MEM_FENCE);
-      //  if(changed == 0) continue;
-      //  for(int element = 0; element < 4; ++element)
-      //  {
-      //    if((hasElements & (1 << element)) == 0)
-      //      continue;
-      //    //generate new entry
-      //    if(w == workerId && (1 << element) == dir4FromBorderId(lid,blockSize))
-      //    {
-      //      int2 offset = (int2)(element<3?element-1:0, element>0?2-element:0);
-      //      atomic_min(&l_queueElement, createQueueEntry(blockId + offset, l_routeData[lid]));
-      //    }
-      //    barrier(CLK_LOCAL_MEM_FENCE);
+      //queue management (one after the other)
+      uint l_queueElement;
+      uint hasElements;
+      for(uint w = 0; w < nowWorked; ++w)
+      {
+        do
+        {
+          int workerId = get_local_id(1);
+          changed = changed_data[get_local_id(0) + get_local_size(0)*get_local_id(1)];
+          if(w == workerId)
+            hasElements = changed;
+        } while(advanceThread());
+        
+        for(int element = 0; element < 4; ++element)
+        {
+          l_queueElement = 0xFFFFFFFF;
+          if((hasElements & (1 << element)) == 0)
+            continue;
+          //generate new entry
+          do
+          {
+            int workerId = get_local_id(1);
+            int lid = get_local_id(0);
+            if(w == workerId && ((1 << element) & dir4FromBorderId(lid,blockSize)))
+            {
+              int2 offset = int2(element<3?element-1:0, element>0?2-element:0);
+              int2 newId = blockId + offset;
+              if(newId.x >= 0 && newId.y >= 0 &&
+                newId.x < numBlocks.x && newId.y < numBlocks.y)
+                l_queueElement = std::min(l_queueElement,createQueueEntry(newId, l_routeData[lid]));
+            }
+          } while(advanceThread());
 
-      //    //insert new entry
-      //    if(queueElements == queueSize-1)
-      //      --queueElements;
-      //    --queueFront;
+          if(l_queueElement == 0xFFFFFFFF)
+            continue;
 
-      //    uint newEntry = l_queueElement;
+          //insert new entry
+          if(queueElements >= queueSize-1)
+            queueElements = queueSize-2;
+          --queueFront;
+          queueFront = (queueFront + queueSize) % queueSize;
 
-      //    barrier(CLK_LOCAL_MEM_FENCE);
-      //    if(linId == 0)
-      //    {
-      //      l_queueElement = queueSize;
-      //      queue[(queueFront)%queueSize] = newEntry;
-      //    }
-      //    
-      //    for(int i=linId; i < queueElements; i+=get_local_size(0)*get_local_size(1))
-      //    {
-      //      int thisid = (queueFront + i + 1)%queueSize;
-      //      uint nextEntry = queue[(queueFront + i + 1)%queueSize];
-      //      if(compareQueueEntryBlocks(nextEntry, newEntry))
-      //        l_queueElement = linId;
-      //      barrier(CLK_LOCAL_MEM_FENCE);
+          uint newEntry = l_queueElement;
 
-      //      if(nextEntry < newEntry || linId > l_queueElement)
-      //        queue[(queueFront + i)%queueSize] = nextEntry;
-      //      else if(queue[(queueFront + i)%queueSize] < newEntry)
-      //        queue[(queueFront + i)%queueSize] = newEntry;
-      //    }
-      //    //no new element added
-      //    if(l_queueElement != queueSize)
-      //      --queueElements;
-      //    else
-      //      ++queueElements;
-      //  }
-      //}
+          l_queueElement = queueSize;
+          queue[queueFront] = newEntry;
+          
+          //for(int i=linId; i < queueElements; i+=get_local_size(0)*get_local_size(1))
+          //{
+          //  int thisid = (queueFront + i + 1)%queueSize;
+          //  uint nextEntry = queue[thisid];
+          //  ////did we find the entry?
+          //  //if(compareQueueEntryBlocks(nextEntry, newEntry))
+          //  //  l_queueElement = i;
+          //  barrier(CLK_LOCAL_MEM_FENCE);
+
+          //  ////if new element has higher cost -> copy old back
+          //  ////if same element has been found -> need to copy all back
+          //  //if(nextEntry < newEntry || i > l_queueElement)
+          //    queue[(queueFront + i)%queueSize] = nextEntry;
+          //  ////insert the new element, if my old one is the last to be copied away
+          //  //else if(queue[(queueFront + i)%queueSize] < newEntry)
+          //  //  queue[(queueFront + i)%queueSize] = newEntry;
+          //}
+
+          //new element added
+          if(l_queueElement == queueSize)
+            ++queueElements;
+        }
+      }
       
     }
   }// while(thisRunChange);
@@ -1981,22 +2003,22 @@ void prepareIndividualRoutingDummy(const float* costmap,
         cl::Buffer d_prepareIndividualRoutingMapping(_cl_context, CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR, startingBlocks.size()*sizeof(cl_int4), &startingBlocks[0]);
 
 
-        //debug
-        //dummy call
-         float* costmap = new float[_buffer_width*_buffer_height];
-         _cl_command_queue.enqueueReadBuffer(_cl_lastCostMap_buffer, true, 0, _buffer_width*_buffer_height * sizeof(float), &costmap[0]);
-         float* routedata = new float[requiredElements*slices];
-         _cl_command_queue.enqueueReadBuffer(d_routingData, true, 0,_buffer_width*_buffer_height * sizeof(float), &routedata[0]);
+        ////debug
+        ////dummy call
+        // float* costmap = new float[_buffer_width*_buffer_height];
+        // _cl_command_queue.enqueueReadBuffer(_cl_lastCostMap_buffer, true, 0, _buffer_width*_buffer_height * sizeof(float), &costmap[0]);
+        // float* routedata = new float[requiredElements*slices];
+        // _cl_command_queue.enqueueReadBuffer(d_routingData, true, 0,_buffer_width*_buffer_height * sizeof(float), &routedata[0]);
 
 
-          float* lmem = new float[2*(_blockSize[0]+2)*(_blockSize[1]+2)];
-          initKernelData(int2(_blockSize[0],_blockSize[1]),int2(startingBlocks.size(),1) );
+        //  float* lmem = new float[2*(_blockSize[0]+2)*(_blockSize[1]+2)];
+        //  initKernelData(int2(_blockSize[0],_blockSize[1]),int2(startingBlocks.size(),1) );
 
-          prepareIndividualRoutingDummy(costmap, routedata, routingPoints, (int4*)&startingBlocks[0], int2(_buffer_width,_buffer_height), int2(_blocks[0], _blocks[1]), requiredElements, lmem);
-          delete[] costmap;
-          delete[] routedata;
-          delete[] lmem;
-        //
+        //  prepareIndividualRoutingDummy(costmap, routedata, routingPoints, (int4*)&startingBlocks[0], int2(_buffer_width,_buffer_height), int2(_blocks[0], _blocks[1]), requiredElements, lmem);
+        //  delete[] costmap;
+        //  delete[] routedata;
+        //  delete[] lmem;
+        ////
 
 
         _cl_prepareIndividualRouting_kernel.setArg(0, _cl_lastCostMap_buffer);
@@ -2029,7 +2051,7 @@ void prepareIndividualRoutingDummy(const float* costmap,
          _cl_command_queue.enqueueReadBuffer(d_routingData, true, 0, mem.size() * sizeof(float), &mem[0]);
          for(size_t i = 0; i < mem.size(); ++i)
            if(mem[i] < 1000.0f)
-            std::cout << "(" << i/requiredElements << "): " << mem[i] << std::endl;
+            std::cout << "(" << i/requiredElements << "," << i % requiredElements << "): " << mem[i] << std::endl;
         dumpBuffer<float>(_cl_command_queue, d_routingData, requiredElements, slices, "initRouting");
       }
 
@@ -2087,7 +2109,7 @@ void prepareIndividualRoutingDummy(const float* costmap,
         int* data = new int[_routingNumLocalWorkers*(boundaryElements+1)];
         uint* queue = new uint[_routingQueueSize];
         int localWorkerSize2 = divup(boundaryElements,_routingLocalWorkersWarpSize)*_routingLocalWorkersWarpSize;
-        initKernelData(int2(localWorkerSize2,1), int2(localWorkerSize2,1));
+        initKernelData(int2(localWorkerSize2,1), int2(1,1));
         routeLocal(h_routeMap_buffer, startBlockRange, routingIds, h_routingData, requiredElements, int2(_blockSize[0], _blockSize[1]), int2(_blocks[0], _blocks[1]), data, queue, _routingQueueSize);
 
         delete[] data;

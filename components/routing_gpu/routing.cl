@@ -257,7 +257,8 @@ int2 lidForBorderId(int borderId, int2 lsize)
 
 int dir4FromBorderId(int borderId, int2 lsize)
 {
-  if(borderId < 0) return 0;
+  int borderElements = 2*(lsize.x+lsize.y-2);
+  if(borderId < 0 || borderId >= borderElements) return 0;
   int mask =  (borderId < lsize.x) | 
               ((borderId >= lsize.x-1 && borderId < lsize.x+lsize.y-1 ) << 1) |
               ((borderId >= lsize.x+lsize.y-2 && borderId < 2*lsize.x+lsize.y-2 ) << 2) |
@@ -485,7 +486,7 @@ float getRouteMapCost(global const float* ourRouteMapBlock, int from, int to, co
   int row = min(from,to);
   int col = max(from,to);
   col = col - row;
-  return ourRouteMapBlock[col + row*borderElements];
+  return ourRouteMapBlock[col + row*borderElements - row*(row-1)/2];
 }
 
 int routeBorder(global const float* routeMap, 
@@ -566,7 +567,7 @@ __kernel void routeLocal(global const float* routeMap,
   const int lid = get_local_id(0);
   const int linId = get_local_id(0) + get_local_size(0)*get_local_id(1);
   const int workerSize = get_local_size(0);
-  const uint workers = get_local_size(1);
+  const int workers = get_local_size(1);
   int withinWorkerId = get_local_id(0);
   int elementsPerWorker = borderElements + 1;
   routingData = routingData + routeDataPerNode*routingIds[get_group_id(0)];
@@ -581,9 +582,9 @@ __kernel void routeLocal(global const float* routeMap,
     //(re)init queue
     //TODO: this needs to circle around until we find a block which has changed
     int4 ourInit = seed[get_group_id(0)];
-    uint queueFront = 0;
-    uint queueElements = (ourInit.w-ourInit.y)*(ourInit.z-ourInit.x);
-    int posoffset = 0;
+    int queueFront = 0;
+    int queueElements = (ourInit.w-ourInit.y)*(ourInit.z-ourInit.x);
+    int posoffset = (ourInit.z-ourInit.x)*get_local_id(1);
     for(int y = ourInit.y + get_local_id(1); y < ourInit.w; y+= get_local_size(1))
     {
       for(int x = get_local_id(0); x < (ourInit.z - ourInit.x); x += get_local_size(0))
@@ -617,61 +618,79 @@ __kernel void routeLocal(global const float* routeMap,
       queueFront += nowWorked;
       queueElements -= nowWorked;
 
-      ////queue management (one after the other)
-      //local uint l_queueElement;
-      //local uint hasElements;
-      //for(uint w = 0; w < nowWorked; ++w)
-      //{
-      //  if(w == workerId)
-      //    hasElements = changed;
-      //  barrier(CLK_LOCAL_MEM_FENCE);
-      //  if(changed == 0) continue;
-      //  for(int element = 0; element < 4; ++element)
-      //  {
-      //    if((hasElements & (1 << element)) == 0)
-      //      continue;
-      //    //generate new entry
-      //    if(w == workerId && (1 << element) == dir4FromBorderId(lid,blockSize))
-      //    {
-      //      int2 offset = (int2)(element<3?element-1:0, element>0?2-element:0);
-      //      atomic_min(&l_queueElement, createQueueEntry(blockId + offset, l_routeData[lid]));
-      //    }
-      //    barrier(CLK_LOCAL_MEM_FENCE);
+      //queue management (one after the other)
+      local uint l_queueElement;
+      local uint hasElements;
+      for(uint w = 0; w < nowWorked; ++w)
+      {
+        if(w == workerId)
+          hasElements = changed;
+        for(int element = 0; element < 4; ++element)
+        {
+          l_queueElement = 0xFFFFFFFF;
+          barrier(CLK_LOCAL_MEM_FENCE);
+          if((hasElements & (1 << element)) == 0)
+            continue;
+          //generate new entry
+          if(w == workerId && ((1 << element) & dir4FromBorderId(lid,blockSize)))
+          {
+            int2 offset = (int2)(element<3?element-1:0, element>0?2-element:0);
+            int2 newId = blockId + offset;
+            if(newId.x >= 0 && newId.y >= 0 &&
+                newId.x < numBlocks.x && newId.y < numBlocks.y)
+              atomic_min(&l_queueElement, createQueueEntry(newId, l_routeData[lid]));
+          }
+          barrier(CLK_LOCAL_MEM_FENCE);
 
-      //    //insert new entry
-      //    if(queueElements == queueSize-1)
-      //      --queueElements;
-      //    --queueFront;
+          if(l_queueElement == 0xFFFFFFFF)
+            continue;
 
-      //    uint newEntry = l_queueElement;
+          //insert new entry
+          if(queueElements >= queueSize-1)
+            queueElements = queueSize-2;
+          --queueFront;
+          queueFront = (queueFront + queueSize) % queueSize;
 
-      //    barrier(CLK_LOCAL_MEM_FENCE);
-      //    if(linId == 0)
-      //    {
-      //      l_queueElement = queueSize;
-      //      queue[(queueFront)%queueSize] = newEntry;
-      //    }
-      //    
-      //    for(int i=linId; i < queueElements; i+=get_local_size(0)*get_local_size(1))
-      //    {
-      //      int thisid = (queueFront + i + 1)%queueSize;
-      //      uint nextEntry = queue[(queueFront + i + 1)%queueSize];
-      //      if(compareQueueEntryBlocks(nextEntry, newEntry))
-      //        l_queueElement = linId;
-      //      barrier(CLK_LOCAL_MEM_FENCE);
+          uint newEntry = l_queueElement;
 
-      //      if(nextEntry < newEntry || linId > l_queueElement)
-      //        queue[(queueFront + i)%queueSize] = nextEntry;
-      //      else if(queue[(queueFront + i)%queueSize] < newEntry)
-      //        queue[(queueFront + i)%queueSize] = newEntry;
-      //    }
-      //    //no new element added
-      //    if(l_queueElement != queueSize)
-      //      --queueElements;
-      //    else
-      //      ++queueElements;
-      //  }
-      //}
+          barrier(CLK_LOCAL_MEM_FENCE);
+          if(linId == 0)
+          {
+            l_queueElement = queueSize;
+            queue[queueFront] = newEntry;
+          }
+          
+          for(int i=0; i < queueElements; i+=get_local_size(0)*get_local_size(1))
+          {
+            int tId = linId + i;
+            uint nextEntry;
+            if(tId < queueElements)
+            {
+              nextEntry = queue[(queueFront + tId + 1)%queueSize];
+              //did we find the entry?
+              if(compareQueueEntryBlocks(nextEntry, newEntry))
+                l_queueElement = i;
+            }
+          
+            barrier(CLK_LOCAL_MEM_FENCE);
+            if(tId < queueElements)
+            {
+              //if new element has higher cost -> copy old back
+              //if same element has been found -> need to copy all back
+              if(nextEntry < newEntry || i > l_queueElement)
+                queue[(queueFront + tId)%queueSize] = nextEntry;
+              //insert the new element, if my old one is the last to be copied away
+              else if(queue[(queueFront + tId)%queueSize] < newEntry)
+                queue[(queueFront + tId)%queueSize] = newEntry;
+            }
+          }
+
+          barrier(CLK_LOCAL_MEM_FENCE);
+          //new element added
+          if(l_queueElement == queueSize)
+            ++queueElements;
+        }
+      }
       
     }
   }// while(thisRunChange);
