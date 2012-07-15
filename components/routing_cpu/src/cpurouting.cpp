@@ -80,16 +80,22 @@ namespace LinksRouting
         if( node->getProps().find("hidden") != node->getProps().end() )
           continue;
 
+        assert( !node->getVertices().empty() );
+
+        float2 region_center;
         for( auto p = node->getVertices().begin();
              p != node->getVertices().end();
              ++p )
         {
-          fork->position += *p;
-          num_nodes += 1;
+          region_center += *p;
         }
+
+        fork->position += region_center / node->getVertices().size();
+        num_nodes += 1;
       }
-      fork->position /= num_nodes;
-      std::cout << fork->position << std::endl;
+
+      if( num_nodes )
+        fork->position /= num_nodes;
 
       //copy routes to hyperedge
       for( auto node = it->_link.getNodes().begin();
@@ -116,7 +122,11 @@ namespace LinksRouting
 
         fork->outgoing.push_back(LinkDescription::HyperEdgeDescriptionSegment());
         fork->outgoing.back().parent = fork;
-        fork->outgoing.back().trail.push_back(min_vert);
+
+        if( num_nodes > 1 )
+          // Only add route if at least one other node exists
+          fork->outgoing.back().trail.push_back(min_vert);
+
         fork->outgoing.back().nodes.push_back(&*node);
       }
     }

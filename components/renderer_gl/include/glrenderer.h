@@ -82,7 +82,7 @@ namespace LinksRouting
       cwc::glShader*    _blur_x_shader;
       cwc::glShader*    _blur_y_shader;
 
-      void renderLinks(const LinkDescription::LinkList& links);
+      bool renderLinks(const LinkDescription::LinkList& links);
   };
 }
 

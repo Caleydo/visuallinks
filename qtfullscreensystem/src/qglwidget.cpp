@@ -372,7 +372,7 @@ ShaderPtr loadShader( QString vert, QString frag )
     //glPopAttrib();
 
     //links.save("fbo.png");
-    if( !_subscribe_routed_links->_data->empty() )
+    if( _subscribe_links->isValid() )
     {
       //writeTexture(_subscribe_links, QString("links%1.png").arg(counter));
 

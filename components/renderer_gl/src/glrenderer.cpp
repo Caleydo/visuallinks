@@ -214,8 +214,11 @@ namespace LinksRouting
     if( _subscribe_links->_data->empty() )
       return _links_fbo.unbind();
 
-    renderLinks(*_subscribe_links->_data);
+    bool rendered_anything = renderLinks(*_subscribe_links->_data);
     _links_fbo.unbind();
+
+    if( !rendered_anything )
+      return;
 
     glDisable(GL_BLEND);
     glColor4f(1,1,1,1);
@@ -272,12 +275,16 @@ for( int i = 0; i < 1; ++i )
   }
 
   //----------------------------------------------------------------------------
-  void GlRenderer::renderLinks(const LinkDescription::LinkList& links)
+  bool GlRenderer::renderLinks(const LinkDescription::LinkList& links)
   {
+    bool rendered_anything = false;
     glColor3f(1.0, 0.2, 0.2);
 
     for(auto link = links.begin(); link != links.end(); ++link)
     {
+      if( !_colors.empty() )
+        glColor3fv(_colors[ link->_color_id % _colors.size() ]);
+
       const LinkDescription::HyperEdgeDescriptionForkation* fork =
         link->_link.getHyperEdgeDescription();
 
@@ -299,12 +306,10 @@ for( int i = 0; i < 1; ++i )
             glVertex2f(second->x, second->y);
           }
           glEnd();
+          rendered_anything = true;
         }
         continue;
       }
-
-      if( !_colors.empty() )
-        glColor3fv(_colors[ link->_color_id % _colors.size() ]);
 
       for( auto segment = fork->outgoing.begin();
            segment != fork->outgoing.end();
@@ -333,6 +338,8 @@ for( int i = 0; i < 1; ++i )
           }
           glEnd();
 
+          rendered_anything = true;
+
           if( !_colors.empty() )
             glColor3fv(_colors[ link->_color_id % _colors.size() ]);
         }
@@ -360,5 +367,7 @@ for( int i = 0; i < 1; ++i )
         glEnd();
       }
     }
+
+    return rendered_anything;
   }
 };
