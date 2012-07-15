@@ -139,7 +139,9 @@ ShaderPtr loadShader( QString vert, QString frag )
     _core.attachComponent(&_server);
     _core.attachComponent(&_cost_analysis);
     _core.attachComponent(&_routing_cpu);
+#if USE_GPU_ROUTING
     _core.attachComponent(&_routing_gpu);
+#endif
     _core.attachComponent(&_renderer);
 
     _core.attachComponent(this);

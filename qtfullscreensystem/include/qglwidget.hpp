@@ -11,7 +11,9 @@
 #include "ipc_server.hpp"
 #include "glcostanalysis.h"
 #include "cpurouting.h"
-#include "gpurouting.h"
+#if USE_GPU_ROUTING
+# include "gpurouting.h"
+#endif
 #include "glrenderer.h"
 
 #include <QMutex>
@@ -100,7 +102,9 @@ namespace qtfullscreensystem
       LinksRouting::IPCServer       _server;
       LinksRouting::GlCostAnalysis  _cost_analysis;
       LinksRouting::CPURouting      _routing_cpu;
+#if USE_GPU_ROUTING
       LinksRouting::GPURouting      _routing_gpu;
+#endif
       LinksRouting::GlRenderer      _renderer;
 
       QMutex            _mutex_slot_links;

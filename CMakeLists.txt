@@ -15,7 +15,15 @@ include( cmake/CopyFiles.cmake )
 include( cmake/AddComponent.cmake )
 include( cmake/AddSubdirOption.cmake )
 
+# ------------------------------------------------------------------------------
 # custom options
+# ------------------------------------------------------------------------------
+
+message("--------------------")
+message("Build configuration:")
+message("--------------------")
+
+# direct desktop blending
 set( RenderUseDesktopBlend_desc
      "Use direct alpha blending with desktop (doesn't work on windows)" )
 if(WIN32)
@@ -29,6 +37,7 @@ if(RenderUseDesktopBlend)
   add_definitions(-DUSE_DESKTOP_BLEND)
 endif()
 
+# ------------------------------------------------------------------------------
 
 #set interface files
 set( INTERFACE_FILES
@@ -78,6 +87,13 @@ add_component(routing_cpu)
 add_component(routing_gpu)
 add_component(transparencyanalysis off)
 #message("comp inc:\n${COMPONENTS_INC_DIR} \ncomp libs:\n${COMPONENTS_LIBS}\ndepeping files:\n${COMPONENTS_DEPENDING_FILES}")
+
+# OpenCL GPU routing
+if(LinksComponent_routing_gpu)
+  add_definitions(-DUSE_GPU_ROUTING)
+endif()
+
+message("--------------------")
 
 #add default applications
 add_subdir_option(qtfullscreensystem QTFullscreenSystem)
