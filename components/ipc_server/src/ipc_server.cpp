@@ -22,6 +22,60 @@
 namespace LinksRouting
 {
 
+  std::ostream& operator<<(std::ostream& strm, const QRect& r)
+  {
+    return strm << "(" << r.x() << "|" << r.y() << ") "
+                << r.width() << "x" << r.height();
+  }
+
+  class WindowMonitor:
+    public QThread
+  {
+    protected:
+      typedef std::map<WId, QRect> WindowRegions;
+
+      void run()
+      {
+        WindowRegions old_regions;
+        for(;;)
+        {
+          WindowRegions regions = getWindows();
+          for( auto cur_reg = regions.begin();
+               cur_reg != regions.end();
+               ++cur_reg )
+          {
+            const std::string title =
+              QxtWindowSystem::windowTitle(cur_reg->first).toStdString();
+
+            auto old_reg = old_regions.find(cur_reg->first);
+            if( old_reg == old_regions.end() )
+            {
+              std::cout << "New (" << title << ") "
+                        << cur_reg->second
+                        << std::endl;
+              continue;
+            }
+
+            if( cur_reg->second != old_reg->second )
+            {
+              std::cout << "Chg (" << title << ") "
+                        << cur_reg->second
+                        << std::endl;
+            }
+          }
+          old_regions = regions;
+          usleep(500);
+        }
+      }
+
+      WindowRegions getWindows() const
+      {
+        WindowRegions regions;
+        foreach(WId id, QxtWindowSystem::windows())
+          regions[ id ] = QxtWindowSystem::windowGeometry(id);
+        return regions;
+      }
+  };
   /**
    * Helper for handling json messages
    */
@@ -161,6 +215,8 @@ namespace LinksRouting
   //----------------------------------------------------------------------------
   bool IPCServer::startup(Core* core, unsigned int type)
   {
+    static WindowMonitor m;
+    m.start();
     return true;
   }
 
@@ -428,15 +484,15 @@ namespace LinksRouting
           QPoint pos(point.x, point.y);
           for (int i = windows.size() - 1; i >= 0; --i)
           {
-              WId wid_cur = windows.at(i);
-              if( wid_cur == _widget->winId() )
-                // Ignore own window as it's always on top, but transparent
-                continue;
-              else if( QxtWindowSystem::windowGeometry(wid_cur).contains(pos) )
-              {
-                  wid = wid_cur;
-                  break;
-              }
+            WId wid_cur = windows.at(i);
+            if( wid_cur == _widget->winId() )
+              // Ignore own window as it's always on top, but transparent
+              continue;
+            else if( QxtWindowSystem::windowGeometry(wid_cur).contains(pos) )
+            {
+              wid = wid_cur;
+              break;
+            }
           }
 
           if( wid != client_wid )
