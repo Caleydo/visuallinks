@@ -271,6 +271,32 @@ namespace LinksRouting
   }
 
   //----------------------------------------------------------------------------
+
+
+  template<typename T>
+  void printfBuffer( cl::CommandQueue& cl_queue,
+                     const cl::Buffer& buf,
+                     size_t width,
+                     size_t height,
+                     const char* name = 0)
+  {
+    cl_queue.finish();
+
+    std::vector<T> mem(width * height);
+    cl_queue.enqueueReadBuffer(buf, true, 0, width * height * sizeof(T), &mem[0]);
+
+    if(name) 
+      std::cout << name << ":\n";
+    else
+      std::cout << "Buffer:\n";
+    for(auto it = mem.begin(); it != mem.end();)
+    {
+      for(size_t i = 0; i < width; ++i, ++it)
+        std::cout << *it << " ";
+      std::cout << '\n';
+    }
+
+  }
   template<typename T>
   void dumpBuffer( cl::CommandQueue& cl_queue,
                    const cl::Buffer& buf,
@@ -1971,19 +1997,19 @@ int getActiveBlock(const int2 seedBlock, const int2 blockId, const int2 activeBl
   void GPURouting::createRoutes(LinksRouting::LinkDescription::HyperEdge& hedge)
   {
 
-    int2 test;
-    int2 seed(2,2);
-    int2 dim(8, 10);
-    for(test.y = 0; test.y < dim.y; ++test.y)
-    {
-      for(test.x = 0; test.x < dim.x; ++test.x)
-      {
-        int res = getActiveBlock(seed*8, test*8, dim);
-        int2 reverse = activeBlockToId(seed*8, res, 0, dim);
-        std::cout << res << '(' << reverse.x << ',' << reverse.y << ")\t";
-      }
-      std::cout << '\n';
-    }
+    //int2 test;
+    //int2 seed(2,2);
+    //int2 dim(8, 10);
+    //for(test.y = 0; test.y < dim.y; ++test.y)
+    //{
+    //  for(test.x = 0; test.x < dim.x; ++test.x)
+    //  {
+    //    int res = getActiveBlock(seed*8, test*8, dim);
+    //    int2 reverse = activeBlockToId(seed*8, res, 0, dim);
+    //    std::cout << res << '(' << reverse.x << ',' << reverse.y << ")\t";
+    //  }
+    //  std::cout << '\n';
+    //}
 
     std::map<const LinkDescription::Node*, size_t > levelNodeMap;
     std::map<const LinkDescription::HyperEdge*, size_t > levelHyperEdgeMap;
@@ -2296,7 +2322,7 @@ int getActiveBlock(const int2 seedBlock, const int2 blockId, const int2 activeBl
 
         //active buffers
         cl_uint activeBufferSize[] = {divup(_blocks[0],8), divup(_blocks[1],8)};
-        cl::Buffer d_routeActive(_cl_context, CL_MEM_READ_WRITE, 2*activeBufferSize[0]*activeBufferSize[1]*startBlockRange.size());
+        cl::Buffer d_routeActive(_cl_context, CL_MEM_READ_WRITE, 2*activeBufferSize[0]*activeBufferSize[1]*startBlockRange.size()*sizeof(cl_uint));
         _cl_initMem_kernel.setArg(0, d_routeActive);
         _cl_initMem_kernel.setArg(1, 0);
 
@@ -2333,6 +2359,7 @@ int getActiveBlock(const int2 seedBlock, const int2 blockId, const int2 activeBl
         int localWorkerSize = divup(boundaryElements,_routingLocalWorkersWarpSize)*_routingLocalWorkersWarpSize;
 
         cl::Event routingRoutingEvent;
+        //_routingNumLocalWorkers = 1;
         _cl_command_queue.enqueueNDRangeKernel
         (
           _cl_routing_kernel,
@@ -2346,6 +2373,7 @@ int getActiveBlock(const int2 seedBlock, const int2 blockId, const int2 activeBl
         routingRoutingEvent.getProfilingInfo(CL_PROFILING_COMMAND_END, &end);
         routingRoutingEvent.getProfilingInfo(CL_PROFILING_COMMAND_START, &start);
         std::cout << " - routingRouting: " << (end-start)/1000000.0  << "ms\n";
+        printfBuffer<uint>(_cl_command_queue, d_routeActive, 2*activeBufferSize[0], activeBufferSize[1]*startBlockRange.size(), "activeBuffer");
         dumpBuffer<float>(_cl_command_queue, d_routingData, requiredElements, slices, "routingRouting");
       }
 

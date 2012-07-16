@@ -207,6 +207,50 @@ bool Dequeue(volatile global QueueGlobal* queueInfo,
 }
 //
 
+//prefix sum
+//elements needs to be power of two and local_size(0) >= elements/2, data must be able to hold one more element
+uint scanLocalWorkEfficient(__local uint* data, size_t linId, size_t elements)
+{
+  //up
+  size_t offset = 1;
+  for(size_t d = elements / 2; d > 0; d /= 2)
+  {
+    barrier(CLK_LOCAL_MEM_FENCE);
+    if(linId < d)
+    {
+      size_t ai = offset*(2*linId+1)-1;
+      size_t bi = offset*(2*linId+2)-1;
+      data[bi] += data[ai];
+    }
+    offset *= 2;
+  }
+  //write out and clear last
+  if (linId)
+  {
+    data[elements] = data[elements - 1];
+    data[elements - 1] = 0;
+  }
+  
+  //down
+  for(size_t d = 1; d < elements; d *= 2)
+  {
+    offset /= 2;
+    barrier(CLK_LOCAL_MEM_FENCE);
+    if(linId < d)
+    {
+      size_t ai = offset*(2*linId+1)-1;
+      size_t bi = offset*(2*linId+2)-1;
+      uint t = data[ai];
+      data[ai] = data[bi];
+      data[bi] += t;
+    }
+  }
+  barrier(CLK_LOCAL_MEM_FENCE);
+  return data[elements];
+}
+
+
+//
 
 float getPenalty(read_only image2d_t costmap, int2 pos)
 {
@@ -259,6 +303,12 @@ int dir4FromBorderId(int borderId, int2 lsize)
 {
   int borderElements = 2*(lsize.x+lsize.y-2);
   if(borderId < 0 || borderId >= borderElements) return 0;
+  
+  //int mask = 0;
+  //if(borderId < lsize.x) mask |= 0x1;
+  //if(borderId >= lsize.x-1 && borderId < lsize.x+lsize.y-1 ) mask |= 0x2;
+  //if(borderId >= lsize.x+lsize.y-2 && borderId < 2*lsize.x+lsize.y-2 ) mask |= 0x4;
+  //if(borderId >= 2*lsize.x+lsize.y-3 || borderId == 0 ) mask |= 0x8;
   int mask =  (borderId < lsize.x) | 
               ((borderId >= lsize.x-1 && borderId < lsize.x+lsize.y-1 ) << 1) |
               ((borderId >= lsize.x+lsize.y-2 && borderId < 2*lsize.x+lsize.y-2 ) << 2) |
@@ -524,7 +574,7 @@ int routeBorder(global const float* routeMap,
     {
       //atomic as multiple might be working on the same
       atomic_min((volatile global unsigned int*)(routingData + gid), as_uint(mycost));
-
+      
       //TODO: this is already an extension for opencl 1.0 so maybe do them individually...
       atomic_or(changeData,dir4FromBorderId(lid, blockSize));
     }
@@ -551,7 +601,7 @@ bool compareQueueEntryBlocks(const uint entry1, const uint entry2)
   return (entry1&0xFFFFFu)==(entry2&0xFFFFFu);
 }
 
-uint nextBlockRange(uint4 dims, uint4 limits)
+uint4 nextBlockRange(uint4 dims, uint4 limits)
 {
   uint maxuint = 0xFFFFFFFF;
   uint current =  maxuint - max(max(dims.x, dims.y), max(dims.z, dims.w)) + 1;
@@ -605,7 +655,7 @@ int2 activeBlockToId(const int2 seedBlock, const int spiralIdIn, const int2 acti
       else
         outerspirals = - c / b;
 
-      int innerspirals = max(1U,std::max(max(area_dims.x, area_dims.y),max(area_dims.z, area_dims.w)));
+      int innerspirals = max(1U,max(max(area_dims.x, area_dims.y),max(area_dims.z, area_dims.w)));
       int4 allspirals = (int4)(max(0,seedAB.x-innerspirals-outerspirals+1), max(0,seedAB.y-innerspirals-outerspirals+1), 
                              min(activeBlocksSize.x-1,seedAB.x+innerspirals+outerspirals-1), min(activeBlocksSize.y-1,seedAB.y+innerspirals+outerspirals-1));
       int allspiralelements = (allspirals.z - allspirals.x+1)*(allspirals.w - allspirals.y+1);
@@ -717,12 +767,12 @@ int2 getActiveBlock(const int2 seedBlock, const int2 blockId, const int2 activeB
 void unsetActiveBlock(volatile global uint* myActiveBlock, const int2 seedBlock, const int2 blockId, const int2 activeBlocksSize)
 {
   int2 tblock = getActiveBlock(seedBlock, blockId, activeBlocksSize);
-  atomic_and(activeBlock + tblock.x, ~tblock.y);
+  atomic_and(myActiveBlock + tblock.x, ~tblock.y);
 }
 void setActiveBlock(volatile global uint* myActiveBlock, const int2 seedBlock, const int2 blockId, const int2 activeBlocksSize)
 {
   int2 tblock = getActiveBlock(seedBlock, blockId, activeBlocksSize);
-  atomic_or(activeBlock + tblock.x, tblock.y);
+  atomic_or(myActiveBlock + tblock.x, tblock.y);
 }
 
 __kernel void routeLocal(global const float* routeMap,
@@ -758,7 +808,7 @@ __kernel void routeLocal(global const float* routeMap,
   int queueFront = 0;
   int queueElements = (ourInit.w-ourInit.y)*(ourInit.z-ourInit.x);
   int posoffset = (ourInit.z-ourInit.x)*get_local_id(1);
-  int2 seedBlock = (int2)(ourInit.x+ourInit.z)/2, (outInit.y+ourInit.w)/2);
+  int2 seedBlock = (int2)((ourInit.x+ourInit.z)/2, (ourInit.y+ourInit.w)/2);
   for(int y = ourInit.y + get_local_id(1); y < ourInit.w; y+= get_local_size(1))
   {
     for(int x = get_local_id(0); x < (ourInit.z - ourInit.x); x += get_local_size(0))
@@ -777,7 +827,7 @@ __kernel void routeLocal(global const float* routeMap,
     {
       int changed = 0;
       int2 blockId;
-      if(queueElements > workerId)
+      if(workerId < queueElements)
       {
         //there is work for me to be done
         blockId = readQueueEntry(queue[(queueFront + workerId)%queueSize]);
@@ -788,7 +838,7 @@ __kernel void routeLocal(global const float* routeMap,
                   numBlocks,
                   l_routeData,
                   l_changedData);
-        unsetActiveBlock(activeBuffer + activeBufferSize.x*activeBufferSize.y*get_group_id(0), seedBlock, blockId, activeBufferSize);
+        //unsetActiveBlock(activeBuffer + 2*activeBufferSize.x*activeBufferSize.y*get_group_id(0), seedBlock, blockId, activeBufferSize);
       }
       int nowWorked = min(queueElements, workers);
       queueFront += nowWorked;
@@ -799,38 +849,41 @@ __kernel void routeLocal(global const float* routeMap,
       local uint hasElements;
       for(uint w = 0; w < nowWorked; ++w)
       {
+        barrier(CLK_LOCAL_MEM_FENCE);
         if(w == workerId)
           hasElements = changed;
         for(int element = 0; element < 4; ++element)
         {
-          l_queueElement = 0xFFFFFFFF;
           barrier(CLK_LOCAL_MEM_FENCE);
           if((hasElements & (1 << element)) == 0)
             continue;
+          l_queueElement = 0xFFFFFFFF;
+          barrier(CLK_LOCAL_MEM_FENCE);
           //generate new entry
           if(w == workerId && ((1 << element) & dir4FromBorderId(lid,blockSize)))
           {
-            int2 offset = (int2)(element<3?element-1:0, element>0?2-element:0);
+            int2 offset = (int2)(element>0?2-element:0, element<3?element-1:0);
             int2 newId = blockId + offset;
             if(newId.x >= 0 && newId.y >= 0 &&
                 newId.x < numBlocks.x && newId.y < numBlocks.y)
               atomic_min(&l_queueElement, createQueueEntry(newId, l_routeData[lid]));
           }
-          barrier(CLK_LOCAL_MEM_FENCE);
 
+          barrier(CLK_LOCAL_MEM_FENCE);
           if(l_queueElement == 0xFFFFFFFF)
             continue;
-
           //insert new entry
           --queueFront;
           queueFront = (queueFront + queueSize) % queueSize;
+
+          
           if(queueElements == queueSize)
           {
             //kick out last
             queueElements = queueSize-1;
             //set as active for later
             if(linId == 0)
-              setActiveBlock(activeBuffer + activeBufferSize.x*activeBufferSize.y*get_group_id(0), seedBlock, queue[queueFront], activeBufferSize);
+              setActiveBlock(activeBuffer + 2*activeBufferSize.x*activeBufferSize.y*get_group_id(0), seedBlock, queue[queueFront], activeBufferSize);
           }
           
           uint newEntry = l_queueElement;
@@ -878,19 +931,18 @@ __kernel void routeLocal(global const float* routeMap,
     //get back active blocks
     //to a maximum of queueSize/4 elements
     queueFront = 0;
-    uint pullers = min(queueSize/2, get_local_size(0)*get_local_size(1));
+    uint pullers = min(queueSize/2, (int)(get_local_size(0)*get_local_size(1)) );
     int pullRun = 0;
     int pullId = linId;
-    __local insertCommunicate;
-    while(queueElements < queueSize/4 && pullRun * pullers < activeBufferSize.x*activeBufferSize.y)
+    //while(queueElements < queueSize/4 && pullRun * pullers < 2*activeBufferSize.x*activeBufferSize.y)
     {
       uint myentry = 0;
+      uint canOffer = 0;
       if(linId < pullers)
       {
-        uint canOffer = 0;
-        if(pullId < activeBufferSize.x*activeBufferSize.y)
+        if(pullId < 2*activeBufferSize.x*activeBufferSize.y)
         {
-          myentry = activeBuffer[activeBufferSize.x*activeBufferSize.y*get_group_id(0) + pullId);
+          myentry = activeBuffer[2*activeBufferSize.x*activeBufferSize.y*get_group_id(0) + pullId];
           canOffer = popc(myentry);
         }
         queue[queueSize/2 + linId] = canOffer;
@@ -898,17 +950,31 @@ __kernel void routeLocal(global const float* routeMap,
       barrier(CLK_LOCAL_MEM_FENCE);
       
       //run prefix sum
+      scanLocalWorkEfficient(queue + queueSize/2, linId, pullers);
 
       //put into queue
       if(myentry != 0)
       {
-        ...
-        // distribute really put into queue
-        insertCommunicate = 0;
-      }
-      barrier(CLK_LOCAL_MEM_FENCE);
+        int myElements = min(canOffer, queueSize/4 - (queueElements + queue[queueSize/2 + linId]));
+        int2 myOffset = activeBlockToId(seedBlock, pullId, activeBufferSize);
 
+        int2 additionalOffset = (int2)(0,0);
+        for(int inserted = 0; additionalOffset.y < 4; ++additionalOffset.y)
+          for(additionalOffset.x = 0; additionalOffset.x < 8 && inserted < myElements; ++additionalOffset.x, myentry >>= 1)
+          {
+            if(myentry & 0x1)
+            {
+              queue[queueElements + queue[queueSize/2 + linId] + inserted] = createQueueEntry(myOffset + additionalOffset , 0);
+              //debug
+              //activeBuffer[queueElements + queue[queueSize/2 + linId] + inserted] = createQueueEntry(myOffset + additionalOffset , 0);
+              ++inserted;
+            }
+          }
+      }
+      queueElements =  min((int)(queueElements + queue[queueSize/2 + pullers]), queueSize/4);
+      barrier(CLK_LOCAL_MEM_FENCE);
       pullId += pullers;
+      pullRun++;
     }
   }
 
