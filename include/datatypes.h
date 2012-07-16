@@ -17,6 +17,8 @@ struct uint4
       unsigned int x,y,z,w;
     };
   };
+  uint4() {}
+  uint4 operator - (unsigned int a) const { return uint4(x-a,y-a,z-a,w-a); }  
   uint4(unsigned int _x, unsigned int _y, unsigned int _z, unsigned int _w) : x(_x), y(_y), z(_z), w(_w) { }
 };
 

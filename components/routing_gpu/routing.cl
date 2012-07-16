@@ -551,6 +551,180 @@ bool compareQueueEntryBlocks(const uint entry1, const uint entry2)
   return (entry1&0xFFFFFu)==(entry2&0xFFFFFu);
 }
 
+uint nextBlockRange(uint4 dims, uint4 limits)
+{
+  uint maxuint = 0xFFFFFFFF;
+  uint current =  maxuint - max(max(dims.x, dims.y), max(dims.z, dims.w)) + 1;
+  //get next highest
+  uint next = max(max(dims.x+current,dims.y+current),max(dims.z+current,dims.w+current));
+  next = (next != 0)*(next - current);
+  return min(limits,(uint4)(next,next,next,next));
+}
+uint popc(uint val)
+{
+  uint c = 0;
+  for(uint i = 0; i < 32; ++i, val >>= 1)
+    c += val & 0x1;
+  return c;
+}
+int2 activeBlockToId(const int2 seedBlock, const int spiralIdIn, const int2 activeBlocksSize)
+{
+  int spiralId = spiralIdIn/2;
+  //get limits
+  int2 seedAB = (int2)(seedBlock.x/8, seedBlock.y/8);
+  uint4 spiral_limits = (uint4)( seedAB.x+1,  seedAB.y+1,
+    activeBlocksSize.x - seedAB.x, activeBlocksSize.y - seedAB.y);
+  uint4 area_dims = spiral_limits;
+
+  int2 resId = seedAB;
+  for(int i = 0; i < 4; ++i)
+  {
+    area_dims = nextBlockRange(area_dims, spiral_limits);
+    int w = max(1, (int)(area_dims.x + area_dims.z - 1));
+    int h = max(1, (int)(area_dims.y + area_dims.w - 1));
+    if(w*h <= spiralId)
+    {
+      //we are outside of this box
+      
+      //where do we increase
+      uint increase_x = (area_dims.x != spiral_limits.x) + (area_dims.z != spiral_limits.z);
+      uint increase_y = (area_dims.y != spiral_limits.y) + (area_dims.w != spiral_limits.w);
+
+      
+      int outerspirals = 0;
+
+      float c = -(spiralId-w*h);
+      float b = increase_x*h + increase_y*w;
+      float a = increase_x*increase_y;
+
+      if(a != 0)
+      {
+        float sq = sqrt(b*b - 4*a*c);
+        outerspirals = (-b + sq)/(2*a);
+      }
+      else
+        outerspirals = - c / b;
+
+      int innerspirals = max(1U,std::max(max(area_dims.x, area_dims.y),max(area_dims.z, area_dims.w)));
+      int4 allspirals = (int4)(max(0,seedAB.x-innerspirals-outerspirals+1), max(0,seedAB.y-innerspirals-outerspirals+1), 
+                             min(activeBlocksSize.x-1,seedAB.x+innerspirals+outerspirals-1), min(activeBlocksSize.y-1,seedAB.y+innerspirals+outerspirals-1));
+      int allspiralelements = (allspirals.z - allspirals.x+1)*(allspirals.w - allspirals.y+1);
+      int myoffset = spiralId - allspiralelements;
+
+      //find the right position depend on the offset
+      if(allspirals.y > 0)
+      {
+        int topelements = allspirals.z - allspirals.x + 1 + (allspirals.z < activeBlocksSize.x-1);
+        if(myoffset < topelements)
+        {
+          resId = (int2)(allspirals.x + myoffset, allspirals.y-1);
+          break;
+        }
+        else
+          myoffset -= topelements;
+      }
+      if(allspirals.z < activeBlocksSize.x-1)
+      {
+        int rightelements = allspirals.w - allspirals.y + 1 + (allspirals.w < activeBlocksSize.y-1);
+        if(myoffset < rightelements)
+        {
+          resId = (int2)(allspirals.z + 1, allspirals.y + myoffset);
+          break;
+        }
+        else
+          myoffset -= rightelements;
+      }
+      if(allspirals.w < activeBlocksSize.y-1)
+      {
+        int bottomelements = allspirals.w - allspirals.y + 2;
+        if(myoffset < bottomelements)
+        {
+          resId = (int2)(allspirals.z - myoffset, allspirals.w + 1);
+          break;
+        }
+        else
+          myoffset -= bottomelements;
+      }
+      //else
+      resId = (int2)(allspirals.x - 1, allspirals.w - myoffset);
+      break;
+    }
+  }
+  return (int2)(resId.x*8, resId.y*8 + (spiralIdIn%1)*4);
+}
+
+int2 getActiveBlock(const int2 seedBlock, const int2 blockId, const int2 activeBlocksSize)
+{
+  int2 seedAB = (int2)(seedBlock.x/8, seedBlock.y/8);
+  int2 blockAB = (int2)(blockId.x/8, blockId.y/8);
+  //get full spiral count
+  int spirals = max(max(seedAB.x - blockAB.x, blockAB.x - seedAB.x), max(seedAB.y - blockAB.y, blockAB.y - seedAB.y));
+
+  int offset = 0;
+  int2 diff = blockAB - seedAB;
+  
+  //top row
+  if(diff.y == -spirals && diff.x > -spirals)
+  {
+    int4 dims;
+    dims.x = max(0, seedAB.x - spirals + 1);
+    dims.z = min(activeBlocksSize.x - 1, seedAB.x + spirals - 1);
+    dims.y = seedAB.y - spirals + 1;
+    dims.w = min(activeBlocksSize.y - 1, seedAB.y + spirals - 1);
+    offset = (dims.z - dims.x + 1) * (dims.w - dims.y + 1) +
+      blockAB.x - dims.x;
+  }
+  //right side
+  else if(diff.x == spirals)
+  {
+    int4 dims;
+    dims.x = max(0, seedAB.x - spirals + 1);
+    dims.z = seedAB.x + spirals - 1;
+    dims.y = max(0, seedAB.y - spirals);
+    dims.w = min(activeBlocksSize.y - 1, seedAB.y + spirals - 1);
+    offset = (dims.z - dims.x + 1) * (dims.w - dims.y + 1) +
+      blockAB.y - dims.y;
+  }
+  //bottom side
+  else if(diff.y == spirals)
+  {
+    int4 dims;
+    dims.x = max(0, seedAB.x - spirals + 1);
+    dims.z = min(activeBlocksSize.x - 1, seedAB.x + spirals);
+    dims.y = max(0, seedAB.y - spirals);
+    dims.w = seedAB.y + spirals - 1;
+    offset = (dims.z - dims.x + 1) * (dims.w - dims.y + 1) +
+      dims.z - blockAB.x;
+  }
+  //left side
+  else
+  {
+    int4 dims;
+    dims.x = seedAB.x - spirals + 1;
+    dims.z = min(activeBlocksSize.x - 1, seedAB.x + spirals);
+    dims.y = max(0, seedAB.y - spirals);
+    dims.w = min(activeBlocksSize.y - 1, seedAB.y + spirals);
+    offset = (dims.z - dims.x + 1) * (dims.w - dims.y + 1) +
+      dims.w - blockAB.y;
+  }
+
+  int2 interBlock = (int2)(blockId.x%8, blockId.y%8);
+  int second = interBlock.y > 4;
+  interBlock.y -= second*4;
+  int mask = 1 << (interBlock.x + interBlock.y*8);
+  return (int2)(2*offset + second, mask);
+}
+void unsetActiveBlock(volatile global uint* myActiveBlock, const int2 seedBlock, const int2 blockId, const int2 activeBlocksSize)
+{
+  int2 tblock = getActiveBlock(seedBlock, blockId, activeBlocksSize);
+  atomic_and(activeBlock + tblock.x, ~tblock.y);
+}
+void setActiveBlock(volatile global uint* myActiveBlock, const int2 seedBlock, const int2 blockId, const int2 activeBlocksSize)
+{
+  int2 tblock = getActiveBlock(seedBlock, blockId, activeBlocksSize);
+  atomic_or(activeBlock + tblock.x, tblock.y);
+}
+
 __kernel void routeLocal(global const float* routeMap,
                          global const int4* seed,
                          global const int* routingIds,
@@ -560,7 +734,9 @@ __kernel void routeLocal(global const float* routeMap,
                          const int2 numBlocks,
                          local int* data,
                          local uint* queue,
-                         const int queueSize)
+                         const int queueSize,
+                         volatile global uint* activeBuffer,
+                         const int2 activeBufferSize)
 {
   int borderElements = 2*(blockSize.x + blockSize.y - 2);
   int workerId = get_local_id(1);
@@ -575,27 +751,27 @@ __kernel void routeLocal(global const float* routeMap,
   local float* l_routeData = (local float*)(data + elementsPerWorker*workerId);
   local int* l_changedData = (local int*)(l_routeData + borderElements);
 
-  local bool thisRunChange;
-  //do
-  {
-    thisRunChange = false;
-    //(re)init queue
-    //TODO: this needs to circle around until we find a block which has changed
-    int4 ourInit = seed[get_group_id(0)];
-    int queueFront = 0;
-    int queueElements = (ourInit.w-ourInit.y)*(ourInit.z-ourInit.x);
-    int posoffset = (ourInit.z-ourInit.x)*get_local_id(1);
-    for(int y = ourInit.y + get_local_id(1); y < ourInit.w; y+= get_local_size(1))
-    {
-      for(int x = get_local_id(0); x < (ourInit.z - ourInit.x); x += get_local_size(0))
-      {
-        int pos = posoffset + x;
-        queue[pos] = createQueueEntry((int2)(ourInit.x+x, y), 0);       
-      }
-      posoffset += (ourInit.z-ourInit.x);
-    }
-    barrier(CLK_LOCAL_MEM_FENCE);
 
+
+  //init queue
+  int4 ourInit = seed[get_group_id(0)];
+  int queueFront = 0;
+  int queueElements = (ourInit.w-ourInit.y)*(ourInit.z-ourInit.x);
+  int posoffset = (ourInit.z-ourInit.x)*get_local_id(1);
+  int2 seedBlock = (int2)(ourInit.x+ourInit.z)/2, (outInit.y+ourInit.w)/2);
+  for(int y = ourInit.y + get_local_id(1); y < ourInit.w; y+= get_local_size(1))
+  {
+    for(int x = get_local_id(0); x < (ourInit.z - ourInit.x); x += get_local_size(0))
+    {
+      int pos = posoffset + x;
+      queue[pos] = createQueueEntry((int2)(ourInit.x+x, y), 0);       
+    }
+    posoffset += (ourInit.z-ourInit.x);
+  }
+  barrier(CLK_LOCAL_MEM_FENCE);
+
+  while(queueElements)
+  {
     //do the work
     while(queueElements)
     {
@@ -612,7 +788,7 @@ __kernel void routeLocal(global const float* routeMap,
                   numBlocks,
                   l_routeData,
                   l_changedData);
-        if(changed) thisRunChange = true;
+        unsetActiveBlock(activeBuffer + activeBufferSize.x*activeBufferSize.y*get_group_id(0), seedBlock, blockId, activeBufferSize);
       }
       int nowWorked = min(queueElements, workers);
       queueFront += nowWorked;
@@ -646,14 +822,20 @@ __kernel void routeLocal(global const float* routeMap,
             continue;
 
           //insert new entry
-          if(queueElements >= queueSize-1)
-            queueElements = queueSize-2;
           --queueFront;
           queueFront = (queueFront + queueSize) % queueSize;
-
+          if(queueElements == queueSize)
+          {
+            //kick out last
+            queueElements = queueSize-1;
+            //set as active for later
+            if(linId == 0)
+              setActiveBlock(activeBuffer + activeBufferSize.x*activeBufferSize.y*get_group_id(0), seedBlock, queue[queueFront], activeBufferSize);
+          }
+          
           uint newEntry = l_queueElement;
-
           barrier(CLK_LOCAL_MEM_FENCE);
+          
           if(linId == 0)
           {
             l_queueElement = queueSize;
@@ -691,9 +873,44 @@ __kernel void routeLocal(global const float* routeMap,
             ++queueElements;
         }
       }
-      
     }
-  }// while(thisRunChange);
+
+    //get back active blocks
+    //to a maximum of queueSize/4 elements
+    queueFront = 0;
+    uint pullers = min(queueSize/2, get_local_size(0)*get_local_size(1));
+    int pullRun = 0;
+    int pullId = linId;
+    __local insertCommunicate;
+    while(queueElements < queueSize/4 && pullRun * pullers < activeBufferSize.x*activeBufferSize.y)
+    {
+      uint myentry = 0;
+      if(linId < pullers)
+      {
+        uint canOffer = 0;
+        if(pullId < activeBufferSize.x*activeBufferSize.y)
+        {
+          myentry = activeBuffer[activeBufferSize.x*activeBufferSize.y*get_group_id(0) + pullId);
+          canOffer = popc(myentry);
+        }
+        queue[queueSize/2 + linId] = canOffer;
+      }
+      barrier(CLK_LOCAL_MEM_FENCE);
+      
+      //run prefix sum
+
+      //put into queue
+      if(myentry != 0)
+      {
+        ...
+        // distribute really put into queue
+        insertCommunicate = 0;
+      }
+      barrier(CLK_LOCAL_MEM_FENCE);
+
+      pullId += pullers;
+    }
+  }
 
  
 }
@@ -945,6 +1162,12 @@ __kernel void constructRoute(global const float* routecost,
   }
 }
 
+
+__kernel void initMem(__global uint* data, uint val)
+{
+  uint id = get_global_id(0) + get_global_id(1)*get_global_size(0);
+  data[id] = val;
+}
 
 
 //#define KEY_TYPE float

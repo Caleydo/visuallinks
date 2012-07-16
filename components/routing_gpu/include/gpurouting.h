@@ -113,6 +113,7 @@ namespace LinksRouting
       cl::CommandQueue  _cl_command_queue;
       cl::Program       _cl_program;
 
+      cl::Kernel  _cl_initMem_kernel;
 
       cl::Kernel  _cl_updateRouteMap_kernel;
       cl::Kernel  _cl_prepareBorderCosts_kernel;

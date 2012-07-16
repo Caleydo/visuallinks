@@ -248,6 +248,7 @@ namespace LinksRouting
 
 
 
+    _cl_initMem_kernel = cl::Kernel(_cl_program, "initMem");
 
     _cl_updateRouteMap_kernel = cl::Kernel(_cl_program, "updateRouteMap");
     _cl_prepareBorderCosts_kernel = cl::Kernel(_cl_program, "prepareBorderCosts");
@@ -1022,6 +1023,10 @@ struct int2
   int2 operator - (const int2& other)
   {
     return int2(x - other.x, y - other.y);
+  }
+  int2 operator *(const int a)
+  {
+    return int2(x*a, y*a);
   }
   int& operator [] (int i)
   {
@@ -1809,8 +1814,177 @@ void prepareIndividualRoutingDummy(const float* costmap,
   }
 
 
+void nextBlockRange(uint* dims, uint* limits)
+{
+  uint maxuint = 0xFFFFFFFF;
+  uint current =  maxuint - std::max(std::max(dims[0], dims[1]),std::max(dims[2], dims[3])) + 1;
+  //get next highest
+  uint next = std::max(std::max(dims[0]+current,dims[1]+current),std::max(dims[2]+current,dims[3]+current));
+  next = (next != 0)*(next - current);
+  for(int i = 0; i < 4; ++i)
+    dims[i] = std::min(limits[i],next);
+}
+int2 activeBlockToId(const int2 seedBlock, const int spiralId, const int value, const int2 activeBlocksSize)
+{
+  //get limits
+  int2 seedAB = int2(seedBlock.x/8, seedBlock.y/8);
+  uint4 spiral_limits = uint4( seedAB.x+1,  seedAB.y+1,
+    activeBlocksSize.x - seedAB.x, activeBlocksSize.y - seedAB.y);
+  uint4 area_dims = spiral_limits;
+
+  int2 resId = seedAB;
+  for(int i = 0; i < 4; ++i)
+  {
+    nextBlockRange(&area_dims.x, &spiral_limits.x);
+    int w = std::max(1, (int)(area_dims.x + area_dims.z - 1));
+    int h = std::max(1, (int)(area_dims.y + area_dims.w - 1));
+    if(w*h <= spiralId)
+    {
+      //we are outside of this box
+      
+      //where do we increase
+      uint increase_x = (area_dims.x != spiral_limits.x) + (area_dims.z != spiral_limits.z);
+      uint increase_y = (area_dims.y != spiral_limits.y) + (area_dims.w != spiral_limits.w);
+
+      
+      int outerspirals = 0;
+
+      float c = -(spiralId-w*h);
+      float b = increase_x*h + increase_y*w;
+      float a = increase_x*increase_y;
+
+      if(a != 0)
+      {
+        float sq = sqrt(b*b - 4*a*c);
+        outerspirals = (-b + sq)/(2*a);
+      }
+      else
+        outerspirals = - c / b;
+
+      int innerspirals = std::max(1U,std::max(std::max(area_dims.x, area_dims.y),std::max(area_dims.z, area_dims.w)));
+      int4 allspirals = int4(std::max(0,seedAB.x-innerspirals-outerspirals+1), std::max(0,seedAB.y-innerspirals-outerspirals+1), 
+                             std::min(activeBlocksSize.x-1,seedAB.x+innerspirals+outerspirals-1), std::min(activeBlocksSize.y-1,seedAB.y+innerspirals+outerspirals-1));
+      int allspiralelements = (allspirals.z - allspirals.x+1)*(allspirals.w - allspirals.y+1);
+      int myoffset = spiralId - allspiralelements;
+
+      //find the right position depend on the offset
+      if(allspirals.y > 0)
+      {
+        int topelements = allspirals.z - allspirals.x + 1 + (allspirals.z < activeBlocksSize.x-1);
+        if(myoffset < topelements)
+        {
+          resId = int2(allspirals.x + myoffset, allspirals.y-1);
+          break;
+        }
+        else
+          myoffset -= topelements;
+      }
+      if(allspirals.z < activeBlocksSize.x-1)
+      {
+        int rightelements = allspirals.w - allspirals.y + 1 + (allspirals.w < activeBlocksSize.y-1);
+        if(myoffset < rightelements)
+        {
+          resId = int2(allspirals.z + 1, allspirals.y + myoffset);
+          break;
+        }
+        else
+          myoffset -= rightelements;
+      }
+      if(allspirals.w < activeBlocksSize.y-1)
+      {
+        int bottomelements = allspirals.w - allspirals.y + 2;
+        if(myoffset < bottomelements)
+        {
+          resId = int2(allspirals.z - myoffset, allspirals.w + 1);
+          break;
+        }
+        else
+          myoffset -= bottomelements;
+      }
+      //else
+      resId = int2(allspirals.x - 1, allspirals.w - myoffset);
+      break;
+    }
+  }
+  
+  return resId;
+
+}
+
+int getActiveBlock(const int2 seedBlock, const int2 blockId, const int2 activeBlocksSize)
+{
+  int2 seedAB = int2(seedBlock.x/8, seedBlock.y/8);
+  int2 blockAB = int2(blockId.x/8, blockId.y/8);
+  //get full spiral count
+  int spirals = std::max(std::max(seedAB.x - blockAB.x, blockAB.x - seedAB.x), std::max(seedAB.y - blockAB.y, blockAB.y - seedAB.y));
+
+  int offset = 0;
+  int2 diff = blockAB - seedAB;
+  
+  //top row
+  if(diff.y == -spirals && diff.x > -spirals)
+  {
+    int4 dims;
+    dims.x = std::max(0, seedAB.x - spirals + 1);
+    dims.z = std::min(activeBlocksSize.x - 1, seedAB.x + spirals - 1);
+    dims.y = seedAB.y - spirals + 1;
+    dims.w = std::min(activeBlocksSize.y - 1, seedAB.y + spirals - 1);
+    offset = (dims.z - dims.x + 1) * (dims.w - dims.y + 1) +
+      blockAB.x - dims.x;
+  }
+  //right side
+  else if(diff.x == spirals)
+  {
+    int4 dims;
+    dims.x = std::max(0, seedAB.x - spirals + 1);
+    dims.z = seedAB.x + spirals - 1;
+    dims.y = std::max(0, seedAB.y - spirals);
+    dims.w = std::min(activeBlocksSize.y - 1, seedAB.y + spirals - 1);
+    offset = (dims.z - dims.x + 1) * (dims.w - dims.y + 1) +
+      blockAB.y - dims.y;
+  }
+  //bottom side
+  else if(diff.y == spirals)
+  {
+    int4 dims;
+    dims.x = std::max(0, seedAB.x - spirals + 1);
+    dims.z = std::min(activeBlocksSize.x - 1, seedAB.x + spirals);
+    dims.y = std::max(0, seedAB.y - spirals);
+    dims.w = seedAB.y + spirals - 1;
+    offset = (dims.z - dims.x + 1) * (dims.w - dims.y + 1) +
+      dims.z - blockAB.x;
+  }
+  //left side
+  else
+  {
+    int4 dims;
+    dims.x = seedAB.x - spirals + 1;
+    dims.z = std::min(activeBlocksSize.x - 1, seedAB.x + spirals);
+    dims.y = std::max(0, seedAB.y - spirals);
+    dims.w = std::min(activeBlocksSize.y - 1, seedAB.y + spirals);
+    offset = (dims.z - dims.x + 1) * (dims.w - dims.y + 1) +
+      dims.w - blockAB.y;
+  }
+  return offset;
+}
+
   void GPURouting::createRoutes(LinksRouting::LinkDescription::HyperEdge& hedge)
   {
+
+    int2 test;
+    int2 seed(2,2);
+    int2 dim(8, 10);
+    for(test.y = 0; test.y < dim.y; ++test.y)
+    {
+      for(test.x = 0; test.x < dim.x; ++test.x)
+      {
+        int res = getActiveBlock(seed*8, test*8, dim);
+        int2 reverse = activeBlockToId(seed*8, res, 0, dim);
+        std::cout << res << '(' << reverse.x << ',' << reverse.y << ")\t";
+      }
+      std::cout << '\n';
+    }
+
     std::map<const LinkDescription::Node*, size_t > levelNodeMap;
     std::map<const LinkDescription::HyperEdge*, size_t > levelHyperEdgeMap;
 
@@ -2097,24 +2271,49 @@ void prepareIndividualRoutingDummy(const float* costmap,
         cl::Buffer d_startBlockRange(_cl_context, CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR, startBlockRange.size()*sizeof(cl_int4), &startBlockRange[0]);
         
 
-        //debug
-        //dummy call
-        size_t size;
-        _cl_routeMap_buffer.getInfo(CL_MEM_SIZE, &size);
-        std::vector<float> h_routeMap_buffer(size/sizeof(float));
-        _cl_command_queue.enqueueReadBuffer(_cl_routeMap_buffer, true, 0, size, &h_routeMap_buffer[0]);
-        std::vector<float> h_routingData(requiredElements*slices);
-        _cl_command_queue.enqueueReadBuffer(d_routingData, true, 0, h_routingData.size() * sizeof(float), &h_routingData[0]);
+        ////debug
+        ////dummy call
+        //size_t size;
+        //_cl_routeMap_buffer.getInfo(CL_MEM_SIZE, &size);
+        //std::vector<float> h_routeMap_buffer(size/sizeof(float));
+        //_cl_command_queue.enqueueReadBuffer(_cl_routeMap_buffer, true, 0, size, &h_routeMap_buffer[0]);
+        //std::vector<float> h_routingData(requiredElements*slices);
+        //_cl_command_queue.enqueueReadBuffer(d_routingData, true, 0, h_routingData.size() * sizeof(float), &h_routingData[0]);
 
-        int* data = new int[_routingNumLocalWorkers*(boundaryElements+1)];
-        uint* queue = new uint[_routingQueueSize];
-        int localWorkerSize2 = divup(boundaryElements,_routingLocalWorkersWarpSize)*_routingLocalWorkersWarpSize;
-        initKernelData(int2(localWorkerSize2,1), int2(1,1));
-        routeLocal(h_routeMap_buffer, startBlockRange, routingIds, h_routingData, requiredElements, int2(_blockSize[0], _blockSize[1]), int2(_blocks[0], _blocks[1]), data, queue, _routingQueueSize);
+        //int* data = new int[_routingNumLocalWorkers*(boundaryElements+1)];
+        //uint* queue = new uint[_routingQueueSize];
+        //int localWorkerSize2 = divup(boundaryElements,_routingLocalWorkersWarpSize)*_routingLocalWorkersWarpSize;
+        //initKernelData(int2(localWorkerSize2,1), int2(1,1));
+        //routeLocal(h_routeMap_buffer, startBlockRange, routingIds, h_routingData, requiredElements, int2(_blockSize[0], _blockSize[1]), int2(_blocks[0], _blocks[1]), data, queue, _routingQueueSize);
 
-        delete[] data;
-        delete[] queue;
-        //
+        //delete[] data;
+        //delete[] queue;
+        ////
+
+
+
+
+
+        //active buffers
+        cl_uint activeBufferSize[] = {divup(_blocks[0],8), divup(_blocks[1],8)};
+        cl::Buffer d_routeActive(_cl_context, CL_MEM_READ_WRITE, 2*activeBufferSize[0]*activeBufferSize[1]*startBlockRange.size());
+        _cl_initMem_kernel.setArg(0, d_routeActive);
+        _cl_initMem_kernel.setArg(1, 0);
+
+        cl::Event clearActiveBufferEvent;
+        _cl_command_queue.enqueueNDRangeKernel
+        (
+         _cl_initMem_kernel,
+          cl::NullRange,
+          cl::NDRange(2*activeBufferSize[0],startBlockRange.size()*activeBufferSize[1]),
+          cl::NullRange,
+          0,
+          &clearActiveBufferEvent
+        );
+        _cl_command_queue.finish();
+        clearActiveBufferEvent.getProfilingInfo(CL_PROFILING_COMMAND_END, &end);
+        clearActiveBufferEvent.getProfilingInfo(CL_PROFILING_COMMAND_START, &start);
+        std::cout << " - clearActiveBuffer: " << (end-start)/1000000.0  << "ms\n";
 
 
 
@@ -2128,6 +2327,8 @@ void prepareIndividualRoutingDummy(const float* costmap,
         _cl_routing_kernel.setArg(7, _routingNumLocalWorkers*(boundaryElements+1)*sizeof(cl_float), NULL);
         _cl_routing_kernel.setArg(8, _routingQueueSize * sizeof(cl_int), NULL);
         _cl_routing_kernel.setArg(9, _routingQueueSize);
+        _cl_routing_kernel.setArg(10, d_routeActive);
+        _cl_routing_kernel.setArg(11, 2 * sizeof(cl_int), activeBufferSize);
           
         int localWorkerSize = divup(boundaryElements,_routingLocalWorkersWarpSize)*_routingLocalWorkersWarpSize;
 
