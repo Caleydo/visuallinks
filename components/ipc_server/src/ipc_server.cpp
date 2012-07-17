@@ -8,8 +8,7 @@
 
 #include "ipc_server.hpp"
 #include "log.hpp"
-
-#include <QxtGui/qxtwindowsystem.h>
+#include "window_monitor.hpp"
 
 #include <QMutex>
 #include <QScriptEngine>
@@ -22,60 +21,6 @@
 namespace LinksRouting
 {
 
-  std::ostream& operator<<(std::ostream& strm, const QRect& r)
-  {
-    return strm << "(" << r.x() << "|" << r.y() << ") "
-                << r.width() << "x" << r.height();
-  }
-
-  class WindowMonitor:
-    public QThread
-  {
-    protected:
-      typedef std::map<WId, QRect> WindowRegions;
-
-      void run()
-      {
-        WindowRegions old_regions;
-        for(;;)
-        {
-          WindowRegions regions = getWindows();
-          for( auto cur_reg = regions.begin();
-               cur_reg != regions.end();
-               ++cur_reg )
-          {
-            const std::string title =
-              QxtWindowSystem::windowTitle(cur_reg->first).toStdString();
-
-            auto old_reg = old_regions.find(cur_reg->first);
-            if( old_reg == old_regions.end() )
-            {
-              std::cout << "New (" << title << ") "
-                        << cur_reg->second
-                        << std::endl;
-              continue;
-            }
-
-            if( cur_reg->second != old_reg->second )
-            {
-              std::cout << "Chg (" << title << ") "
-                        << cur_reg->second
-                        << std::endl;
-            }
-          }
-          old_regions = regions;
-          usleep(500);
-        }
-      }
-
-      WindowRegions getWindows() const
-      {
-        WindowRegions regions;
-        foreach(WId id, QxtWindowSystem::windows())
-          regions[ id ] = QxtWindowSystem::windowGeometry(id);
-        return regions;
-      }
-  };
   /**
    * Helper for handling json messages
    */
@@ -216,6 +161,7 @@ namespace LinksRouting
   bool IPCServer::startup(Core* core, unsigned int type)
   {
     static WindowMonitor m;
+    connect(&m, SIGNAL(regionsChanged()), this, SLOT(regionsChanged()));
     m.start();
     return true;
   }
@@ -444,6 +390,60 @@ namespace LinksRouting
   }
 
   //----------------------------------------------------------------------------
+  void IPCServer::regionsChanged()
+  {
+    WindowList windows = QxtWindowSystem::windows();
+
+    for( auto link = _slot_links->_data->begin();
+         link != _slot_links->_data->end();
+         ++link )
+    {
+      link->_stamp += 1;
+      std::vector<LinkDescription::Node> new_nodes;
+      auto nodes = link->_link.getNodes();
+      for( auto node = nodes.begin();
+           node != nodes.end();
+           ++node )
+      {
+        LinkDescription::props_t props;
+        props["client_wid"] = node->getProps().at("client_wid");
+        WId client_wid = std::stoul(node->getProps().at("client_wid"));
+        for( auto vert = node->getVertices().begin();
+             vert != node->getVertices().end();
+             ++vert )
+        {
+          WId wid = 0;
+          QPoint pos(vert->x, vert->y);
+          for (int i = windows.size() - 1; i >= 0; --i)
+          {
+            WId wid_cur = windows.at(i);
+            if( wid_cur == _widget->winId() )
+              // Ignore own window as it's always on top, but transparent
+              continue;
+            else if( QxtWindowSystem::windowGeometry(wid_cur).contains(pos) )
+            {
+              wid = wid_cur;
+              break;
+            }
+          }
+
+          if( wid != client_wid )
+            // if point is in other window don't show region
+            props["hidden"] = "true";
+        }
+        new_nodes.push_back( LinkDescription::Node(node->getVertices(), props) );
+      }
+
+      link->_link = LinkDescription::HyperEdge(
+        new_nodes,
+        link->_link.getProps()
+      );
+    }
+    LOG_INFO("Windows changed -> trigger reroute");
+    _cond_data_ready->wakeAll();
+  }
+
+  //----------------------------------------------------------------------------
   std::vector<LinkDescription::Node>
   IPCServer::parseRegions(IPCServer::JSON& json, WId client_wid)
   {
@@ -508,6 +508,8 @@ namespace LinksRouting
         else
           LOG_WARN("Wrong data type: " << point->typeName());
       }
+
+      props["client_wid"] = std::to_string(client_wid);
 
       if( !points.empty() )
         nodes.push_back( LinkDescription::Node(points, props) );

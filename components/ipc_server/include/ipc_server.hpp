@@ -62,6 +62,8 @@ namespace LinksRouting
       void onPong(quint64 elapsedTime);
       void onClientDisconnection();
 
+      void regionsChanged();
+
     private:
 
       QWsServer          *_server;
