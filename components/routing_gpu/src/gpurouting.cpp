@@ -1451,6 +1451,7 @@ int routeBorder(std::vector<float>& routeMap,
     {
       //atomic as multiple might be working on the same
       routingData[gid] =std::min(routingData[gid] , mycost);
+      routeData[lid] = mycost;
 
       //TODO: this is already an extension for opencl 1.0 so maybe do them individually...
       *changeData |= dir4FromBorderId(lid, blockSize);
@@ -1466,9 +1467,9 @@ uint createDummyQueueEntry()
 {
   return 0xFFFFFFFF;
 }
-uint createQueueEntry(const int2 block, const float priority)
+uint createQueueEntry(const int2 block, const float priority, const uint minPriorty = 1u)
 {
-  return ((std::min((uint)(priority*0.1f),0xFFFu)&0xFFFu) << 20) |
+  return ((std::max(minPriorty,std::min((uint)(priority*0.5f),0xFFFu))) << 20) |
          (block.y << 10) | block.x;
 }
 int2 readQueueEntry(const uint entry)
@@ -1487,9 +1488,11 @@ void routeLocal( std::vector<float>& routeMap,
                          const int routeDataPerNode,
                          const int2 blockSize,
                          const int2 numBlocks,
-                          int* data,
-                          uint* queue,
-                         const int queueSize)
+                         int* data,
+                         uint* queue,
+                         const int queueSize,
+                         uint* activeBuffer,
+                         const int2 activeBufferSize)
 {
   std::vector<uint> changed_data(get_local_size(0)*get_local_size(1));
   int borderElements = 2*(blockSize.x + blockSize.y - 2);
@@ -1520,7 +1523,7 @@ void routeLocal( std::vector<float>& routeMap,
       for(int x = get_local_id(0); x < (ourInit.z - ourInit.x); x += get_local_size(0))
       {
         int pos = posoffset + x;
-        queue[pos] = createQueueEntry(int2(ourInit.x+x, y), 0);       
+        queue[pos] = createQueueEntry(int2(ourInit.x+x, y), 0, 0);       
       }
       posoffset += (ourInit.z-ourInit.x);
     }
@@ -1581,7 +1584,7 @@ void routeLocal( std::vector<float>& routeMap,
             int lid = get_local_id(0);
             if(w == workerId && ((1 << element) & dir4FromBorderId(lid,blockSize)))
             {
-              int2 offset = int2(element<3?element-1:0, element>0?2-element:0);
+              int2 offset = int2(element>0?2-element:0, element<3?element-1:0);
               int2 newId = blockId + offset;
               if(newId.x >= 0 && newId.y >= 0 &&
                 newId.x < numBlocks.x && newId.y < numBlocks.y)
@@ -1603,27 +1606,48 @@ void routeLocal( std::vector<float>& routeMap,
           l_queueElement = queueSize;
           queue[queueFront] = newEntry;
           
-          //for(int i=linId; i < queueElements; i+=get_local_size(0)*get_local_size(1))
-          //{
-          //  int thisid = (queueFront + i + 1)%queueSize;
-          //  uint nextEntry = queue[thisid];
-          //  ////did we find the entry?
-          //  //if(compareQueueEntryBlocks(nextEntry, newEntry))
-          //  //  l_queueElement = i;
-          //  barrier(CLK_LOCAL_MEM_FENCE);
-
-          //  ////if new element has higher cost -> copy old back
-          //  ////if same element has been found -> need to copy all back
-          //  //if(nextEntry < newEntry || i > l_queueElement)
-          //    queue[(queueFront + i)%queueSize] = nextEntry;
-          //  ////insert the new element, if my old one is the last to be copied away
-          //  //else if(queue[(queueFront + i)%queueSize] < newEntry)
-          //  //  queue[(queueFront + i)%queueSize] = newEntry;
-          //}
+          for(int i=0; i < queueElements; i+=get_local_size(0)*get_local_size(1))
+          {
+            do
+            {
+              const int linId = get_local_id(0) + get_local_size(0)*get_local_id(1);
+              int tId = linId + i;
+              uint nextEntry;
+              if(tId < queueElements)
+              {
+                nextEntry = queue[(queueFront + tId + 1)%queueSize];
+                //did we find the entry?
+                if(compareQueueEntryBlocks(nextEntry, newEntry))
+                  l_queueElement = tId;
+              }
+            } while(advanceThread());
+          
+            do
+            {
+              const int linId = get_local_id(0) + get_local_size(0)*get_local_id(1);
+              int tId = linId + i;
+              if(tId < queueElements)
+              {
+                uint nextEntry = queue[(queueFront + tId + 1)%queueSize];
+                //if new element has higher cost -> copy old back
+                //if same element has been found -> need to copy all back
+                if(nextEntry < newEntry || tId > l_queueElement)
+                  queue[(queueFront + tId)%queueSize] = nextEntry;
+                //insert the new element, if my old one is the last to be copied away
+                else if(queue[(queueFront + tId)%queueSize] < newEntry)
+                  queue[(queueFront + tId)%queueSize] = newEntry;
+              }
+            } while(advanceThread());
+          }
 
           //new element added
           if(l_queueElement == queueSize)
+          {
+            //element must be added at the back...
+            if(queue[(queueFront + queueElements)%queueSize] == queue[(queueFront + queueElements - 1)%queueSize])
+              queue[(queueFront + queueElements)%queueSize] = newEntry;
             ++queueElements;
+          }
         }
       }
       
@@ -1807,6 +1831,11 @@ void prepareIndividualRoutingDummy(const float* costmap,
     //std::stringstream fname;
     //fname << "costmap" << count++;
     //dumpBuffer<float>(_cl_command_queue, _cl_lastCostMap_buffer, _buffer_width, _buffer_height, fname.str());
+    //std::stringstream fname2;
+    //fname2 << "routemap" << count++;
+    //int boundaryElements = 2*(_blockSize[0] + _blockSize[1]-2);
+    //dumpBuffer<float>(_cl_command_queue, _cl_routeMap_buffer, _blocks[0]*boundaryElements, _blocks[1]*boundaryElements/2, fname2.str());
+    
 
     cl_ulong start, end;
     std::cout << "CLInfo:\n";
@@ -2297,24 +2326,26 @@ int getActiveBlock(const int2 seedBlock, const int2 blockId, const int2 activeBl
         cl::Buffer d_startBlockRange(_cl_context, CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR, startBlockRange.size()*sizeof(cl_int4), &startBlockRange[0]);
         
 
-        ////debug
-        ////dummy call
-        //size_t size;
-        //_cl_routeMap_buffer.getInfo(CL_MEM_SIZE, &size);
-        //std::vector<float> h_routeMap_buffer(size/sizeof(float));
-        //_cl_command_queue.enqueueReadBuffer(_cl_routeMap_buffer, true, 0, size, &h_routeMap_buffer[0]);
-        //std::vector<float> h_routingData(requiredElements*slices);
-        //_cl_command_queue.enqueueReadBuffer(d_routingData, true, 0, h_routingData.size() * sizeof(float), &h_routingData[0]);
+        //debug
+        //dummy call
+        size_t size;
+        _cl_routeMap_buffer.getInfo(CL_MEM_SIZE, &size);
+        std::vector<float> h_routeMap_buffer(size/sizeof(float));
+        _cl_command_queue.enqueueReadBuffer(_cl_routeMap_buffer, true, 0, size, &h_routeMap_buffer[0]);
+        std::vector<float> h_routingData(requiredElements*slices);
+        _cl_command_queue.enqueueReadBuffer(d_routingData, true, 0, h_routingData.size() * sizeof(float), &h_routingData[0]);
 
-        //int* data = new int[_routingNumLocalWorkers*(boundaryElements+1)];
-        //uint* queue = new uint[_routingQueueSize];
-        //int localWorkerSize2 = divup(boundaryElements,_routingLocalWorkersWarpSize)*_routingLocalWorkersWarpSize;
-        //initKernelData(int2(localWorkerSize2,1), int2(1,1));
-        //routeLocal(h_routeMap_buffer, startBlockRange, routingIds, h_routingData, requiredElements, int2(_blockSize[0], _blockSize[1]), int2(_blocks[0], _blocks[1]), data, queue, _routingQueueSize);
+        int* data = new int[_routingNumLocalWorkers*(boundaryElements+1)];
+        uint* queue = new uint[_routingQueueSize];
+        int2 tactiveBufferSize(divup(_blocks[0],8), divup(_blocks[1],8));
+        std::vector<uint> activeBuffer(2*tactiveBufferSize.x*tactiveBufferSize.y*startBlockRange.size(), 0);
+        int localWorkerSize2 = divup(boundaryElements,_routingLocalWorkersWarpSize)*_routingLocalWorkersWarpSize;
+        initKernelData(int2(localWorkerSize2,1), int2(1,1));
+        routeLocal(h_routeMap_buffer, startBlockRange, routingIds, h_routingData, requiredElements, int2(_blockSize[0], _blockSize[1]), int2(_blocks[0], _blocks[1]), data, queue, _routingQueueSize, &activeBuffer[0], tactiveBufferSize);
 
-        //delete[] data;
-        //delete[] queue;
-        ////
+        delete[] data;
+        delete[] queue;
+        //
 
 
 

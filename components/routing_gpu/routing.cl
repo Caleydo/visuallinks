@@ -574,6 +574,7 @@ int routeBorder(global const float* routeMap,
     {
       //atomic as multiple might be working on the same
       atomic_min((volatile global unsigned int*)(routingData + gid), as_uint(mycost));
+      routeData[lid] = mycost;
       
       //TODO: this is already an extension for opencl 1.0 so maybe do them individually...
       atomic_or(changeData,dir4FromBorderId(lid, blockSize));
@@ -587,9 +588,9 @@ uint createDummyQueueEntry()
 {
   return 0xFFFFFFFF;
 }
-uint createQueueEntry(const int2 block, const float priority)
+uint createQueueEntry(const int2 block, const float priority, const uint minPriorty)
 {
-  return ((min((uint)(priority*0.1f),0xFFFu)&0xFFFu) << 20) |
+  return (max(minPriorty,min((uint)(priority*0.5f),0xFFFu)) << 20) |
          (block.y << 10) | block.x;
 }
 int2 readQueueEntry(const uint entry)
@@ -814,7 +815,7 @@ __kernel void routeLocal(global const float* routeMap,
     for(int x = get_local_id(0); x < (ourInit.z - ourInit.x); x += get_local_size(0))
     {
       int pos = posoffset + x;
-      queue[pos] = createQueueEntry((int2)(ourInit.x+x, y), 0);       
+      queue[pos] = createQueueEntry((int2)(ourInit.x+x, y), 0, 0);       
     }
     posoffset += (ourInit.z-ourInit.x);
   }
@@ -852,7 +853,7 @@ __kernel void routeLocal(global const float* routeMap,
         barrier(CLK_LOCAL_MEM_FENCE);
         if(w == workerId)
           hasElements = changed;
-        for(int element = 0; element < 4; ++element)
+        for(int element = 0; element < 8; ++element)
         {
           barrier(CLK_LOCAL_MEM_FENCE);
           if((hasElements & (1 << element)) == 0)
@@ -862,11 +863,16 @@ __kernel void routeLocal(global const float* routeMap,
           //generate new entry
           if(w == workerId && ((1 << element) & dir4FromBorderId(lid,blockSize)))
           {
+            //int2 offset = (int2)(0,0);
+            //if(element == 0 || element >= 6) offset.x = -1;
+            //else if(element >= 2 && element <= 4) offset.x = 1;
+            //if(element >= 0 && element <= 2) offset.y = -1;
+            //else if(element >= 5 && element <= 6) offset.y = 1;
             int2 offset = (int2)(element>0?2-element:0, element<3?element-1:0);
             int2 newId = blockId + offset;
             if(newId.x >= 0 && newId.y >= 0 &&
                 newId.x < numBlocks.x && newId.y < numBlocks.y)
-              atomic_min(&l_queueElement, createQueueEntry(newId, l_routeData[lid]));
+              atomic_min(&l_queueElement, createQueueEntry(newId, l_routeData[lid],1));
           }
 
           barrier(CLK_LOCAL_MEM_FENCE);
@@ -904,7 +910,7 @@ __kernel void routeLocal(global const float* routeMap,
               nextEntry = queue[(queueFront + tId + 1)%queueSize];
               //did we find the entry?
               if(compareQueueEntryBlocks(nextEntry, newEntry))
-                l_queueElement = i;
+                l_queueElement = tId;
             }
           
             barrier(CLK_LOCAL_MEM_FENCE);
@@ -912,7 +918,7 @@ __kernel void routeLocal(global const float* routeMap,
             {
               //if new element has higher cost -> copy old back
               //if same element has been found -> need to copy all back
-              if(nextEntry < newEntry || i > l_queueElement)
+              if(nextEntry < newEntry || tId > l_queueElement)
                 queue[(queueFront + tId)%queueSize] = nextEntry;
               //insert the new element, if my old one is the last to be copied away
               else if(queue[(queueFront + tId)%queueSize] < newEntry)
@@ -923,7 +929,12 @@ __kernel void routeLocal(global const float* routeMap,
           barrier(CLK_LOCAL_MEM_FENCE);
           //new element added
           if(l_queueElement == queueSize)
+          {
+            //element must be added at the back...
+            if(queue[(queueFront + queueElements)%queueSize] == queue[(queueFront + queueElements - 1)%queueSize])
+              queue[(queueFront + queueElements)%queueSize] = newEntry;
             ++queueElements;
+          }
         }
       }
     }
@@ -934,7 +945,7 @@ __kernel void routeLocal(global const float* routeMap,
     uint pullers = min(queueSize/2, (int)(get_local_size(0)*get_local_size(1)) );
     int pullRun = 0;
     int pullId = linId;
-    //while(queueElements < queueSize/4 && pullRun * pullers < 2*activeBufferSize.x*activeBufferSize.y)
+    while(queueElements < queueSize/4 && pullRun * pullers < 2*activeBufferSize.x*activeBufferSize.y)
     {
       uint myentry = 0;
       uint canOffer = 0;
@@ -964,9 +975,9 @@ __kernel void routeLocal(global const float* routeMap,
           {
             if(myentry & 0x1)
             {
-              queue[queueElements + queue[queueSize/2 + linId] + inserted] = createQueueEntry(myOffset + additionalOffset , 0);
+              queue[queueElements + queue[queueSize/2 + linId] + inserted] = createQueueEntry(myOffset + additionalOffset , 0, 0);
               //debug
-              //activeBuffer[queueElements + queue[queueSize/2 + linId] + inserted] = createQueueEntry(myOffset + additionalOffset , 0);
+              //activeBuffer[queueElements + queue[queueSize/2 + linId] + inserted] = createQueueEntry(myOffset + additionalOffset , 0, 0);
               ++inserted;
             }
           }
