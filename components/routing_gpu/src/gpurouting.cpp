@@ -41,8 +41,8 @@ namespace LinksRouting
     registerArg("BlockSizeX", _blockSize[0] = 8);
     registerArg("BlockSizeY", _blockSize[1] = 8);
     registerArg("enabled", _enabled = true);
-    registerArg("QueueSize", _routingQueueSize = 512);
-    registerArg("NumLocalWorkers", _routingNumLocalWorkers = 16);
+    registerArg("QueueSize", _routingQueueSize = 64);
+    registerArg("NumLocalWorkers", _routingNumLocalWorkers = 8);
     registerArg("WorkersWarpSize", _routingLocalWorkersWarpSize = 32);
   }
 
@@ -1461,7 +1461,176 @@ int routeBorder(std::vector<float>& routeMap,
   return *changeData;
 }
 
+void nextBlockRange(uint* dims, uint* limits)
+{
+  uint maxuint = 0xFFFFFFFF;
+  uint current =  maxuint - std::max(std::max(dims[0], dims[1]),std::max(dims[2], dims[3])) + 1;
+  //get next highest
+  uint next = std::max(std::max(dims[0]+current,dims[1]+current),std::max(dims[2]+current,dims[3]+current));
+  next = (next != 0)*(next - current);
+  for(int i = 0; i < 4; ++i)
+    dims[i] = std::min(limits[i],next);
+}
+int2 activeBlockToId(const int2 seedBlock, const int spiralIdIn, const int2 activeBlocksSize)
+{
+  int spiralId = spiralIdIn/2;
+  //get limits
+  int2 seedAB = int2(seedBlock.x/8, seedBlock.y/8);
+  uint4 spiral_limits = uint4( seedAB.x+1,  seedAB.y+1,
+    activeBlocksSize.x - seedAB.x, activeBlocksSize.y - seedAB.y);
+  uint4 area_dims = spiral_limits;
 
+  int2 resId = seedAB;
+  for(int i = 0; i < 4; ++i)
+  {
+    nextBlockRange(&area_dims.x, &spiral_limits.x);
+    int w = std::max(1, (int)(area_dims.x + area_dims.z - 1));
+    int h = std::max(1, (int)(area_dims.y + area_dims.w - 1));
+    if(w*h <= spiralId)
+    {
+      //we are outside of this box
+      
+      //where do we increase
+      uint increase_x = (area_dims.x != spiral_limits.x) + (area_dims.z != spiral_limits.z);
+      uint increase_y = (area_dims.y != spiral_limits.y) + (area_dims.w != spiral_limits.w);
+
+      
+      int outerspirals = 0;
+
+      float c = -(spiralId-w*h);
+      float b = increase_x*h + increase_y*w;
+      float a = increase_x*increase_y;
+
+      if(a != 0)
+      {
+        float sq = sqrt(b*b - 4*a*c);
+        outerspirals = (-b + sq)/(2*a);
+      }
+      else
+        outerspirals = - c / b;
+
+      int innerspirals = std::max(1U,std::max(std::max(area_dims.x, area_dims.y),std::max(area_dims.z, area_dims.w)));
+      int4 allspirals = int4(std::max(0,seedAB.x-innerspirals-outerspirals+1), std::max(0,seedAB.y-innerspirals-outerspirals+1), 
+                             std::min(activeBlocksSize.x-1,seedAB.x+innerspirals+outerspirals-1), std::min(activeBlocksSize.y-1,seedAB.y+innerspirals+outerspirals-1));
+      int allspiralelements = (allspirals.z - allspirals.x+1)*(allspirals.w - allspirals.y+1);
+      int myoffset = spiralId - allspiralelements;
+
+      //find the right position depend on the offset
+      if(allspirals.y > 0)
+      {
+        int topelements = allspirals.z - allspirals.x + 1 + (allspirals.z < activeBlocksSize.x-1);
+        if(myoffset < topelements)
+        {
+          resId = int2(allspirals.x + myoffset, allspirals.y-1);
+          break;
+        }
+        else
+          myoffset -= topelements;
+      }
+      if(allspirals.z < activeBlocksSize.x-1)
+      {
+        int rightelements = allspirals.w - allspirals.y + 1 + (allspirals.w < activeBlocksSize.y-1);
+        if(myoffset < rightelements)
+        {
+          resId = int2(allspirals.z + 1, allspirals.y + myoffset);
+          break;
+        }
+        else
+          myoffset -= rightelements;
+      }
+      if(allspirals.w < activeBlocksSize.y-1)
+      {
+        int bottomelements = allspirals.w - allspirals.y + 2;
+        if(myoffset < bottomelements)
+        {
+          resId = int2(allspirals.z - myoffset, allspirals.w + 1);
+          break;
+        }
+        else
+          myoffset -= bottomelements;
+      }
+      //else
+      resId = int2(allspirals.x - 1, allspirals.w - myoffset);
+      break;
+    }
+  }
+  
+  return int2(resId.x*8, resId.y*8 + (spiralIdIn%1)*4);
+
+}
+
+int2 getActiveBlock(const int2 seedBlock, const int2 blockId, const int2 activeBlocksSize)
+{
+  int2 seedAB = int2(seedBlock.x/8, seedBlock.y/8);
+  int2 blockAB = int2(blockId.x/8, blockId.y/8);
+  //get full spiral count
+  int spirals = std::max(std::max(seedAB.x - blockAB.x, blockAB.x - seedAB.x), std::max(seedAB.y - blockAB.y, blockAB.y - seedAB.y));
+
+  uint offset = 0;
+  int2 diff = blockAB - seedAB;
+  
+  //top row
+  if(diff.y == -spirals && diff.x > -spirals)
+  {
+    int4 dims;
+    dims.x = std::max(0, seedAB.x - spirals + 1);
+    dims.z = std::min(activeBlocksSize.x - 1, seedAB.x + spirals - 1);
+    dims.y = seedAB.y - spirals + 1;
+    dims.w = std::min(activeBlocksSize.y - 1, seedAB.y + spirals - 1);
+    offset = (dims.z - dims.x + 1) * (dims.w - dims.y + 1) +
+      blockAB.x - dims.x;
+  }
+  //right side
+  else if(diff.x == spirals)
+  {
+    int4 dims;
+    dims.x = std::max(0, seedAB.x - spirals + 1);
+    dims.z = seedAB.x + spirals - 1;
+    dims.y = std::max(0, seedAB.y - spirals);
+    dims.w = std::min(activeBlocksSize.y - 1, seedAB.y + spirals - 1);
+    offset = (dims.z - dims.x + 1) * (dims.w - dims.y + 1) +
+      blockAB.y - dims.y;
+  }
+  //bottom side
+  else if(diff.y == spirals)
+  {
+    int4 dims;
+    dims.x = std::max(0, seedAB.x - spirals + 1);
+    dims.z = std::min(activeBlocksSize.x - 1, seedAB.x + spirals);
+    dims.y = std::max(0, seedAB.y - spirals);
+    dims.w = seedAB.y + spirals - 1;
+    offset = (dims.z - dims.x + 1) * (dims.w - dims.y + 1) +
+      dims.z - blockAB.x;
+  }
+  //left side
+  else
+  {
+    int4 dims;
+    dims.x = seedAB.x - spirals + 1;
+    dims.z = std::min(activeBlocksSize.x - 1, seedAB.x + spirals);
+    dims.y = std::max(0, seedAB.y - spirals);
+    dims.w = std::min(activeBlocksSize.y - 1, seedAB.y + spirals);
+    offset = (dims.z - dims.x + 1) * (dims.w - dims.y + 1) +
+      dims.w - blockAB.y;
+  }
+
+  int2 interBlock = int2(blockId.x%8, blockId.y%8);
+  int second = interBlock.y >= 4;
+  interBlock.y -= second*4;
+  uint mask = 1u << (uint)(interBlock.x + interBlock.y*8);
+  return int2(2*offset + second, mask);
+}
+
+void unsetActiveBlock(uint* myActiveBlock, const int2 seedBlock, const int2 blockId, const int2 activeBlocksSize)
+{
+  int2 tblock = getActiveBlock(seedBlock, blockId, activeBlocksSize);
+  myActiveBlock[tblock.x] &= (~tblock.y);
+}
+void setActiveBlock( uint* myActiveBlock, const int2 seedBlock, const int2 blockId, const int2 activeBlocksSize)
+{
+  int2 tblock = getActiveBlock(seedBlock, blockId, activeBlocksSize);
+  myActiveBlock[tblock.x] |= tblock.y;
+}
 
 uint createDummyQueueEntry()
 {
@@ -1480,7 +1649,25 @@ bool compareQueueEntryBlocks(const uint entry1, const uint entry2)
 {
   return (entry1&0xFFFFFu)==(entry2&0xFFFFFu);
 }
-
+uint popc(uint val)
+{
+  uint c = 0;
+  for(uint i = 0; i < 32; ++i, val >>= 1)
+    c += val & 0x1;
+  return c;
+}
+uint scanLocalWorkEfficient(uint* data, size_t linId, size_t elements)
+{
+  uint v = 0;
+  for(size_t i = 0; i < elements; ++i)
+  {
+    uint t = v;
+    v += data[i];
+    data[i] = t;
+  }
+  return data[elements] = v;
+  
+}
 void routeLocal( std::vector<float>& routeMap,
                  std::vector<int4>& seed,
                  std::vector<cl_uint>& routingIds,
@@ -1505,19 +1692,22 @@ void routeLocal( std::vector<float>& routeMap,
   int elementsPerWorker = borderElements + 1;
   float* routingData = &routingData_in[0] + routeDataPerNode*routingIds[get_group_id(0)];
   
+  int2 seedBlock;
+  std::vector<int> routed(numBlocks.x*numBlocks.y, 0);
 
    bool thisRunChange;
   //do
-  {
+
     thisRunChange = false;
     //(re)init queue
     //TODO: this needs to circle around until we find a block which has changed
     int4 ourInit = seed[get_group_id(0)];
+    seedBlock = int2((ourInit.x+ourInit.z)/2, (ourInit.y+ourInit.w)/2);
     uint queueFront = 0;
     uint queueElements = (ourInit.w-ourInit.y)*(ourInit.z-ourInit.x);
     do
     {
-    int posoffset = 0;
+    int posoffset = (ourInit.z-ourInit.x)*get_local_id(1);
     for(int y = ourInit.y + get_local_id(1); y < ourInit.w; y+= get_local_size(1))
     {
       for(int x = get_local_id(0); x < (ourInit.z - ourInit.x); x += get_local_size(0))
@@ -1529,6 +1719,8 @@ void routeLocal( std::vector<float>& routeMap,
     }
     } while(advanceThread());
 
+    while(queueElements)
+    {
     //do the work
     while(queueElements)
     {
@@ -1550,6 +1742,8 @@ void routeLocal( std::vector<float>& routeMap,
                   numBlocks,
                   l_routeData,
                   l_changedData);
+        unsetActiveBlock(activeBuffer + 2*activeBufferSize.x*activeBufferSize.y*get_group_id(0), seedBlock, blockId, activeBufferSize);
+        ++routed[blockId.x + blockId.y*numBlocks.x];
         do {
           changed_data[get_local_id(0) + get_local_size(0)*get_local_id(1)] = changed;
         } while(advanceThread());
@@ -1595,11 +1789,17 @@ void routeLocal( std::vector<float>& routeMap,
           if(l_queueElement == 0xFFFFFFFF)
             continue;
 
-          //insert new entry
-          if(queueElements >= queueSize-1)
-            queueElements = queueSize-2;
           --queueFront;
           queueFront = (queueFront + queueSize) % queueSize;
+
+          //insert new entry
+          if(queueElements >= queueSize)
+          {
+            queueElements = queueSize-1;
+            setActiveBlock(activeBuffer + 2*activeBufferSize.x*activeBufferSize.y*get_group_id(0), seedBlock, readQueueEntry(queue[queueFront]), activeBufferSize);
+        
+          }
+          
 
           uint newEntry = l_queueElement;
 
@@ -1652,8 +1852,76 @@ void routeLocal( std::vector<float>& routeMap,
       }
       
     }
-  }// while(thisRunChange);
+  
 
+    queueFront = 0;
+    uint pullers = std::min(queueSize/2, (int)(get_local_size(0)*get_local_size(1)) );
+    int pullRun = 0;
+    while(queueElements < queueSize/4 && pullRun * pullers < 2*activeBufferSize.x*activeBufferSize.y)
+    {
+      uint myentry = 0;
+      uint canOffer = 0;
+      do
+      {
+        int linId = get_local_id(0);
+        int pullId = linId + pullRun*pullers;
+        if(linId < pullers)
+        {
+          if(pullId < 2*activeBufferSize.x*activeBufferSize.y)
+          {
+            myentry = activeBuffer[2*activeBufferSize.x*activeBufferSize.y*get_group_id(0) + pullId];
+            canOffer = popc(myentry);
+          }
+          queue[queueSize/2 + linId-1] = canOffer;
+        }
+      }while(advanceThread());
+      
+      //run prefix sum
+      scanLocalWorkEfficient(queue + queueSize/2-1, 0, pullers);
+
+      //put into queue
+      do
+      {
+        int linId = get_local_id(0);
+        int pullId = linId + pullRun*pullers;
+        if(linId < pullers)
+        {
+          if(pullId < 2*activeBufferSize.x*activeBufferSize.y)
+          {
+            myentry = activeBuffer[2*activeBufferSize.x*activeBufferSize.y*get_group_id(0) + pullId];
+            canOffer = popc(myentry);
+
+
+            int myElements = std::min((int)canOffer, queueSize/4 - (int)(queueElements + queue[queueSize/2-1 + linId]));
+            int2 myOffset = activeBlockToId(seedBlock, pullId, activeBufferSize);
+
+            int2 additionalOffset = int2(0,0);
+            for(int inserted = 0; additionalOffset.y < 4; ++additionalOffset.y)
+              for(additionalOffset.x = 0; additionalOffset.x < 8 && inserted < myElements; ++additionalOffset.x, myentry >>= 1)
+              {
+                if(myentry & 0x1)
+                {
+                  queue[queueElements + queue[queueSize/2-1 + linId] + inserted] = createQueueEntry(myOffset + additionalOffset , 0, 0);
+                  ++inserted;
+                }
+              }
+          }
+        }
+      } while(advanceThread());
+      queueElements =  std::min((int)(queueElements + queue[queueSize/2 + pullers-1]), queueSize/4);
+      
+      pullRun++;
+    }
+
+
+  }
+
+  float count = 0;
+  for(auto it = routed.begin(); it != routed.end(); ++it)
+    if(*it == 0)
+      std::cout << "ouch!!!\n";
+    else count += *it;
+    std::cout << "avg iterations per block: " << (count/routed.size()) << "\n";
  
 }
 
@@ -1900,162 +2168,6 @@ void prepareIndividualRoutingDummy(const float* costmap,
         checkLevels(levelNodeMap, levelHyperEdgeMap, *(*it), level + 1);
     }
   }
-
-
-void nextBlockRange(uint* dims, uint* limits)
-{
-  uint maxuint = 0xFFFFFFFF;
-  uint current =  maxuint - std::max(std::max(dims[0], dims[1]),std::max(dims[2], dims[3])) + 1;
-  //get next highest
-  uint next = std::max(std::max(dims[0]+current,dims[1]+current),std::max(dims[2]+current,dims[3]+current));
-  next = (next != 0)*(next - current);
-  for(int i = 0; i < 4; ++i)
-    dims[i] = std::min(limits[i],next);
-}
-int2 activeBlockToId(const int2 seedBlock, const int spiralId, const int value, const int2 activeBlocksSize)
-{
-  //get limits
-  int2 seedAB = int2(seedBlock.x/8, seedBlock.y/8);
-  uint4 spiral_limits = uint4( seedAB.x+1,  seedAB.y+1,
-    activeBlocksSize.x - seedAB.x, activeBlocksSize.y - seedAB.y);
-  uint4 area_dims = spiral_limits;
-
-  int2 resId = seedAB;
-  for(int i = 0; i < 4; ++i)
-  {
-    nextBlockRange(&area_dims.x, &spiral_limits.x);
-    int w = std::max(1, (int)(area_dims.x + area_dims.z - 1));
-    int h = std::max(1, (int)(area_dims.y + area_dims.w - 1));
-    if(w*h <= spiralId)
-    {
-      //we are outside of this box
-      
-      //where do we increase
-      uint increase_x = (area_dims.x != spiral_limits.x) + (area_dims.z != spiral_limits.z);
-      uint increase_y = (area_dims.y != spiral_limits.y) + (area_dims.w != spiral_limits.w);
-
-      
-      int outerspirals = 0;
-
-      float c = -(spiralId-w*h);
-      float b = increase_x*h + increase_y*w;
-      float a = increase_x*increase_y;
-
-      if(a != 0)
-      {
-        float sq = sqrt(b*b - 4*a*c);
-        outerspirals = (-b + sq)/(2*a);
-      }
-      else
-        outerspirals = - c / b;
-
-      int innerspirals = std::max(1U,std::max(std::max(area_dims.x, area_dims.y),std::max(area_dims.z, area_dims.w)));
-      int4 allspirals = int4(std::max(0,seedAB.x-innerspirals-outerspirals+1), std::max(0,seedAB.y-innerspirals-outerspirals+1), 
-                             std::min(activeBlocksSize.x-1,seedAB.x+innerspirals+outerspirals-1), std::min(activeBlocksSize.y-1,seedAB.y+innerspirals+outerspirals-1));
-      int allspiralelements = (allspirals.z - allspirals.x+1)*(allspirals.w - allspirals.y+1);
-      int myoffset = spiralId - allspiralelements;
-
-      //find the right position depend on the offset
-      if(allspirals.y > 0)
-      {
-        int topelements = allspirals.z - allspirals.x + 1 + (allspirals.z < activeBlocksSize.x-1);
-        if(myoffset < topelements)
-        {
-          resId = int2(allspirals.x + myoffset, allspirals.y-1);
-          break;
-        }
-        else
-          myoffset -= topelements;
-      }
-      if(allspirals.z < activeBlocksSize.x-1)
-      {
-        int rightelements = allspirals.w - allspirals.y + 1 + (allspirals.w < activeBlocksSize.y-1);
-        if(myoffset < rightelements)
-        {
-          resId = int2(allspirals.z + 1, allspirals.y + myoffset);
-          break;
-        }
-        else
-          myoffset -= rightelements;
-      }
-      if(allspirals.w < activeBlocksSize.y-1)
-      {
-        int bottomelements = allspirals.w - allspirals.y + 2;
-        if(myoffset < bottomelements)
-        {
-          resId = int2(allspirals.z - myoffset, allspirals.w + 1);
-          break;
-        }
-        else
-          myoffset -= bottomelements;
-      }
-      //else
-      resId = int2(allspirals.x - 1, allspirals.w - myoffset);
-      break;
-    }
-  }
-  
-  return resId;
-
-}
-
-int getActiveBlock(const int2 seedBlock, const int2 blockId, const int2 activeBlocksSize)
-{
-  int2 seedAB = int2(seedBlock.x/8, seedBlock.y/8);
-  int2 blockAB = int2(blockId.x/8, blockId.y/8);
-  //get full spiral count
-  int spirals = std::max(std::max(seedAB.x - blockAB.x, blockAB.x - seedAB.x), std::max(seedAB.y - blockAB.y, blockAB.y - seedAB.y));
-
-  int offset = 0;
-  int2 diff = blockAB - seedAB;
-  
-  //top row
-  if(diff.y == -spirals && diff.x > -spirals)
-  {
-    int4 dims;
-    dims.x = std::max(0, seedAB.x - spirals + 1);
-    dims.z = std::min(activeBlocksSize.x - 1, seedAB.x + spirals - 1);
-    dims.y = seedAB.y - spirals + 1;
-    dims.w = std::min(activeBlocksSize.y - 1, seedAB.y + spirals - 1);
-    offset = (dims.z - dims.x + 1) * (dims.w - dims.y + 1) +
-      blockAB.x - dims.x;
-  }
-  //right side
-  else if(diff.x == spirals)
-  {
-    int4 dims;
-    dims.x = std::max(0, seedAB.x - spirals + 1);
-    dims.z = seedAB.x + spirals - 1;
-    dims.y = std::max(0, seedAB.y - spirals);
-    dims.w = std::min(activeBlocksSize.y - 1, seedAB.y + spirals - 1);
-    offset = (dims.z - dims.x + 1) * (dims.w - dims.y + 1) +
-      blockAB.y - dims.y;
-  }
-  //bottom side
-  else if(diff.y == spirals)
-  {
-    int4 dims;
-    dims.x = std::max(0, seedAB.x - spirals + 1);
-    dims.z = std::min(activeBlocksSize.x - 1, seedAB.x + spirals);
-    dims.y = std::max(0, seedAB.y - spirals);
-    dims.w = seedAB.y + spirals - 1;
-    offset = (dims.z - dims.x + 1) * (dims.w - dims.y + 1) +
-      dims.z - blockAB.x;
-  }
-  //left side
-  else
-  {
-    int4 dims;
-    dims.x = seedAB.x - spirals + 1;
-    dims.z = std::min(activeBlocksSize.x - 1, seedAB.x + spirals);
-    dims.y = std::max(0, seedAB.y - spirals);
-    dims.w = std::min(activeBlocksSize.y - 1, seedAB.y + spirals);
-    offset = (dims.z - dims.x + 1) * (dims.w - dims.y + 1) +
-      dims.w - blockAB.y;
-  }
-  return offset;
-}
-
   void GPURouting::createRoutes(LinksRouting::LinkDescription::HyperEdge& hedge)
   {
 
