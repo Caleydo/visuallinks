@@ -365,37 +365,41 @@ bool route_data(local float const * l_cost,
   //route as long as there is change
   local bool change;
   change = true;
-  barrier(CLK_LOCAL_MEM_FENCE);
-
+  
   int2 localid = (int2)(get_local_id(0),get_local_id(1));
-  local float* myval = accessLocalCost(l_route, localid);
   //iterate over it
   int counter = -1;
   while(change)
   {
+    barrier(CLK_LOCAL_MEM_FENCE);
     change = false;
     barrier(CLK_LOCAL_MEM_FENCE);
 
-    float lastmyval = *myval;
-    
+    float lastmyval = *accessLocalCost(l_route, localid);
+    float tval = lastmyval;
+
     int2 offset;
     for(offset.y = -1; offset.y  <= 1; ++offset.y)
       for(offset.x = -1; offset.x <= 1; ++offset.x)
       {
         //d is either 1 or M_SQRT2 - maybe it is faster to substitute
-        //float d = native_sqrt((float)(offset.x*offset.x+offset.y*offset.y));
+        float d = native_sqrt((float)(offset.x*offset.x+offset.y*offset.y));
         //by
-        int d2 = offset.x*offset.x+offset.y*offset.y;
-        float d = (d2-1)*M_SQRT2 + (2-d2);
+        //uint d2 = offset.x*offset.x+offset.y*offset.y;
+        //float d = (d2-1u)*M_SQRT2 + (2u-d2);
         float penalty = 0.5f*(*accessLocalCostConst(l_cost, localid) +
                               *accessLocalCostConst(l_cost, localid + offset));
         float r_other = *accessLocalCost(l_route, localid + offset);
         //TODO use custom params here
-        *myval = min(*myval, r_other + 0.01f*d + d*penalty);
+        tval = min(tval, r_other + 0.01f*d + d*penalty);
+        //tval = min(tval, r_other + offset.x*offset.x+offset.y*offset.y);
       }
 
-    if(*myval != lastmyval)
-      change = true;    
+    if(tval != lastmyval)
+    {
+      change = true;  
+      *accessLocalCost(l_route, localid) = tval;
+    }
     
     barrier(CLK_LOCAL_MEM_FENCE);
     ++counter;
@@ -434,12 +438,12 @@ __kernel void updateRouteMap(read_only image2d_t costmap,
 {
   local bool changed;
   changed = computeAll>0?true:false;
+  barrier(CLK_LOCAL_MEM_FENCE);
 
   local float* l_cost = l_data;
   local float* l_routing_data = l_data + (get_local_size(0)+2)*(get_local_size(1)+2);
 
   int2 gid2 = (int2)(get_group_id(0)*(get_local_size(0)-1) + get_local_id(0), get_group_id(1)*(get_local_size(1)-1) + get_local_id(1));
-
   
   float newcost = getPenalty(costmap, (int2)(gid2.x, gid2.y));
   float last_cost = loadCostToLocalAndSetRoute((int2)(get_group_id(0), get_group_id(1)), gid2, dim, lastCostmap, l_cost, l_routing_data);
@@ -454,6 +458,10 @@ __kernel void updateRouteMap(read_only image2d_t costmap,
   barrier(CLK_LOCAL_MEM_FENCE);
   if(!changed) return;
 
+  
+  float inside = 0.1f*MAXFLOAT;
+  if(gid2.x < dim.x && gid2.y < dim.y)
+    inside = 0;
 
   //do the routing
   int boundaryelements = 2*(get_local_size(0) + get_local_size(1)-2);
@@ -464,16 +472,18 @@ __kernel void updateRouteMap(read_only image2d_t costmap,
     //init routing data
     float mydata = 0.1f*MAXFLOAT;
     if(i == myBorderId)
-      mydata = 0.0f;
+      mydata = inside;
     *accessLocalCost(l_routing_data, (int2)(get_local_id(0), get_local_id(1))) = mydata;
+    barrier(CLK_LOCAL_MEM_FENCE);
 
     //route
     route_data(l_cost, l_routing_data);
+    barrier(CLK_LOCAL_MEM_FENCE);
 
     //write result
     if(myBorderId >= i) 
-      routeMap[boundaryelements*boundaryelements/2*(get_group_id(0)+get_group_id(1)*get_num_groups(0)) +
-               written + myBorderId - i] = *accessLocalCost(l_routing_data, (int2)(get_local_id(0), get_local_id(1)));
+      routeMap[boundaryelements*(boundaryelements+1)/2*(get_group_id(0)+get_group_id(1)*get_num_groups(0)) +
+               written + myBorderId - i] = max(inside,*accessLocalCost(l_routing_data, (int2)(get_local_id(0), get_local_id(1))));
     written += boundaryelements - i;
   }
 }
@@ -554,7 +564,7 @@ int routeBorder(global const float* routeMap,
 
   *changeData = 0;
   float mycost = 0.01f*MAXFLOAT;
-  global const float* ourRouteMap = routeMap + borderElements*borderElements/2*(blockId.x + blockId.y*numBlocks.x);
+  global const float* ourRouteMap = routeMap + borderElements*(borderElements+1)/2*(blockId.x + blockId.y*numBlocks.x);
   if(lid < borderElements)
   {    
     mycost = routingData[gid];
@@ -570,7 +580,7 @@ int routeBorder(global const float* routeMap,
       mycost = min(newcost, mycost);
     }
     
-    if(mycost < origCost)
+    if(mycost + 0.0001f < origCost)
     {
       //atomic as multiple might be working on the same
       atomic_min((volatile global unsigned int*)(routingData + gid), as_uint(mycost));

@@ -1416,10 +1416,10 @@ int routeBorder(std::vector<float>& routeMap,
 
   *changeData = 0;
   
-  const float* ourRouteMap = &routeMap[0] + borderElements*borderElements/2*(blockId.x + blockId.y*numBlocks.x);
+  const float* ourRouteMap = &routeMap[0] + borderElements*(borderElements+1)/2*(blockId.x + blockId.y*numBlocks.x);
   do
   {
-    float mycost = 0.01f*MAXFLOAT;
+    float mycost = 0.1f*MAXFLOAT;
     int lid = get_local_id(0);
     int gid = getCostGlobalId(lid, blockId, blockSize, numBlocks);
     if(lid < borderElements)
@@ -1436,7 +1436,7 @@ int routeBorder(std::vector<float>& routeMap,
   if(lid < borderElements)
   {
     
-    float mycost = 0.01f*MAXFLOAT;
+    float mycost = 0.1f*MAXFLOAT;
     if(lid < borderElements)
       mycost = routingData[gid];
 
@@ -1447,7 +1447,7 @@ int routeBorder(std::vector<float>& routeMap,
       mycost = std::min(newcost, mycost);
     }
     
-    if(mycost < origCost)
+    if(mycost + 0.0001f < origCost)
     {
       //atomic as multiple might be working on the same
       routingData[gid] =std::min(routingData[gid] , mycost);
@@ -1657,7 +1657,27 @@ void routeLocal( std::vector<float>& routeMap,
  
 }
 
-
+void validateRouteMap(const float* routeMap, size_t borderElements)
+{
+  for(size_t from = 0; from < borderElements; ++from)
+  {
+    for(size_t to = 0; to < borderElements; ++to)
+    {
+      //float a = getRouteMapCost(routeMap, from, to, borderElements);
+      //if(a != std::max(from, to) && (from != to || a != 0))
+      //  std::cout << "outch\n";
+      float directCost = getRouteMapCost(routeMap, from, to, borderElements);
+      for(size_t over = 0; over < borderElements; ++over)
+      {
+        float overcost0 = getRouteMapCost(routeMap, from, over, borderElements);
+        float overcost1 = getRouteMapCost(routeMap, over, to, borderElements);
+        float overcost = overcost0 + overcost1;
+        if(overcost + 0.001f < directCost)
+          std::cout << "routeMap not valid: direct cost (" << from << "->" << to << "): " << directCost << " > (" << from << "->" << over << "->" << to << "): " << overcost << "\n";
+      }
+    }
+  }
+}
 
 void prepareIndividualRoutingDummy(const float* costmap,
                                     float* routedata,
@@ -1706,7 +1726,7 @@ void prepareIndividualRoutingDummy(const float* costmap,
   {
     int2 gid = int2(mapping.x*(get_local_size(0)-1)+get_local_id(0),
                     mapping.y*(get_local_size(1)-1)+get_local_id(1));
-    float startcost = 0.01f*MAXFLOAT;
+    float startcost = 0.1f*MAXFLOAT;
     if(gid.x < dim.x && gid.y < dim.y)
     {
       if(startingPoints[mapping.z].x <= gid.x && gid.x <= startingPoints[mapping.z].z &&
@@ -1755,7 +1775,7 @@ void prepareIndividualRoutingDummy(const float* costmap,
       
       int boundaryElements = 2*(_blockSize[0] + _blockSize[1]-2);
 
-      _cl_routeMap_buffer =  cl::Buffer(_cl_context, CL_MEM_READ_WRITE, _blocks[0]*_blocks[1]*boundaryElements*boundaryElements/2*sizeof(cl_float));
+      _cl_routeMap_buffer =  cl::Buffer(_cl_context, CL_MEM_READ_WRITE, _blocks[0]*_blocks[1]*boundaryElements*(boundaryElements+1)/2*sizeof(cl_float));
       computeAll = true;
     }
 
@@ -1785,6 +1805,7 @@ void prepareIndividualRoutingDummy(const float* costmap,
     //update route map
     //_cl_updateRouteMap_kernel
 
+
     _cl_updateRouteMap_kernel.setArg(0, memory_gl[0]);
     _cl_updateRouteMap_kernel.setArg(1, _cl_lastCostMap_buffer);
     _cl_updateRouteMap_kernel.setArg(2, _cl_routeMap_buffer);
@@ -1808,6 +1829,18 @@ void prepareIndividualRoutingDummy(const float* costmap,
     _cl_command_queue.finish();
 
 
+    ////debug
+    //size_t size;
+    //_cl_routeMap_buffer.getInfo(CL_MEM_SIZE, &size);
+    //std::vector<float> h_routeMap_buffer(size/sizeof(float));
+    //_cl_command_queue.enqueueReadBuffer(_cl_routeMap_buffer, true, 0, size, &h_routeMap_buffer[0]);
+    //
+    ////check routemap
+    //size_t bels = 2*(_blockSize[0] + _blockSize[1] - 2);
+    //for(size_t j = 0; j < _blocks[1]; ++j)
+    //for(size_t i = 0; i < _blocks[0]; ++i)
+    //  validateRouteMap(&h_routeMap_buffer[(i + j*_blocks[0])*bels*(bels+1)/2], bels);
+    ////end debug
 
 
     //    //dummy call
@@ -2341,6 +2374,13 @@ int getActiveBlock(const int2 seedBlock, const int2 blockId, const int2 activeBl
         std::vector<uint> activeBuffer(2*tactiveBufferSize.x*tactiveBufferSize.y*startBlockRange.size(), 0);
         int localWorkerSize2 = divup(boundaryElements,_routingLocalWorkersWarpSize)*_routingLocalWorkersWarpSize;
         initKernelData(int2(localWorkerSize2,1), int2(1,1));
+
+        ////check routemap
+        //size_t bels = 2*(_blockSize[0] + _blockSize[1] - 2);
+        //for(size_t i = 0; i < _blocks[0]; ++i)
+        //  for(size_t j = 0; j < _blocks[1]; ++j)
+        //    validateRouteMap(&h_routeMap_buffer[(i + j*_blocks[0])*bels*(bels+1)/2], bels);
+
         routeLocal(h_routeMap_buffer, startBlockRange, routingIds, h_routingData, requiredElements, int2(_blockSize[0], _blockSize[1]), int2(_blocks[0], _blocks[1]), data, queue, _routingQueueSize, &activeBuffer[0], tactiveBufferSize);
 
         delete[] data;
