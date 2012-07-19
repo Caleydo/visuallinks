@@ -44,6 +44,7 @@ namespace LinksRouting
     registerArg("QueueSize", _routingQueueSize = 128);
     registerArg("NumLocalWorkers", _routingNumLocalWorkers = 8);
     registerArg("WorkersWarpSize", _routingLocalWorkersWarpSize = 32);
+    registerArg("BValue",_Bvalue = 1.0);
   }
 
   //------------------------------------------------------------------------------
@@ -253,9 +254,11 @@ namespace LinksRouting
     _cl_updateRouteMap_kernel = cl::Kernel(_cl_program, "updateRouteMap");
     _cl_prepareBorderCosts_kernel = cl::Kernel(_cl_program, "prepareBorderCosts");
     _cl_prepareIndividualRouting_kernel = cl::Kernel(_cl_program, "prepareIndividualRouting");
+    _cl_prepareIndividualRoutingParent_kernel = cl::Kernel(_cl_program, "prepareIndividualRoutingParent");
     _cl_routing_kernel  = cl::Kernel(_cl_program, "routeLocal");
 
-
+    
+    _cl_voteMinimum_kernel = cl::Kernel(_cl_program, "voteMinimum");
     _cl_getMinimum_kernel = cl::Kernel(_cl_program, "getMinimum");
     _cl_routeInOut_kernel = cl::Kernel(_cl_program, "calcInOut");
     _cl_routeInterBlock_kernel = cl::Kernel(_cl_program, "calcInterBlockRoute");
@@ -2155,7 +2158,30 @@ void prepareIndividualRoutingDummy(const float* costmap,
     std::cout << " - updateRouteMap: " << (end-start)/1000000.0  << "ms\n";
   }
 
-  void checkLevels(std::map<const LinkDescription::Node*, size_t>& levelNodeMap, std::map<const LinkDescription::HyperEdge*, size_t>& levelHyperEdgeMap, const LinkDescription::HyperEdge& hedge, size_t level = 0)
+  bool getTargetRect(const std::vector<float2> &vertices, int4& target, int downsample, int buffer_width, int buffer_height)
+  {
+    target = int4(buffer_width-1, buffer_height-1,0,0);
+    for( auto p = vertices.begin();
+          p != vertices.end();
+          ++p )
+    {
+      target.x = std::min<int>(target.x, p->x/downsample);
+      target.y = std::min<int>(target.y, p->y/downsample);
+      target.z = std::max<int>(target.z, p->x/downsample);
+      target.w = std::max<int>(target.w, p->y/downsample);
+    }
+
+    target.x = std::max(target.x, 0);
+    target.y = std::max(target.y, 0);
+    target.z = std::min(target.z, buffer_width-1);
+    target.w = std::min(target.w, buffer_height-1);
+    return (target.z - target.x > 0 && target.w - target.y > 0);
+  }
+            
+
+          
+
+  void checkLevels(std::map<LinkDescription::Node*, size_t>& levelNodeMap, std::map<LinkDescription::HyperEdge*, size_t>& levelHyperEdgeMap, LinkDescription::HyperEdge& hedge, size_t level = 0)
   {
     auto found = levelHyperEdgeMap.find(&hedge);
     if(found != levelHyperEdgeMap.end())
@@ -2195,13 +2221,13 @@ void prepareIndividualRoutingDummy(const float* costmap,
     //  std::cout << '\n';
     //}
 
-    std::map<const LinkDescription::Node*, size_t > levelNodeMap;
-    std::map<const LinkDescription::HyperEdge*, size_t > levelHyperEdgeMap;
+    std::map< LinkDescription::Node*, size_t > levelNodeMap;
+    std::map< LinkDescription::HyperEdge*, size_t > levelHyperEdgeMap;
 
-    std::map<const LinkDescription::Node*, size_t > nodeMemMap;
-    std::map<const LinkDescription::HyperEdge*, size_t > hyperEdgeMemMap;
-    std::vector< std::vector< const LinkDescription::Node* > > levelNodes;
-    std::vector< std::vector< const LinkDescription::HyperEdge* > > levelHyperEdges;
+    std::map< LinkDescription::Node*, size_t > nodeMemMap;
+    std::map< LinkDescription::HyperEdge*, size_t > hyperEdgeMemMap;
+    std::vector< std::vector<  LinkDescription::Node* > > levelNodes;
+    std::vector< std::vector<  LinkDescription::HyperEdge* > > levelHyperEdges;
 
     int downsample = _subscribe_desktop->_data->width / _subscribe_costmap->_data->width;
     int boundaryElements = 2*(_blockSize[0] + _blockSize[1]-2);
@@ -2210,6 +2236,10 @@ void prepareIndividualRoutingDummy(const float* costmap,
     //there can be loops due to hyperedges connecting the same nodes, so we have to avoid double entries
     //the same way, one node could be put on different levels, so we need to analyse the nodes level first
     checkLevels(levelNodeMap, levelHyperEdgeMap, hedge);
+
+    //remove routing info
+    for(auto edgeIt = levelHyperEdgeMap.begin(); edgeIt != levelHyperEdgeMap.end(); ++edgeIt)
+      edgeIt->first->removeRoutingInformation();
 
     //compute mem requirement and map
     size_t slices = 0;
@@ -2293,299 +2323,403 @@ void prepareIndividualRoutingDummy(const float* costmap,
 
     //bottom up routing -> for every level do:
     levelHyperEdges.resize(levelNodes.size()); //make same size (always: nodes.size > hyperedges.size)
-    auto levelNodesit = levelNodes.rbegin();
-    auto levelHyperEdgesit = levelHyperEdges.rbegin();
-    while(levelNodesit != levelNodes.rend() ||  levelHyperEdgesit != levelHyperEdges.rend())
     {
-      std::vector<int4> routingPoints;
-      std::vector<int4> startBlockRange;
-      std::vector< std::vector<cl_uint> > routingSources;
-      std::vector<cl_uint> routingIds;
-
-      //geometry nodes
-      for(auto nodeit = levelNodesit->begin(); nodeit != levelNodesit->end(); ++nodeit)
+      auto levelNodesit = levelNodes.rbegin();
+      auto levelHyperEdgesit = levelHyperEdges.rbegin();
+      while(levelNodesit != levelNodes.rend() ||  levelHyperEdgesit != levelHyperEdges.rend())
       {
-        //handle non children first
-        if((*nodeit)->getChildren().size() != 0)
-          continue;
+        std::vector<int4> routingPoints;
+        std::vector<int4> startBlockRange;
+        std::vector< std::vector<cl_uint> > routingSources;
+        std::vector<cl_uint> routingIds;
 
-        //compute min max for poly
-        int4 target(_buffer_width-1,_buffer_height-1,0,0);
-        for( auto p = (*nodeit)->getVertices().begin();
-              p != (*nodeit)->getVertices().end();
-              ++p )
+        //geometry nodes
+        for(auto nodeit = levelNodesit->begin(); nodeit != levelNodesit->end(); ++nodeit)
         {
-          target.x = std::min<int>(target.x, p->x/downsample);
-          target.y = std::min<int>(target.y, p->y/downsample);
-          target.z = std::max<int>(target.z, p->x/downsample);
-          target.w = std::max<int>(target.w, p->y/downsample);
-        }
+          //handle non children first
+          if((*nodeit)->getChildren().size() != 0)
+            continue;
 
-        target.x = std::max(target.x, 0);
-        target.y = std::max(target.y, 0);
-        target.z = std::min(target.z, ((int)_buffer_width-1));
-        target.w = std::min(target.w, ((int)_buffer_height-1));
+          int4 target;
+          if(!getTargetRect((*nodeit)->getVertices(), target, downsample, _buffer_width, _buffer_height))
+            continue;
 
-        if(target.z - target.x <= 0 || target.w - target.y <= 0)
-          continue;
-        routingPoints.push_back(target);
-        routingIds.push_back(nodeMemMap.find(*nodeit)->second);
-        startBlockRange.push_back(int4(std::max(0,target.x/(_blockSize[0]-1)-1),
-                                       std::max(0,target.y/(_blockSize[1]-1)-1),  
-                                       std::min(_blocks[0]-1,divup(target.z,_blockSize[0]-1)+1),
-                                       std::min(_blocks[1]-1,divup(target.w,_blockSize[1]-1)+1) ) );
-      }
-      //nodes with hyperedges
-      for(auto nodeit = levelNodesit->begin(); nodeit != levelNodesit->end(); ++nodeit)
-      {
-        if((*nodeit)->getChildren().size() == 0)
-          continue;
-        std::vector<cl_uint> thisSources;
-        for(auto childIt = (*nodeit)->getChildren().begin();
-            childIt != (*nodeit)->getChildren().end();
-            ++childIt)
-        {
-          thisSources.push_back(hyperEdgeMemMap.find(*childIt)->second);
+          routingPoints.push_back(target);
+          routingIds.push_back(nodeMemMap.find(*nodeit)->second);
+          startBlockRange.push_back(int4(std::max(0,target.x/(_blockSize[0]-1)-1),
+                                         std::max(0,target.y/(_blockSize[1]-1)-1),  
+                                         std::min(_blocks[0]-1,divup(target.z,_blockSize[0]-1)+1),
+                                         std::min(_blocks[1]-1,divup(target.w,_blockSize[1]-1)+1) ) );
         }
-        routingSources.push_back(thisSources);
-        routingIds.push_back(nodeMemMap.find(*nodeit)->second);
-        startBlockRange.push_back(int4(0,0, _blocks[0], _blocks[1]));
-      }
-      //nodes from hyperedges
-      for(auto hyperedgeit = levelHyperEdgesit->begin(); hyperedgeit != levelHyperEdgesit->end(); ++hyperedgeit)
-      {
-        std::vector<cl_uint> thisSources;
-        for(auto childIt = (*hyperedgeit)->getNodes().begin();
-            childIt != (*hyperedgeit)->getNodes().end();
-            ++childIt)
+        //nodes with hyperedges
+        for(auto nodeit = levelNodesit->begin(); nodeit != levelNodesit->end(); ++nodeit)
         {
-          thisSources.push_back(nodeMemMap.find(&(*childIt))->second);
+          if((*nodeit)->getChildren().size() == 0)
+            continue;
+          std::vector<cl_uint> thisSources;
+          for(auto childIt = (*nodeit)->getChildren().begin();
+              childIt != (*nodeit)->getChildren().end();
+              ++childIt)
+          {
+            thisSources.push_back(hyperEdgeMemMap.find(*childIt)->second);
+          }
+          routingSources.push_back(thisSources);
+          routingIds.push_back(nodeMemMap.find(*nodeit)->second);
+          startBlockRange.push_back(int4(0,0, _blocks[0], _blocks[1]));
         }
-        routingSources.push_back(thisSources);
-        routingIds.push_back(hyperEdgeMemMap.find(*hyperedgeit)->second);
-      }
+        //nodes from hyperedges
+        for(auto hyperedgeit = levelHyperEdgesit->begin(); hyperedgeit != levelHyperEdgesit->end(); ++hyperedgeit)
+        {
+          std::vector<cl_uint> thisSources;
+          for(auto childIt = (*hyperedgeit)->getNodes().begin();
+              childIt != (*hyperedgeit)->getNodes().end();
+              ++childIt)
+          {
+            thisSources.push_back(nodeMemMap.find(&(*childIt))->second);
+          }
+          routingSources.push_back(thisSources);
+          routingIds.push_back(hyperEdgeMemMap.find(*hyperedgeit)->second);
+          startBlockRange.push_back(int4(0,0, _blocks[0], _blocks[1]));
+        }
       
-      cl::Buffer d_routingIds(_cl_context, CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR, routingIds.size()*sizeof(cl_uint), &routingIds[0]);  
+        cl::Buffer d_routingIds(_cl_context, CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR, routingIds.size()*sizeof(cl_uint), &routingIds[0]);  
 
-      if(routingPoints.size() > 0)
-      {
-        cl::Buffer d_routingPoints(_cl_context, CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR, routingPoints.size()*sizeof(uint4), &routingPoints[0]);
-        // init all nodes with geometry
-        std::vector<cl_int4> startingBlocks;
-        //determine requ. blocks
-        for(int i = 0; i < routingPoints.size(); ++i)
+        if(routingPoints.size() > 0)
         {
-          for(int y = routingPoints[i].y/(_blockSize[1]-1); y < divup(routingPoints[i].w,_blockSize[1]-1); ++y)
-          for(int x = routingPoints[i].x/(_blockSize[0]-1); x < divup(routingPoints[i].z,_blockSize[0]-1); ++x)
-            if(x >= 0 && x < _blocks[0] && y >= 0 && y < _blocks[1])
+          cl::Buffer d_routingPoints(_cl_context, CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR, routingPoints.size()*sizeof(uint4), &routingPoints[0]);
+          // init all nodes with geometry
+          std::vector<cl_int4> startingBlocks;
+          //determine requ. blocks
+          for(int i = 0; i < routingPoints.size(); ++i)
+          {
+            for(int y = routingPoints[i].y/(_blockSize[1]-1); y < divup(routingPoints[i].w,_blockSize[1]-1); ++y)
+            for(int x = routingPoints[i].x/(_blockSize[0]-1); x < divup(routingPoints[i].z,_blockSize[0]-1); ++x)
+              if(x >= 0 && x < _blocks[0] && y >= 0 && y < _blocks[1])
+              {
+                cl_int3 nblock;
+                nblock.s[0] = x; nblock.s[1] = y; nblock.s[2] = i; nblock.s[3] = routingIds[i];
+                startingBlocks.push_back(nblock);
+              }
+          }
+          cl::Buffer d_prepareIndividualRoutingMapping(_cl_context, CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR, startingBlocks.size()*sizeof(cl_int4), &startingBlocks[0]);
+
+
+          ////debug
+          ////dummy call
+          // float* costmap = new float[_buffer_width*_buffer_height];
+          // _cl_command_queue.enqueueReadBuffer(_cl_lastCostMap_buffer, true, 0, _buffer_width*_buffer_height * sizeof(float), &costmap[0]);
+          // float* routedata = new float[requiredElements*slices];
+          // _cl_command_queue.enqueueReadBuffer(d_routingData, true, 0,_buffer_width*_buffer_height * sizeof(float), &routedata[0]);
+
+
+          //  float* lmem = new float[2*(_blockSize[0]+2)*(_blockSize[1]+2)];
+          //  initKernelData(int2(_blockSize[0],_blockSize[1]),int2(startingBlocks.size(),1) );
+
+          //  prepareIndividualRoutingDummy(costmap, routedata, routingPoints, (int4*)&startingBlocks[0], int2(_buffer_width,_buffer_height), int2(_blocks[0], _blocks[1]), requiredElements, lmem);
+          //  delete[] costmap;
+          //  delete[] routedata;
+          //  delete[] lmem;
+          ////
+
+
+          _cl_prepareIndividualRouting_kernel.setArg(0, _cl_lastCostMap_buffer);
+          _cl_prepareIndividualRouting_kernel.setArg(1, d_routingData);
+          _cl_prepareIndividualRouting_kernel.setArg(2, d_routingPoints);
+          _cl_prepareIndividualRouting_kernel.setArg(3, d_prepareIndividualRoutingMapping);
+          _cl_prepareIndividualRouting_kernel.setArg(4, 2 * sizeof(cl_int), bufferDim);
+          _cl_prepareIndividualRouting_kernel.setArg(5, 2 * sizeof(cl_int), _blocks);
+          _cl_prepareIndividualRouting_kernel.setArg(6, sizeof(cl_int), &requiredElements);
+          _cl_prepareIndividualRouting_kernel.setArg(7, 2*(_blockSize[0]+2)*(_blockSize[1]+2)*sizeof(float), NULL);
+
+          cl::Event prepareIndividualRoutingEvent;
+          _cl_command_queue.enqueueNDRangeKernel
+          (
+            _cl_prepareIndividualRouting_kernel,
+            cl::NullRange,
+            cl::NDRange(_blockSize[0]*startingBlocks.size(),_blockSize[1]),
+            cl::NDRange(_blockSize[0],_blockSize[1]),
+            0,
+            &prepareIndividualRoutingEvent
+          );
+
+          _cl_command_queue.finish();
+          prepareIndividualRoutingEvent.getProfilingInfo(CL_PROFILING_COMMAND_END, &end);
+          prepareIndividualRoutingEvent.getProfilingInfo(CL_PROFILING_COMMAND_START, &start);
+          std::cout << " - prepareIndividualRouting: " << (end-start)/1000000.0  << "ms\n";
+
+          ////debug:
+          //std::vector<float> mem(requiredElements*slices);
+          // _cl_command_queue.enqueueReadBuffer(d_routingData, true, 0, mem.size() * sizeof(float), &mem[0]);
+          // for(size_t i = 0; i < mem.size(); ++i)
+          //   if(mem[i] < 1000.0f)
+          //    std::cout << "(" << i/requiredElements << "," << i % requiredElements << "): " << mem[i] << std::endl;
+          //dumpBuffer<float>(_cl_command_queue, d_routingData, requiredElements, slices, "initRouting");
+        }
+
+
+
+        if(routingSources.size() > 0)
+        {
+          //init nodes from child routing data
+          std::vector<cl_uint> routingSourcesOffset;
+          std::vector<cl_uint> routingSourcesData;
+          for(auto it = routingSources.begin(); it != routingSources.end(); ++it)
+            routingSourcesOffset.push_back(routingSourcesData.size()),
+            routingSourcesData.insert(routingSourcesData.end(), it->begin(), it->end());
+          routingSourcesOffset.push_back(routingSourcesData.size());
+
+          cl::Buffer d_routingSourcesData(_cl_context, CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR, routingSourcesData.size()*sizeof(cl_uint), &routingSourcesData[0]);
+          cl::Buffer d_routingSourcesOffset(_cl_context, CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR, routingSourcesOffset.size()*sizeof(cl_uint), &routingSourcesOffset[0]);
+
+        
+          _cl_prepareIndividualRoutingParent_kernel.setArg(0, d_routingData);
+          _cl_prepareIndividualRoutingParent_kernel.setArg(1, d_routingSourcesOffset);
+          _cl_prepareIndividualRoutingParent_kernel.setArg(2, d_routingSourcesData);
+          _cl_prepareIndividualRoutingParent_kernel.setArg(3, d_routingIds);
+          _cl_prepareIndividualRoutingParent_kernel.setArg(4, (int)(routingIds.size() - routingSources.size()));
+          _cl_prepareIndividualRoutingParent_kernel.setArg(5, requiredElements);
+          _cl_prepareIndividualRoutingParent_kernel.setArg<float>(6, _Bvalue);
+
+          cl::Event prepareIndividualRoutingParentEvent;
+          _cl_command_queue.enqueueNDRangeKernel
+          (
+            _cl_prepareIndividualRoutingParent_kernel,
+            cl::NullRange,
+            cl::NDRange(requiredElements,routingSources.size()),
+            cl::NullRange,
+            0,
+            &prepareIndividualRoutingParentEvent
+          );
+
+          _cl_command_queue.finish();
+          prepareIndividualRoutingParentEvent.getProfilingInfo(CL_PROFILING_COMMAND_END, &end);
+          prepareIndividualRoutingParentEvent.getProfilingInfo(CL_PROFILING_COMMAND_START, &start);
+          std::cout << " - prepareIndividualRoutingParent: " << (end-start)/1000000.0  << "ms\n";
+          //dumpBuffer<float>(_cl_command_queue, d_routingData, requiredElements, slices, "routingPrepareFromParent");
+        }
+
+
+        if(startBlockRange.size() > 0)
+        {
+          //run the routing
+
+          //make sure we dont flood the queue
+          int maxInitDim = sqrt(static_cast<float>(_routingQueueSize))/2;
+          for(auto br_it = startBlockRange.begin(); br_it != startBlockRange.end(); ++br_it)
+          {
+            if(br_it->z-br_it->x > maxInitDim)
             {
-              cl_int3 nblock;
-              nblock.s[0] = x; nblock.s[1] = y; nblock.s[2] = i; nblock.s[3] = routingIds[i];
-              startingBlocks.push_back(nblock);
+              int center = (br_it->z+br_it->x)/2;
+              br_it->x = center - maxInitDim/2;
+              br_it->z = center + maxInitDim/2+1;
             }
-        }
-        cl::Buffer d_prepareIndividualRoutingMapping(_cl_context, CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR, startingBlocks.size()*sizeof(cl_int4), &startingBlocks[0]);
-
-
-        ////debug
-        ////dummy call
-        // float* costmap = new float[_buffer_width*_buffer_height];
-        // _cl_command_queue.enqueueReadBuffer(_cl_lastCostMap_buffer, true, 0, _buffer_width*_buffer_height * sizeof(float), &costmap[0]);
-        // float* routedata = new float[requiredElements*slices];
-        // _cl_command_queue.enqueueReadBuffer(d_routingData, true, 0,_buffer_width*_buffer_height * sizeof(float), &routedata[0]);
-
-
-        //  float* lmem = new float[2*(_blockSize[0]+2)*(_blockSize[1]+2)];
-        //  initKernelData(int2(_blockSize[0],_blockSize[1]),int2(startingBlocks.size(),1) );
-
-        //  prepareIndividualRoutingDummy(costmap, routedata, routingPoints, (int4*)&startingBlocks[0], int2(_buffer_width,_buffer_height), int2(_blocks[0], _blocks[1]), requiredElements, lmem);
-        //  delete[] costmap;
-        //  delete[] routedata;
-        //  delete[] lmem;
-        ////
-
-
-        _cl_prepareIndividualRouting_kernel.setArg(0, _cl_lastCostMap_buffer);
-        _cl_prepareIndividualRouting_kernel.setArg(1, d_routingData);
-        _cl_prepareIndividualRouting_kernel.setArg(2, d_routingPoints);
-        _cl_prepareIndividualRouting_kernel.setArg(3, d_prepareIndividualRoutingMapping);
-        _cl_prepareIndividualRouting_kernel.setArg(4, 2 * sizeof(cl_int), bufferDim);
-        _cl_prepareIndividualRouting_kernel.setArg(5, 2 * sizeof(cl_int), _blocks);
-        _cl_prepareIndividualRouting_kernel.setArg(6, sizeof(cl_int), &requiredElements);
-        _cl_prepareIndividualRouting_kernel.setArg(7, 2*(_blockSize[0]+2)*(_blockSize[1]+2)*sizeof(float), NULL);
-
-        cl::Event prepareIndividualRoutingEvent;
-        _cl_command_queue.enqueueNDRangeKernel
-        (
-          _cl_prepareIndividualRouting_kernel,
-          cl::NullRange,
-          cl::NDRange(_blockSize[0]*startingBlocks.size(),_blockSize[1]),
-          cl::NDRange(_blockSize[0],_blockSize[1]),
-          0,
-          &prepareIndividualRoutingEvent
-        );
-
-        _cl_command_queue.finish();
-        prepareIndividualRoutingEvent.getProfilingInfo(CL_PROFILING_COMMAND_END, &end);
-        prepareIndividualRoutingEvent.getProfilingInfo(CL_PROFILING_COMMAND_START, &start);
-        std::cout << " - prepareIndividualRouting: " << (end-start)/1000000.0  << "ms\n";
-
-        //debug:
-        std::vector<float> mem(requiredElements*slices);
-         _cl_command_queue.enqueueReadBuffer(d_routingData, true, 0, mem.size() * sizeof(float), &mem[0]);
-         for(size_t i = 0; i < mem.size(); ++i)
-           if(mem[i] < 1000.0f)
-            std::cout << "(" << i/requiredElements << "," << i % requiredElements << "): " << mem[i] << std::endl;
-        dumpBuffer<float>(_cl_command_queue, d_routingData, requiredElements, slices, "initRouting");
-      }
-
-
-
-      if(routingSources.size() > 0)
-      {
-        std::vector<cl_uint> routingSourcesOffset;
-        std::vector<cl_uint> routingSourcesData;
-        for(auto it = routingSources.begin(); it != routingSources.end(); ++it)
-          routingSourcesOffset.push_back(routingSourcesData.size()),
-          routingSourcesData.insert(routingSourcesData.end(), it->begin(), it->end());
-
-        cl::Buffer d_routingSourcesData(_cl_context, CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR, routingSourcesData.size()*sizeof(cl_uint), &routingSourcesData[0]);
-        cl::Buffer d_routingSourcesOffset(_cl_context, CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR, routingSourcesOffset.size()*sizeof(cl_uint), &routingSourcesOffset[0]);
-
-        //TODO: init nodes from child routing data
-        // _cl_prepareIndividualRoutingParent_kernel
-      }
-
-
-      if(startBlockRange.size() > 0)
-      {
-        //run the routing
-
-        //make sure we dont flood the queue
-        int maxInitDim = sqrt(static_cast<float>(_routingQueueSize))/2;
-        for(auto br_it = startBlockRange.begin(); br_it != startBlockRange.end(); ++br_it)
-        {
-          if(br_it->z-br_it->x > maxInitDim)
-          {
-            int center = (br_it->z+br_it->x)/2;
-            br_it->x = center - maxInitDim/2;
-            br_it->z = center + maxInitDim/2+1;
+            if(br_it->w-br_it->y > maxInitDim)
+            {
+              int center = (br_it->w+br_it->y)/2;
+              br_it->y = center - maxInitDim/2;
+              br_it->w = center + maxInitDim/2+1;
+            }
           }
-          if(br_it->w-br_it->y > maxInitDim)
-          {
-            int center = (br_it->w+br_it->y)/2;
-            br_it->y = center - maxInitDim/2;
-            br_it->w = center + maxInitDim/2+1;
-          }
-        }
-        cl::Buffer d_startBlockRange(_cl_context, CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR, startBlockRange.size()*sizeof(cl_int4), &startBlockRange[0]);
+          cl::Buffer d_startBlockRange(_cl_context, CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR, startBlockRange.size()*sizeof(cl_int4), &startBlockRange[0]);
         
 
-        //debug
-        //dummy call
-        size_t size;
-        _cl_routeMap_buffer.getInfo(CL_MEM_SIZE, &size);
-        std::vector<float> h_routeMap_buffer(size/sizeof(float));
-        _cl_command_queue.enqueueReadBuffer(_cl_routeMap_buffer, true, 0, size, &h_routeMap_buffer[0]);
-        std::vector<float> h_routingData(requiredElements*slices);
-        _cl_command_queue.enqueueReadBuffer(d_routingData, true, 0, h_routingData.size() * sizeof(float), &h_routingData[0]);
+          ////debug
+          ////dummy call
+          //size_t size;
+          //_cl_routeMap_buffer.getInfo(CL_MEM_SIZE, &size);
+          //std::vector<float> h_routeMap_buffer(size/sizeof(float));
+          //_cl_command_queue.enqueueReadBuffer(_cl_routeMap_buffer, true, 0, size, &h_routeMap_buffer[0]);
+          //std::vector<float> h_routingData(requiredElements*slices);
+          //_cl_command_queue.enqueueReadBuffer(d_routingData, true, 0, h_routingData.size() * sizeof(float), &h_routingData[0]);
 
-        int* data = new int[_routingNumLocalWorkers*(boundaryElements+1)];
-        uint* queue = new uint[_routingQueueSize];
-        int2 tactiveBufferSize(divup(_blocks[0],8), divup(_blocks[1],8));
-        std::vector<uint> activeBuffer(2*tactiveBufferSize.x*tactiveBufferSize.y*startBlockRange.size(), 0);
-        int localWorkerSize2 = divup(boundaryElements,_routingLocalWorkersWarpSize)*_routingLocalWorkersWarpSize;
-        initKernelData(int2(localWorkerSize2,1), int2(1,1));
+          //int* data = new int[_routingNumLocalWorkers*(boundaryElements+1)];
+          //uint* queue = new uint[_routingQueueSize];
+          //int2 tactiveBufferSize(divup(_blocks[0],8), divup(_blocks[1],8));
+          //std::vector<uint> activeBuffer(2*tactiveBufferSize.x*tactiveBufferSize.y*startBlockRange.size(), 0);
+          //int localWorkerSize2 = divup(boundaryElements,_routingLocalWorkersWarpSize)*_routingLocalWorkersWarpSize;
+          //initKernelData(int2(localWorkerSize2,1), int2(1,1));
 
-        ////check routemap
-        //size_t bels = 2*(_blockSize[0] + _blockSize[1] - 2);
-        //for(size_t i = 0; i < _blocks[0]; ++i)
-        //  for(size_t j = 0; j < _blocks[1]; ++j)
-        //    validateRouteMap(&h_routeMap_buffer[(i + j*_blocks[0])*bels*(bels+1)/2], bels);
+          //////check routemap
+          ////size_t bels = 2*(_blockSize[0] + _blockSize[1] - 2);
+          ////for(size_t i = 0; i < _blocks[0]; ++i)
+          ////  for(size_t j = 0; j < _blocks[1]; ++j)
+          ////    validateRouteMap(&h_routeMap_buffer[(i + j*_blocks[0])*bels*(bels+1)/2], bels);
 
-        routeLocal(h_routeMap_buffer, startBlockRange, routingIds, h_routingData, requiredElements, int2(_blockSize[0], _blockSize[1]), int2(_blocks[0], _blocks[1]), data, queue, _routingQueueSize, &activeBuffer[0], tactiveBufferSize);
+          //routeLocal(h_routeMap_buffer, startBlockRange, routingIds, h_routingData, requiredElements, int2(_blockSize[0], _blockSize[1]), int2(_blocks[0], _blocks[1]), data, queue, _routingQueueSize, &activeBuffer[0], tactiveBufferSize);
 
-        delete[] data;
-        delete[] queue;
-        //
-
-
+          //delete[] data;
+          //delete[] queue;
+          ////
 
 
 
-        //active buffers
-        cl_uint activeBufferSize[] = {divup(_blocks[0],8), divup(_blocks[1],8)};
-        cl::Buffer d_routeActive(_cl_context, CL_MEM_READ_WRITE, 2*activeBufferSize[0]*activeBufferSize[1]*startBlockRange.size()*sizeof(cl_uint));
-        _cl_initMem_kernel.setArg(0, d_routeActive);
-        _cl_initMem_kernel.setArg(1, 0);
-
-        cl::Event clearActiveBufferEvent;
-        _cl_command_queue.enqueueNDRangeKernel
-        (
-         _cl_initMem_kernel,
-          cl::NullRange,
-          cl::NDRange(2*activeBufferSize[0],startBlockRange.size()*activeBufferSize[1]),
-          cl::NullRange,
-          0,
-          &clearActiveBufferEvent
-        );
-        _cl_command_queue.finish();
-        clearActiveBufferEvent.getProfilingInfo(CL_PROFILING_COMMAND_END, &end);
-        clearActiveBufferEvent.getProfilingInfo(CL_PROFILING_COMMAND_START, &start);
-        std::cout << " - clearActiveBuffer: " << (end-start)/1000000.0  << "ms\n";
 
 
+          //active buffers
+          cl_uint activeBufferSize[] = {divup(_blocks[0],8), divup(_blocks[1],8)};
+          cl::Buffer d_routeActive(_cl_context, CL_MEM_READ_WRITE, 2*activeBufferSize[0]*activeBufferSize[1]*startBlockRange.size()*sizeof(cl_uint));
+          _cl_initMem_kernel.setArg(0, d_routeActive);
+          _cl_initMem_kernel.setArg(1, 0);
 
-        _cl_routing_kernel.setArg(0, _cl_routeMap_buffer);
-        _cl_routing_kernel.setArg(1, d_startBlockRange);
-        _cl_routing_kernel.setArg(2, d_routingIds);
-        _cl_routing_kernel.setArg(3, d_routingData);
-        _cl_routing_kernel.setArg(4, requiredElements);
-        _cl_routing_kernel.setArg(5, 2 * sizeof(cl_int), _blockSize);
-        _cl_routing_kernel.setArg(6, 2 * sizeof(cl_int), _blocks);
-        _cl_routing_kernel.setArg(7, _routingNumLocalWorkers*(boundaryElements+1)*sizeof(cl_float), NULL);
-        _cl_routing_kernel.setArg(8, _routingQueueSize * sizeof(cl_int), NULL);
-        _cl_routing_kernel.setArg(9, _routingQueueSize);
-        _cl_routing_kernel.setArg(10, d_routeActive);
-        _cl_routing_kernel.setArg(11, 2 * sizeof(cl_int), activeBufferSize);
+          cl::Event clearActiveBufferEvent;
+          _cl_command_queue.enqueueNDRangeKernel
+          (
+           _cl_initMem_kernel,
+            cl::NullRange,
+            cl::NDRange(2*activeBufferSize[0],startBlockRange.size()*activeBufferSize[1]),
+            cl::NullRange,
+            0,
+            &clearActiveBufferEvent
+          );
+          _cl_command_queue.finish();
+          clearActiveBufferEvent.getProfilingInfo(CL_PROFILING_COMMAND_END, &end);
+          clearActiveBufferEvent.getProfilingInfo(CL_PROFILING_COMMAND_START, &start);
+          std::cout << " - clearActiveBuffer: " << (end-start)/1000000.0  << "ms\n";
+
+
+
+          _cl_routing_kernel.setArg(0, _cl_routeMap_buffer);
+          _cl_routing_kernel.setArg(1, d_startBlockRange);
+          _cl_routing_kernel.setArg(2, d_routingIds);
+          _cl_routing_kernel.setArg(3, d_routingData);
+          _cl_routing_kernel.setArg(4, requiredElements);
+          _cl_routing_kernel.setArg(5, 2 * sizeof(cl_int), _blockSize);
+          _cl_routing_kernel.setArg(6, 2 * sizeof(cl_int), _blocks);
+          _cl_routing_kernel.setArg(7, _routingNumLocalWorkers*(boundaryElements+1)*sizeof(cl_float), NULL);
+          _cl_routing_kernel.setArg(8, _routingQueueSize * sizeof(cl_int), NULL);
+          _cl_routing_kernel.setArg(9, _routingQueueSize);
+          _cl_routing_kernel.setArg(10, d_routeActive);
+          _cl_routing_kernel.setArg(11, 2 * sizeof(cl_int), activeBufferSize);
           
-        int localWorkerSize = divup(boundaryElements,_routingLocalWorkersWarpSize)*_routingLocalWorkersWarpSize;
+          int localWorkerSize = divup(boundaryElements,_routingLocalWorkersWarpSize)*_routingLocalWorkersWarpSize;
 
-        cl::Event routingRoutingEvent;
-        _cl_command_queue.enqueueNDRangeKernel
-        (
-          _cl_routing_kernel,
-          cl::NullRange,
-          cl::NDRange(localWorkerSize*startBlockRange.size(),_routingNumLocalWorkers),
-          cl::NDRange(localWorkerSize,_routingNumLocalWorkers),
-          0,
-          &routingRoutingEvent
-        );
-        _cl_command_queue.finish();
-        routingRoutingEvent.getProfilingInfo(CL_PROFILING_COMMAND_END, &end);
-        routingRoutingEvent.getProfilingInfo(CL_PROFILING_COMMAND_START, &start);
-        std::cout << " - routingRouting: " << (end-start)/1000000.0  << "ms\n";
-        printfBuffer<uint>(_cl_command_queue, d_routeActive, 2*activeBufferSize[0], activeBufferSize[1]*startBlockRange.size(), "activeBuffer");
-        dumpBuffer<float>(_cl_command_queue, d_routingData, requiredElements, slices, "routingRouting");
-      }
+          cl::Event routingRoutingEvent;
+          _cl_command_queue.enqueueNDRangeKernel
+          (
+            _cl_routing_kernel,
+            cl::NullRange,
+            cl::NDRange(localWorkerSize*startBlockRange.size(),_routingNumLocalWorkers),
+            cl::NDRange(localWorkerSize,_routingNumLocalWorkers),
+            0,
+            &routingRoutingEvent
+          );
+          _cl_command_queue.finish();
+          routingRoutingEvent.getProfilingInfo(CL_PROFILING_COMMAND_END, &end);
+          routingRoutingEvent.getProfilingInfo(CL_PROFILING_COMMAND_START, &start);
+          std::cout << " - routingRouting: " << (end-start)/1000000.0  << "ms\n";
+          //printfBuffer<uint>(_cl_command_queue, d_routeActive, 2*activeBufferSize[0], activeBufferSize[1]*startBlockRange.size(), "activeBuffer");
+          //dumpBuffer<float>(_cl_command_queue, d_routingData, requiredElements, slices, "routingRouting");
+        }
 
 
 
-      ++levelNodesit;
-      ++levelHyperEdgesit;
+        ++levelNodesit;
+        ++levelHyperEdgesit;
+      }   
     }
 
-    //top down route construction
-    //get minimum of top node
-    // _cl_getMinimum_kernel;
-
-    
-
-    for(auto it = levelNodes.begin(); it != levelNodes.end(); ++it)
+    //top down route reconstruction   
     {
-      // _cl_routeInOut_kernel;
-      // _cl_routeInterBlock_kernel;
-      // _cl_routeConstruct_kernel;
+
+      std::map<LinkDescription::HyperEdge*, uint[2]> hyperEdgeCenters;
+      std::map<LinkDescription::Node*, uint[2]> nodePositions;
+      auto levelNodesit = levelNodes.begin();
+      auto levelHyperEdgesit = levelHyperEdges.begin();
+      for( ; levelNodesit != levelNodes.end() ||  levelHyperEdgesit != levelHyperEdges.end() ;
+          ++levelNodesit, ++levelHyperEdgesit )
+      {
+        std::vector<const LinkDescription::Node* > needMinSearchNodes;
+        std::vector<const LinkDescription::HyperEdge* > needMinSearchHyperEdges;
+        std::vector<uint> needMinSearchIds;
+        std::vector<uint> needMinSearchOffsets;
+        std::vector<uint> needMinSearchChildren;
+
+        //for free nodes with no position find the minimum
+        for(auto nodeit = levelNodesit->begin(); nodeit != levelNodesit->end(); ++nodeit)
+          if((*nodeit)->getChildren().size() > 0 && nodePositions.find((*nodeit)) == nodePositions.end())
+          {
+            needMinSearchNodes.push_back(*nodeit);
+            needMinSearchIds.push_back(nodeMemMap.find(*nodeit)->second);
+
+            needMinSearchOffsets.push_back(needMinSearchChildren.size());
+            for(auto childIt = (*nodeit)->getChildren().begin();
+              childIt != (*nodeit)->getChildren().end();
+              ++childIt)
+              needMinSearchChildren.push_back(hyperEdgeMemMap.find(*childIt)->second);
+          }
+
+        //for hyperedges with no parents find the minimum
+        for(auto edgeit = levelHyperEdgesit->begin(); edgeit != levelHyperEdgesit->end(); ++edgeit)
+          if((*edgeit)->getNodes().size() > 0 && hyperEdgeCenters.find(*edgeit) == hyperEdgeCenters.end())
+          {
+            needMinSearchHyperEdges.push_back(*edgeit);
+            needMinSearchIds.push_back(hyperEdgeMemMap.find(*edgeit)->second);
+
+            needMinSearchOffsets.push_back(needMinSearchChildren.size());
+            for(auto childIt = (*edgeit)->getNodes().begin();
+              childIt != (*edgeit)->getNodes().end();
+              ++childIt)
+              needMinSearchChildren.push_back(nodeMemMap.find(&(*childIt))->second);
+          }
+        needMinSearchOffsets.push_back(needMinSearchChildren.size());
+
+        // _cl_voteMinimum_kernel;
+        // _cl_getMinimum_kernel;
+
+
+
+
+        std::vector<const LinkDescription::Node* > needRouteConstructionNodes;
+        std::vector<const LinkDescription::HyperEdge* > needRouteConstructionEdges;
+
+        std::vector< uint4 > needRouteConstructionInfo;
+        std::vector< uint >  needRouteConstructionElements;
+        std::vector< int4 >  needRouteConstructionEndElements;
+
+        //for free nodes go to child hyperedges
+        for(auto nodeit = levelNodesit->begin(); nodeit != levelNodesit->end(); ++nodeit)
+          if((*nodeit)->getChildren().size() > 0)
+          {
+            auto found = nodePositions.find((*nodeit));
+
+            needRouteConstructionNodes.push_back(*nodeit);
+            needRouteConstructionInfo.push_back(uint4(found->second[0], found->second[1], needRouteConstructionElements.size(),0));
+            for(auto childIt = (*nodeit)->getChildren().begin();
+              childIt != (*nodeit)->getChildren().end();
+              ++childIt)
+            {
+              needRouteConstructionElements.push_back(hyperEdgeMemMap.find(*childIt)->second);
+              needRouteConstructionEndElements.push_back(int4(-1,-1,-1,-1));
+            }
+          }
+
+        //for hyperedges go to nodes
+        for(auto edgeit = levelHyperEdgesit->begin(); edgeit != levelHyperEdgesit->end(); ++edgeit)
+          if((*edgeit)->getNodes().size() > 0)
+          {
+            auto found = hyperEdgeCenters.find((*edgeit));
+
+            needRouteConstructionEdges.push_back(*edgeit);
+            needRouteConstructionInfo.push_back(uint4(found->second[0], found->second[1], needRouteConstructionElements.size(),0));
+            for(auto childIt = (*edgeit)->getNodes().begin();
+              childIt != (*edgeit)->getNodes().end();
+              ++childIt)
+            {
+              //pushback startnodes
+              int4 target;
+              if(!getTargetRect(childIt->getVertices(), target, downsample, _buffer_width, _buffer_height))
+                continue;
+              needRouteConstructionEndElements.push_back(target);
+              needRouteConstructionElements.push_back(nodeMemMap.find(&(*childIt))->second);
+            }
+          }
+      
+        needRouteConstructionInfo.push_back(uint4(0,0, needRouteConstructionElements.size(),0));
+
+        // _cl_routeInOut_kernel;
+        // _cl_routeInterBlock_kernel;
+        // _cl_routeConstruct_kernel;
+      }
     }
     
   }

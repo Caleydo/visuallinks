@@ -410,6 +410,7 @@ bool route_data(local float const * l_cost,
 }
 
 
+
 float loadCostToLocalAndSetRoute(const int2 group_id, const int2 gid, const int2 dim, global const float* g_cost, local float* l_cost, local float* l_route)
 {
   int lid = get_local_id(0) + get_local_id(1)*get_local_size(0);
@@ -496,6 +497,31 @@ __kernel void prepareBorderCosts(global float* routedata)
   routedata[get_global_id(0) + get_global_size(0)*get_global_id(1)] = 0.01f*MAXFLOAT;
 }
 
+__kernel void prepareIndividualRoutingParent(global float* routedata,
+                                             const global uint* sourcesOffset,
+                                             const global uint* sourcesData,
+                                             const global uint* targets,
+                                             const int targetOffset,
+                                             const int routeDataPerNode,
+                                             const float B)
+{
+  int pos = get_global_id(0);
+  int layer = get_global_id(1);
+  //get id of sources
+  int sourcesStart = sourcesOffset[layer];
+  int sources = sourcesOffset[layer+1] - sourcesOffset[layer];
+
+  //sum up sources
+  float sum = 0;
+  for(int i = 0; i < sources; ++i)
+    sum += routedata[sourcesData[sourcesStart + i]*routeDataPerNode + pos];
+
+  //adjust
+  sum = sum/(B*sources);
+
+  //write
+  routedata[targets[targetOffset+layer]*routeDataPerNode + pos] = sum;
+}
 
 __kernel void prepareIndividualRouting(const global float* costmap,
                                        global float* routedata,
@@ -841,15 +867,21 @@ __kernel void routeLocal(global const float* routeMap,
   int queueElements = (ourInit.w-ourInit.y)*(ourInit.z-ourInit.x);
   int posoffset = (ourInit.z-ourInit.x)*get_local_id(1);
   int2 seedBlock = (int2)((ourInit.x+ourInit.z)/2, (ourInit.y+ourInit.w)/2);
+
   for(int y = ourInit.y + get_local_id(1); y < ourInit.w; y+= get_local_size(1))
   {
     for(int x = get_local_id(0); x < (ourInit.z - ourInit.x); x += get_local_size(0))
     {
       int pos = posoffset + x;
-      queue[pos] = createQueueEntry((int2)(ourInit.x+x, y), 0, 0);       
+      int2 blockId = (int2)(ourInit.x+x, y);
+      if(pos < queueSize)
+        queue[pos] = createQueueEntry(blockId, 0, 0);
+      else
+        setActiveBlock(activeBuffer + 2*activeBufferSize.x*activeBufferSize.y*get_group_id(0), seedBlock, blockId, activeBufferSize);
     }
     posoffset += (ourInit.z-ourInit.x);
   }
+  queueElements = min(queueElements, queueSize);
   barrier(CLK_LOCAL_MEM_FENCE);
 
   while(queueElements)
@@ -885,6 +917,7 @@ __kernel void routeLocal(global const float* routeMap,
           route_mycost = min(newcost, route_mycost);
         }
     
+        //TODO: extension in opencl 1.0!
         if(route_mycost + 0.0001f < route_origCost)
           //atomic as multiple might be working on the same
           atomic_min((volatile global unsigned int*)(routingData + route_gid), as_uint(route_mycost));
@@ -1044,46 +1077,115 @@ __kernel void routeLocal(global const float* routeMap,
  
 }
 
-__kernel void getMinimum(global const float* routecost,
-                         //volatile global QueueGlobal* queueInfo,
-                         volatile global ushort2* coordinates,
-                         const int2 dim,
-                         int targets)
+
+
+__kernel void voteMinimum( global const float* routecost,
+                           global const uint* ids,
+                           const int routeDataPerNode,
+                           const int2 numBlocks,
+                           const int2 blockSize,
+                           global volatile float* vote)
 {
-  //float cost = 0;
-  //for(int i = 0; i < targets; ++i)
-  //  cost += routecost[dim.x*get_global_id(1) + get_global_id(0) + dim.x*dim.y*i];
+  __local volatile float mymax;
+  mymin = 0;
+  barrier(CLK_LOCAL_MEM_FENCE);
 
-  //__local uint localmin;
-  //__local uint2 coords;
-  //localmin = as_uint(MAXFLOAT);
+  int lid = get_local_id(0);
+  int2 blockId = (int2)(get_group_id(0), get_group_id(1));
+  int mynode = ids[get_global_id(2)];
+  int mydata_offset = mynode*routeDataPerNode + getCostGlobalId(lid, blockId, blockSize, numBlocks);
+  float myval = routecost[mydata_offset];
 
-  //barrier(CLK_LOCAL_MEM_FENCE);
+  //TODO: do that in shared memory..
+  atomic_min((volatile uint*)(&mymin), as_uint(myval));
+  barrier(CLK_LOCAL_MEM_FENCE);
 
-  //atomic_min(&localmin, as_uint(cost));
+  if(lid == 0)
+    atomic_min((volatile uint*)(&vote), as_uint(mymax));
+}
 
-  //barrier(CLK_LOCAL_MEM_FENCE);
+__kernel void getMinimum( global const float* costmap,
+                          global const float* routecost,
+                          global const uint* ids,
+                          global const uint* childIds,
+                          global const uint* childIdOffsets,
+                          const int routeDataPerNode,
+                          const int2 numBlocks,
+                          const int2 blockSize,
+                          const int2 dim,
+                          global const float* vote,
+                          local float* l_route,
+                          local float* l_cost,
+                          global volatile uint* results)
+{
+   __local bool should_try;
+  mymin = MAXFLOAT;
+  barrier(CLK_LOCAL_MEM_FENCE);
 
-  //if(localmin == as_uint(cost))
-  //  coords = (uint2)(get_global_id(0), get_global_id(1));
+  int2 blockId = (int2)(get_group_id(0), get_group_id(1));
+  int2 gid2 = (int2)(blockId.x * (blockSize.x-1) + get_local_id(0),
+                    (blockId.y * (blockSize.y-1) + get_local_id(1));
+  int2 lid2 = int2)(get_local_id(0),get_local_id(1));
+  int lid =  borderId(lid2, blockSize);
+  int mydata_offset = -1;
+  
+  float myroutecost = 0.1f*MAXFLOAT;
+  if(lid >= 0)
+  {
+    int mynode = ids[get_global_id(2)];
+    mydata_offset = getCostGlobalId(lid, blockId, blockSize, numBlocks);
+    myroutecost = routecost[mynode*routeDataPerNode +  mydata_offset];
+  }
 
-  //barrier(CLK_LOCAL_MEM_FENCE);
+  //TODO: do that in shared memory..
+  atomic_min((volatile uint*)(&mymin), as_uint(myroutecost));
+  barrier(CLK_LOCAL_MEM_FENCE);
 
-  //if( (get_local_id(0) + get_local_id(1)) == 0 )
-  //{
-  //  uint minv = as_uint(localmin);
-  //  //compress it
-  //  minv = (minv << 1) & 0xFFFFFF00;
-  //  //combine with block id
-  //  uint groupv = (get_group_id(0) + get_group_id(1)*get_num_groups(0)) & 0xFF;
-  //  uint combined = minv | groupv;
-  //  uint old = atomic_min(&queueInfo->mincost, combined);
-  //  if(old > combined)
-  //  {
-  //    //write coords to array entry
-  //    coordinates[groupv] = (ushort2)(coords.x,coords.y);
-  //  }
-  //}
+  if(mymin <= vote + 0.001f)
+    should_try = true;
+
+  barrier(CLK_LOCAL_MEM_FENCE);
+
+  if(!should_try)
+    return;
+
+  
+  //this block could contain the minimum, so construct all routes
+  mymin = MAXFLOAT;
+
+  float accumulate = 0;
+  loadCostToLocalAndSetRoute(blockId, gid2, dim, costmap, l_cost, l_route);
+
+  for(int offset = childIdOffsets[get_global_id(2)]; offset < childIdOffsets[get_global_id(2) + 1]; ++offset)
+  {
+    barrier(CLK_LOCAL_MEM_FENCE);
+    int thisNode = childIds[offset];
+
+    float mydata = 0.1f*MAXFLOAT;
+    if(mydata_offset >= 0)
+       mydata = routecost[thisNode*routeDataPerNode +  mydata_offset];
+    *accessLocalCost(l_route, lid2) = mydata;
+    barrier(CLK_LOCAL_MEM_FENCE);
+
+    //route
+    route_data(l_cost, l_route);
+    barrier(CLK_LOCAL_MEM_FENCE);
+
+    //accumulate
+    accumulate += *accessLocalCost(l_route, lid2);
+  }
+
+  //get the minimum TODO: reduction..
+  atomic_min((volatile uint*)(&mymin), as_uint(accumulate));
+  barrier(CLK_LOCAL_MEM_FENCE);
+
+  if(mymin == accumulate)
+  {
+    uint offset = atomic_add(results, 3);
+    results[offset] = as_uint(accumulate);
+    results[offset+1] = gid.x;
+    results[offset+2] = gid.y;
+  }
 }
 
 

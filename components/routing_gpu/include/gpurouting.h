@@ -106,6 +106,8 @@ namespace LinksRouting
         }
       };
 
+      double _Bvalue;
+
       std::map<std::string, LinkInfo>   _link_infos;
 
       cl::Context       _cl_context;
@@ -118,10 +120,12 @@ namespace LinksRouting
       cl::Kernel  _cl_updateRouteMap_kernel;
       cl::Kernel  _cl_prepareBorderCosts_kernel;
       cl::Kernel  _cl_prepareIndividualRouting_kernel;
+      cl::Kernel  _cl_prepareIndividualRoutingParent_kernel;
       cl::Kernel  _cl_runIndividualRoutings_kernel;
       cl::Kernel  _cl_fillUpIndividualRoutings_kernel;
       cl::Kernel  _cl_routing_kernel;
 
+      cl::Kernel  _cl_voteMinimum_kernel;
       cl::Kernel  _cl_getMinimum_kernel;
       cl::Kernel  _cl_routeInOut_kernel;
       cl::Kernel  _cl_routeInterBlock_kernel;
