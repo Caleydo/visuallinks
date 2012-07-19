@@ -209,7 +209,7 @@ bool Dequeue(volatile global QueueGlobal* queueInfo,
 
 //prefix sum
 //elements needs to be power of two and local_size(0) >= elements/2, data must be able to hold one more element
-uint scanLocalWorkEfficient(__local uint* data, size_t linId, size_t elements)
+uint scanLocalWorkEfficient(__local volatile uint* data, size_t linId, size_t elements)
 {
   //up
   size_t offset = 1;
@@ -224,8 +224,9 @@ uint scanLocalWorkEfficient(__local uint* data, size_t linId, size_t elements)
     }
     offset *= 2;
   }
+  barrier(CLK_LOCAL_MEM_FENCE);
   //write out and clear last
-  if (linId)
+  if (linId == 0)
   {
     data[elements] = data[elements - 1];
     data[elements - 1] = 0;
@@ -712,10 +713,10 @@ int2 activeBlockToId(const int2 seedBlock, const int spiralIdIn, const int2 acti
       break;
     }
   }
-  return (int2)(resId.x*8, resId.y*8 + (spiralIdIn%1)*4);
+  return (int2)(resId.x*8, resId.y*8 + (spiralIdIn&1)*4);
 }
 
-uint2 getActiveBlock(const int2 seedBlock, const int2 blockId, const int2 activeBlocksSize)
+int2 getActiveBlock(const int2 seedBlock, const int2 blockId, const int2 activeBlocksSize)
 {
   int2 seedAB = (int2)(seedBlock.x/8, seedBlock.y/8);
   int2 blockAB = (int2)(blockId.x/8, blockId.y/8);
@@ -774,17 +775,36 @@ uint2 getActiveBlock(const int2 seedBlock, const int2 blockId, const int2 active
   int second = interBlock.y >= 4;
   interBlock.y -= second*4;
   uint mask = 1u << (uint)(interBlock.x + interBlock.y*8);
-  return (uint2)(2*offset + second, mask);
+  return (int2)(2*offset + second, mask);
 }
 void unsetActiveBlock(volatile global uint* myActiveBlock, const int2 seedBlock, const int2 blockId, const int2 activeBlocksSize)
 {
-  uint2 tblock = getActiveBlock(seedBlock, blockId, activeBlocksSize);
+  int2 tblock = getActiveBlock(seedBlock, blockId, activeBlocksSize);
   atomic_and(myActiveBlock + tblock.x, ~tblock.y);
 }
 void setActiveBlock(volatile global uint* myActiveBlock, const int2 seedBlock, const int2 blockId, const int2 activeBlocksSize)
 {
-  uint2 tblock = getActiveBlock(seedBlock, blockId, activeBlocksSize);
-  atomic_or(myActiveBlock + tblock.x, (uint)tblock.y);
+  int2 tblock = getActiveBlock(seedBlock, blockId, activeBlocksSize);
+  atomic_or(myActiveBlock + tblock.x, tblock.y);
+}
+
+uint scanLocalWorkEfficientDummy(__local volatile  uint* data, size_t linId, size_t elements)
+{
+
+  barrier(CLK_LOCAL_MEM_FENCE);
+  if(linId == 0)
+  {
+    uint v = 0;
+    for(size_t i = 0; i < elements; ++i)
+    {
+      uint t = v;
+      v += data[i];
+      data[i] = t;
+    }
+    data[elements] = v;
+  }
+  barrier(CLK_LOCAL_MEM_FENCE);
+  return data[elements];
 }
 
 __kernel void routeLocal(global const float* routeMap,
@@ -795,7 +815,7 @@ __kernel void routeLocal(global const float* routeMap,
                          const int2 blockSize,
                          const int2 numBlocks,
                          local int* data,
-                         local uint* queue,
+                         local volatile uint* queue,
                          const int queueSize,
                          volatile global uint* activeBuffer,
                          const int2 activeBufferSize)
@@ -992,6 +1012,7 @@ __kernel void routeLocal(global const float* routeMap,
       barrier(CLK_LOCAL_MEM_FENCE);
       
       //run prefix sum
+      //scanLocalWorkEfficientDummy(queue + queueSize/2-1, linId, pullers);
       scanLocalWorkEfficient(queue + queueSize/2-1, linId, pullers);
 
       //put into queue

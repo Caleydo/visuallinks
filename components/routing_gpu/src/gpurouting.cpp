@@ -1555,7 +1555,7 @@ int2 activeBlockToId(const int2 seedBlock, const int spiralIdIn, const int2 acti
     }
   }
   
-  return int2(resId.x*8, resId.y*8 + (spiralIdIn%1)*4);
+  return int2(resId.x*8, resId.y*8 + (spiralIdIn&1)*4);
 
 }
 
@@ -1694,6 +1694,7 @@ void routeLocal( std::vector<float>& routeMap,
   
   int2 seedBlock;
   std::vector<int> routed(numBlocks.x*numBlocks.y, 0);
+  std::set<uint> activeBufferCheck;
 
    bool thisRunChange;
   //do
@@ -1743,6 +1744,7 @@ void routeLocal( std::vector<float>& routeMap,
                   l_routeData,
                   l_changedData);
         unsetActiveBlock(activeBuffer + 2*activeBufferSize.x*activeBufferSize.y*get_group_id(0), seedBlock, blockId, activeBufferSize);
+        activeBufferCheck.erase((blockId.y << 16) | blockId.x);
         ++routed[blockId.x + blockId.y*numBlocks.x];
         do {
           changed_data[get_local_id(0) + get_local_size(0)*get_local_id(1)] = changed;
@@ -1793,11 +1795,12 @@ void routeLocal( std::vector<float>& routeMap,
           queueFront = (queueFront + queueSize) % queueSize;
 
           //insert new entry
-          if(queueElements >= queueSize)
+          if(queueElements == queueSize)
           {
             queueElements = queueSize-1;
+            //std::cout << "putting in: " << readQueueEntry(queue[queueFront]).x << ", " << readQueueEntry(queue[queueFront]).y << std::endl;
+            activeBufferCheck.insert((readQueueEntry(queue[queueFront]).y << 16) | readQueueEntry(queue[queueFront]).x);
             setActiveBlock(activeBuffer + 2*activeBufferSize.x*activeBufferSize.y*get_group_id(0), seedBlock, readQueueEntry(queue[queueFront]), activeBufferSize);
-        
           }
           
 
@@ -1901,6 +1904,13 @@ void routeLocal( std::vector<float>& routeMap,
               {
                 if(myentry & 0x1)
                 {
+                  //std::cout << "taking out: " << (myOffset + additionalOffset).x << ", " << (myOffset + additionalOffset).y << std::endl;
+
+                  auto found = activeBufferCheck.find( ((myOffset + additionalOffset).y << 16) |  (myOffset + additionalOffset).x);
+                  if(found == activeBufferCheck.end())
+                    std::cout << "oh no!\n";
+                  else
+                    activeBufferCheck.erase(found);
                   queue[queueElements + queue[queueSize/2-1 + linId] + inserted] = createQueueEntry(myOffset + additionalOffset , 0, 0);
                   ++inserted;
                 }
@@ -2542,7 +2552,7 @@ void prepareIndividualRoutingDummy(const float* costmap,
         int localWorkerSize = divup(boundaryElements,_routingLocalWorkersWarpSize)*_routingLocalWorkersWarpSize;
 
         cl::Event routingRoutingEvent;
-        //_routingNumLocalWorkers = 1;
+        _routingNumLocalWorkers = 1;
         _cl_command_queue.enqueueNDRangeKernel
         (
           _cl_routing_kernel,
