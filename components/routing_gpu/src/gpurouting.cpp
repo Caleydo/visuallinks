@@ -2621,15 +2621,15 @@ void prepareIndividualRoutingDummy(const float* costmap,
     //top down route reconstruction   
     {
 
-      std::map<LinkDescription::HyperEdge*, uint[2]> hyperEdgeCenters;
-      std::map<LinkDescription::Node*, uint[2]> nodePositions;
+      std::map<LinkDescription::HyperEdge*, int2> hyperEdgeCenters;
+      std::map<LinkDescription::Node*, int2> nodePositions;
       auto levelNodesit = levelNodes.begin();
       auto levelHyperEdgesit = levelHyperEdges.begin();
       for( ; levelNodesit != levelNodes.end() ||  levelHyperEdgesit != levelHyperEdges.end() ;
           ++levelNodesit, ++levelHyperEdgesit )
       {
-        std::vector<const LinkDescription::Node* > needMinSearchNodes;
-        std::vector<const LinkDescription::HyperEdge* > needMinSearchHyperEdges;
+        std::vector<LinkDescription::Node* > needMinSearchNodes;
+        std::vector<LinkDescription::HyperEdge* > needMinSearchHyperEdges;
         std::vector<uint> needMinSearchIds;
         std::vector<uint> needMinSearchOffsets;
         std::vector<uint> needMinSearchChildren;
@@ -2662,9 +2662,121 @@ void prepareIndividualRoutingDummy(const float* costmap,
               needMinSearchChildren.push_back(nodeMemMap.find(&(*childIt))->second);
           }
         needMinSearchOffsets.push_back(needMinSearchChildren.size());
+              
+        if(needMinSearchIds.size() > 0)
+        {
+          cl::Buffer d_needMinSearchIds(_cl_context, CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR, needMinSearchIds.size()*sizeof(uint), &needMinSearchIds[0]);
+          cl::Buffer d_needMinSearchOffsets(_cl_context, CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR, needMinSearchOffsets.size()*sizeof(uint), &needMinSearchOffsets[0]);
+          cl::Buffer d_needMinSearchChildren(_cl_context, CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR, needMinSearchChildren.size()*sizeof(uint), &needMinSearchChildren[0]);
+        
+          std::vector<float> voteMin(needMinSearchIds.size(), 99999999.f);
+          cl::Buffer d_voteMin(_cl_context, CL_MEM_READ_WRITE | CL_MEM_COPY_HOST_PTR, voteMin.size()*sizeof(float), &voteMin[0]);
 
-        // _cl_voteMinimum_kernel;
-        // _cl_getMinimum_kernel;
+          _cl_voteMinimum_kernel.setArg(0, d_routingData);
+          _cl_voteMinimum_kernel.setArg(1, d_needMinSearchIds);
+          _cl_voteMinimum_kernel.setArg(2, requiredElements);
+          _cl_voteMinimum_kernel.setArg(3, 2 * sizeof(cl_int), _blockSize);
+          _cl_voteMinimum_kernel.setArg(4, 2 * sizeof(cl_int), _blocks);
+          _cl_voteMinimum_kernel.setArg(5, d_voteMin);
+          
+          cl::Event routingVoteMinEvent;
+          _cl_command_queue.enqueueNDRangeKernel
+          (
+            _cl_voteMinimum_kernel,
+            cl::NullRange,
+            cl::NDRange(boundaryElements*_blocks[0],_blocks[1],needMinSearchIds.size()),
+            cl::NDRange(boundaryElements,1,1),
+            0,
+            &routingVoteMinEvent
+          );
+          _cl_command_queue.finish();
+          //debug
+          _cl_command_queue.enqueueReadBuffer(d_voteMin, true, 0, voteMin.size()*sizeof(float), &voteMin[0]);
+          //
+          routingVoteMinEvent.getProfilingInfo(CL_PROFILING_COMMAND_END, &end);
+          routingVoteMinEvent.getProfilingInfo(CL_PROFILING_COMMAND_START, &start);
+          std::cout << " - routingVoteMin: " << (end-start)/1000000.0  << "ms\n";
+
+
+          int maxResults = 3*32+1;
+          std::vector<uint> minSearchResults(needMinSearchIds.size()*maxResults, 0xFFFFFFFF);
+          for(int i = 0; i < needMinSearchIds.size(); ++i)
+            minSearchResults[i*maxResults] = 1;
+          cl::Buffer d_minSearchResults(_cl_context, CL_MEM_READ_WRITE | CL_MEM_COPY_HOST_PTR, minSearchResults.size()*sizeof(uint), &minSearchResults[0]);
+          
+          _cl_getMinimum_kernel.setArg(0, _cl_lastCostMap_buffer);
+          _cl_getMinimum_kernel.setArg(1, d_routingData);
+          _cl_getMinimum_kernel.setArg(2, d_needMinSearchIds);
+          _cl_getMinimum_kernel.setArg(3, d_needMinSearchChildren);
+          _cl_getMinimum_kernel.setArg(4, d_needMinSearchOffsets);
+          _cl_getMinimum_kernel.setArg(5, requiredElements);
+          _cl_getMinimum_kernel.setArg(6, 2 * sizeof(cl_int), _blockSize);
+          _cl_getMinimum_kernel.setArg(7, 2 * sizeof(cl_int), _blocks);
+          _cl_getMinimum_kernel.setArg(8, 2 * sizeof(cl_int), bufferDim);
+          _cl_getMinimum_kernel.setArg(9, d_voteMin);
+          _cl_getMinimum_kernel.setArg(10, sizeof(float)*(_blockSize[0]+2)*(_blockSize[1]+2), NULL);
+          _cl_getMinimum_kernel.setArg(11, sizeof(float)*(_blockSize[0]+2)*(_blockSize[1]+2), NULL);
+          _cl_getMinimum_kernel.setArg(12, d_minSearchResults);
+          _cl_getMinimum_kernel.setArg(13, maxResults);
+
+          cl::Event routingGetMinEvent;
+          _cl_command_queue.enqueueNDRangeKernel
+          (
+            _cl_getMinimum_kernel,
+            cl::NullRange,
+            cl::NDRange(_blockSize[0]*_blocks[0],_blockSize[1]*_blocks[1],needMinSearchIds.size()),
+            cl::NDRange(_blockSize[0],_blockSize[1],1),
+            0,
+            &routingGetMinEvent
+          );
+          _cl_command_queue.finish();
+          routingGetMinEvent.getProfilingInfo(CL_PROFILING_COMMAND_END, &end);
+          routingGetMinEvent.getProfilingInfo(CL_PROFILING_COMMAND_START, &start);
+          std::cout << " - routingGetMin: " << (end-start)/1000000.0  << "ms\n";
+
+          _cl_command_queue.enqueueReadBuffer(d_minSearchResults, true, 0, minSearchResults.size()*sizeof(uint), &minSearchResults[0]);
+          auto thisdatastart = minSearchResults.begin();
+          for(auto nit = needMinSearchNodes.begin(); nit != needMinSearchNodes.end(); ++nit)
+          {
+            //find min among all results
+            auto thisdataend = thisdatastart + maxResults;
+            float min_cost = 99999999.f;
+            auto resContainer = nodePositions.insert(std::pair<LinkDescription::Node*, int2>(*nit, int2(0,0))).first;
+            for(++thisdatastart; thisdatastart < thisdataend; thisdatastart+=3)
+            {
+              if( *thisdatastart == 0xFFFFFFFF) 
+                break;
+              if(min_cost > *reinterpret_cast<float*>(&(*thisdatastart)))
+              {
+                min_cost = *reinterpret_cast<float*>(&(*thisdatastart));
+                resContainer->second.x= *(thisdatastart+1);
+                resContainer->second.y = *(thisdatastart+2);
+              }
+            }
+            thisdatastart = thisdataend;
+          }
+          for(auto eit = needMinSearchHyperEdges.begin(); eit != needMinSearchHyperEdges.end(); ++eit)
+          {
+            //find min among all results
+            auto thisdataend = thisdatastart + maxResults;
+            float min_cost = 99999999.f;
+            auto resContainer = hyperEdgeCenters.insert(std::pair<LinkDescription::HyperEdge*, int2>(*eit, int2(0,0))).first;
+            for(++thisdatastart; thisdatastart < thisdataend; thisdatastart+=3)
+            {
+              if( *thisdatastart == 0xFFFFFFFF) 
+                break;
+              if(min_cost > *reinterpret_cast<float*>(&(*thisdatastart)))
+              {
+                min_cost = *reinterpret_cast<float*>(&(*thisdatastart));
+                resContainer->second.x = *(thisdatastart+1);
+                resContainer->second.y = *(thisdatastart+2);
+              }
+            }
+            thisdatastart = thisdataend;
+          }        
+        }
+
+        
 
 
 

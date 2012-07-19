@@ -1082,12 +1082,12 @@ __kernel void routeLocal(global const float* routeMap,
 __kernel void voteMinimum( global const float* routecost,
                            global const uint* ids,
                            const int routeDataPerNode,
-                           const int2 numBlocks,
                            const int2 blockSize,
+                           const int2 numBlocks,
                            global volatile float* vote)
 {
-  __local volatile float mymax;
-  mymin = 0;
+  __local volatile float mymin;
+  mymin = 0.1f*MAXFLOAT;
   barrier(CLK_LOCAL_MEM_FENCE);
 
   int lid = get_local_id(0);
@@ -1097,11 +1097,11 @@ __kernel void voteMinimum( global const float* routecost,
   float myval = routecost[mydata_offset];
 
   //TODO: do that in shared memory..
-  atomic_min((volatile uint*)(&mymin), as_uint(myval));
+  atomic_min((volatile local uint*)(&mymin), as_uint(myval));
   barrier(CLK_LOCAL_MEM_FENCE);
 
   if(lid == 0)
-    atomic_min((volatile uint*)(&vote), as_uint(mymax));
+    atomic_min((volatile global uint*)(vote+get_global_id(2)), as_uint(mymin));
 }
 
 __kernel void getMinimum( global const float* costmap,
@@ -1110,22 +1110,23 @@ __kernel void getMinimum( global const float* costmap,
                           global const uint* childIds,
                           global const uint* childIdOffsets,
                           const int routeDataPerNode,
-                          const int2 numBlocks,
                           const int2 blockSize,
+                          const int2 numBlocks,
                           const int2 dim,
                           global const float* vote,
                           local float* l_route,
                           local float* l_cost,
-                          global volatile uint* results)
+                          global volatile uint* results,
+                          const int maxresults)
 {
-   __local bool should_try;
-  mymin = MAXFLOAT;
+  __local bool should_try;
+  should_try = false;
   barrier(CLK_LOCAL_MEM_FENCE);
 
   int2 blockId = (int2)(get_group_id(0), get_group_id(1));
   int2 gid2 = (int2)(blockId.x * (blockSize.x-1) + get_local_id(0),
-                    (blockId.y * (blockSize.y-1) + get_local_id(1));
-  int2 lid2 = int2)(get_local_id(0),get_local_id(1));
+                     blockId.y * (blockSize.y-1) + get_local_id(1));
+  int2 lid2 = (int2)(get_local_id(0),get_local_id(1));
   int lid =  borderId(lid2, blockSize);
   int mydata_offset = -1;
   
@@ -1138,10 +1139,9 @@ __kernel void getMinimum( global const float* costmap,
   }
 
   //TODO: do that in shared memory..
-  atomic_min((volatile uint*)(&mymin), as_uint(myroutecost));
   barrier(CLK_LOCAL_MEM_FENCE);
 
-  if(mymin <= vote + 0.001f)
+  if(myroutecost <= vote[get_global_id(2)] + 0.0001f)
     should_try = true;
 
   barrier(CLK_LOCAL_MEM_FENCE);
@@ -1151,6 +1151,7 @@ __kernel void getMinimum( global const float* costmap,
 
   
   //this block could contain the minimum, so construct all routes
+  __local float mymin;
   mymin = MAXFLOAT;
 
   float accumulate = 0;
@@ -1176,15 +1177,18 @@ __kernel void getMinimum( global const float* costmap,
   }
 
   //get the minimum TODO: reduction..
-  atomic_min((volatile uint*)(&mymin), as_uint(accumulate));
+  atomic_min((volatile local uint*)(&mymin), as_uint(accumulate));
   barrier(CLK_LOCAL_MEM_FENCE);
 
   if(mymin == accumulate)
   {
-    uint offset = atomic_add(results, 3);
-    results[offset] = as_uint(accumulate);
-    results[offset+1] = gid.x;
-    results[offset+2] = gid.y;
+    uint offset = atomic_add(results + get_global_id(2)*maxresults, 3);
+    if(offset + 3 < maxresults)
+    {
+      results[offset + get_global_id(2)*maxresults] = as_uint(accumulate);
+      results[offset+1 + get_global_id(2)*maxresults] = gid2.x;
+      results[offset+2 + get_global_id(2)*maxresults] = gid2.y;
+    }
   }
 }
 
