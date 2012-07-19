@@ -699,7 +699,7 @@ int2 activeBlockToId(const int2 seedBlock, const int spiralIdIn, const int2 acti
       }
       if(allspirals.w < activeBlocksSize.y-1)
       {
-        int bottomelements = allspirals.w - allspirals.y + 2;
+        int bottomelements = allspirals.z - allspirals.x + 2;
         if(myoffset < bottomelements)
         {
           resId = (int2)(allspirals.z - myoffset, allspirals.w + 1);
@@ -992,12 +992,14 @@ __kernel void routeLocal(global const float* routeMap,
 
     //get back active blocks
     //to a maximum of queueSize/4 elements
+    barrier(CLK_LOCAL_MEM_FENCE);
     queueFront = 0;
     uint pullers = min(queueSize/2, (int)(get_local_size(0)*get_local_size(1)) );
     int pullRun = 0;
-    int pullId = linId;
+    
     while(queueElements < queueSize/4 && pullRun * pullers < 2*activeBufferSize.x*activeBufferSize.y)
     {
+      int pullId = pullRun * pullers + linId;
       uint myentry = 0;
       uint canOffer = 0;
       if(linId < pullers)
@@ -1022,7 +1024,7 @@ __kernel void routeLocal(global const float* routeMap,
         int2 myOffset = activeBlockToId(seedBlock, pullId, activeBufferSize);
 
         int2 additionalOffset = (int2)(0,0);
-        for(int inserted = 0; additionalOffset.y < 4; ++additionalOffset.y)
+        for(int inserted = 0; additionalOffset.y < 4 && inserted < myElements; ++additionalOffset.y)
           for(additionalOffset.x = 0; additionalOffset.x < 8 && inserted < myElements; ++additionalOffset.x, myentry >>= 1)
           {
             if(myentry & 0x1)
@@ -1032,9 +1034,9 @@ __kernel void routeLocal(global const float* routeMap,
             }
           }
       }
-      queueElements =  min((int)(queueElements + queue[queueSize/2 + pullers-1]), queueSize/4);
       barrier(CLK_LOCAL_MEM_FENCE);
-      pullId += pullers;
+      queueElements =  min((int)(queueElements + queue[queueSize/2-1 + pullers]), queueSize/4);
+      barrier(CLK_LOCAL_MEM_FENCE);
       pullRun++;
     }
   }

@@ -41,7 +41,7 @@ namespace LinksRouting
     registerArg("BlockSizeX", _blockSize[0] = 8);
     registerArg("BlockSizeY", _blockSize[1] = 8);
     registerArg("enabled", _enabled = true);
-    registerArg("QueueSize", _routingQueueSize = 64);
+    registerArg("QueueSize", _routingQueueSize = 128);
     registerArg("NumLocalWorkers", _routingNumLocalWorkers = 8);
     registerArg("WorkersWarpSize", _routingLocalWorkersWarpSize = 32);
   }
@@ -1540,7 +1540,7 @@ int2 activeBlockToId(const int2 seedBlock, const int spiralIdIn, const int2 acti
       }
       if(allspirals.w < activeBlocksSize.y-1)
       {
-        int bottomelements = allspirals.w - allspirals.y + 2;
+        int bottomelements = allspirals.z - allspirals.x + 2;
         if(myoffset < bottomelements)
         {
           resId = int2(allspirals.z - myoffset, allspirals.w + 1);
@@ -2552,7 +2552,6 @@ void prepareIndividualRoutingDummy(const float* costmap,
         int localWorkerSize = divup(boundaryElements,_routingLocalWorkersWarpSize)*_routingLocalWorkersWarpSize;
 
         cl::Event routingRoutingEvent;
-        _routingNumLocalWorkers = 1;
         _cl_command_queue.enqueueNDRangeKernel
         (
           _cl_routing_kernel,
