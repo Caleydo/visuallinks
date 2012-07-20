@@ -1225,11 +1225,14 @@ int writeOutBlock(global uint* interblockResult, const int interblockSize, const
 
   return written+2;
 }
-float checkRoutes(int2 blockId, int2 localStart, global const float* routecost, global const float* routeMap, int layer, int2 numBlocks, int2 blockSize, int lid, int routeDataPerNode)
+float2 checkRoutes(int2 blockId, int2 localStart, global const float* routecost, global const float* routeMap, int layer, int2 numBlocks, int2 blockSize, int lid, int routeDataPerNode)
 {
-  local float minres;
-  minres = 0.1f*MAXFLOAT;
+  local float minresX, minresY;
+  minresX = 0.1f*MAXFLOAT;
+  minresY = 0.1f*MAXFLOAT;
   barrier(CLK_LOCAL_MEM_FENCE);
+
+  float2 newmincosts = (float2)(0.1f*MAXFLOAT,  0.1f*MAXFLOAT);
   
   int startLid = borderId(localStart, blockSize);
   if(lid > 0)
@@ -1237,15 +1240,20 @@ float checkRoutes(int2 blockId, int2 localStart, global const float* routecost, 
     int borderElements = 2*(blockSize.x + blockSize.y - 2);
     global const float* ourRouteMap = routeMap + borderElements*(borderElements+1)/2*(blockId.x + blockId.y*numBlocks.x);
     int gid = getCostGlobalId(lid, blockId, blockSize, numBlocks);
-    float mycost = routecost[routeDataPerNode*layer + gid];
+    newmincosts.x = routecost[routeDataPerNode*layer + gid];
 
-    mycost = mycost + getRouteMapCost(ourRouteMap, startLid, lid, borderElements); 
+    newmincosts.y = newmincosts.x + getRouteMapCost(ourRouteMap, startLid, lid, borderElements); 
 
     //TODO: reduction..
-    atomic_min((volatile local uint*)(&minres), as_uint(mycost));
+    atomic_min((volatile local uint*)(&minresY), as_uint(newmincosts.y));
   }
   barrier(CLK_LOCAL_MEM_FENCE);
-  return minres;
+
+  if(minresY == newmincosts.y)
+    minresX = newmincosts.x; 
+  barrier(CLK_LOCAL_MEM_FENCE);
+
+  return (float2)(minresX, minresY);
 }
 __kernel void calcInterBlockRoute(global const float* routecost,
                                   global const float* routeMap,
@@ -1317,6 +1325,7 @@ __kernel void calcInterBlockRoute(global const float* routecost,
     incost = minvoter;
     //check all dirs
     local float newminval;
+    local float fromnewminval;
     newminval = 0.1f*MAXFLOAT;
     local int2 newBlock;
     local int2 localInPos;
@@ -1343,10 +1352,13 @@ __kernel void calcInterBlockRoute(global const float* routecost,
       barrier(CLK_LOCAL_MEM_FENCE);
       if(testStart != -1)
       {
-        float nextMinval = checkRoutes(testBlock, testStart, routecost, routeMap, layer, numBlocks, blockSize, lid, routeDataPerNode);
-        if(nextMinval < newminval && testStart == lid)
+        float2 nextMinval = checkRoutes(testBlock, testStart, routecost, routeMap, layer, numBlocks, blockSize, lid, routeDataPerNode);
+        if(nextMinval.x < newminval && 
+           nextMinval.y <= newminval + 0.000001f &&
+           testStart == lid)
         {
-          newminval = nextMinval;
+          newminval = nextMinval.y;
+          fromnewminval = nextMinval.x;
           newBlock = testBlock;
           localInPos = lid2;
         }
@@ -1354,13 +1366,13 @@ __kernel void calcInterBlockRoute(global const float* routecost,
     }
     barrier(CLK_LOCAL_MEM_FENCE);
     
-    minvoter = newminval;
+    minvoter = fromnewminval;
     currentBlock = newBlock;
 
     if(lid == 0)
       written = writeOutBlock(interblockResult, interblockSize, layer, currentBlock, blockSize, numBlocks, currentBlock + localInPos, written);
     
-  } while( !(isContainedInBlock(tos[layer], currentBlock, blockSize) || minvoter >= incost) );
+  } while( !(isContainedInBlock(tos[layer], currentBlock, blockSize) ) || minvoter >= incost) );
 }
 
 //__kernel void calcInOut(global const float* routecost,
