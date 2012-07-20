@@ -260,9 +260,8 @@ namespace LinksRouting
     
     _cl_voteMinimum_kernel = cl::Kernel(_cl_program, "voteMinimum");
     _cl_getMinimum_kernel = cl::Kernel(_cl_program, "getMinimum");
-    _cl_routeInOut_kernel = cl::Kernel(_cl_program, "calcInOut");
     _cl_routeInterBlock_kernel = cl::Kernel(_cl_program, "calcInterBlockRoute");
-    _cl_routeConstruct_kernel = cl::Kernel(_cl_program, "constructRoute");
+    //_cl_routeConstruct_kernel = cl::Kernel(_cl_program, "constructRoute");
     
 
   }
@@ -2795,11 +2794,14 @@ void prepareIndividualRoutingDummy(const float* costmap,
             auto found = nodePositions.find((*nodeit));
 
             needRouteConstructionNodes.push_back(*nodeit);
-            needRouteConstructionInfo.push_back(uint4(found->second[0], found->second[1], needRouteConstructionElements.size(),0));
+            //TODO: use this when implementing bundling -> all routes from the same groups should be handled by one block
+            //needRouteConstructionInfo.push_back(uint4(found->second[0], found->second[1], needRouteConstructionElements.size(),0));
             for(auto childIt = (*nodeit)->getChildren().begin();
               childIt != (*nodeit)->getChildren().end();
               ++childIt)
             {
+              //TODO: remove this for implementing bundling
+              needRouteConstructionInfo.push_back(uint4(found->second[0], found->second[1], 0,0));
               needRouteConstructionElements.push_back(hyperEdgeMemMap.find(*childIt)->second);
               needRouteConstructionEndElements.push_back(int4(-1,-1,-1,-1));
             }
@@ -2812,7 +2814,8 @@ void prepareIndividualRoutingDummy(const float* costmap,
             auto found = hyperEdgeCenters.find((*edgeit));
 
             needRouteConstructionEdges.push_back(*edgeit);
-            needRouteConstructionInfo.push_back(uint4(found->second[0], found->second[1], needRouteConstructionElements.size(),0));
+            //TODO: use this when implementing bundling -> all routes from the same groups should be handled by one block
+            //needRouteConstructionInfo.push_back(uint4(found->second[0], found->second[1], needRouteConstructionElements.size(),0));
             for(auto childIt = (*edgeit)->getNodes().begin();
               childIt != (*edgeit)->getNodes().end();
               ++childIt)
@@ -2821,6 +2824,8 @@ void prepareIndividualRoutingDummy(const float* costmap,
               int4 target;
               if(!getTargetRect(childIt->getVertices(), target, downsample, _buffer_width, _buffer_height))
                 continue;
+              //TODO: remove this for implementing bundling
+              needRouteConstructionInfo.push_back(uint4(found->second[0], found->second[1], 0,0));
               needRouteConstructionEndElements.push_back(target);
               needRouteConstructionElements.push_back(nodeMemMap.find(&(*childIt))->second);
             }
@@ -2828,9 +2833,56 @@ void prepareIndividualRoutingDummy(const float* costmap,
       
         needRouteConstructionInfo.push_back(uint4(0,0, needRouteConstructionElements.size(),0));
 
-        // _cl_routeInOut_kernel;
-        // _cl_routeInterBlock_kernel;
+        if(needRouteConstructionElements.size() > 0)
+        {
+          cl::Buffer d_needRouteConstructionInfo(_cl_context, CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR, needRouteConstructionInfo.size()*sizeof(uint4), &needRouteConstructionInfo[0]);
+          cl::Buffer d_needRouteConstructionEndElements(_cl_context, CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR, needRouteConstructionEndElements.size()*sizeof(uint4), &needRouteConstructionEndElements[0]);
+          cl::Buffer d_needRouteConstructionElements(_cl_context, CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR, needRouteConstructionElements.size()*sizeof(uint4), &needRouteConstructionElements[0]);
+
+          int maxBlocksForRoute = _blocks[0]*_blocks[1]/4;
+          cl::Buffer d_blockRoutes(_cl_context, CL_MEM_READ_WRITE, needRouteConstructionElements.size()*maxBlocksForRoute*sizeof(uint));
+
+          _cl_routeInterBlock_kernel.setArg(0, d_routingData);
+          _cl_routeInterBlock_kernel.setArg(1, _cl_routeMap_buffer);
+          _cl_routeInterBlock_kernel.setArg(2, _cl_lastCostMap_buffer);
+          _cl_routeInterBlock_kernel.setArg(3, d_needRouteConstructionInfo);
+          _cl_routeInterBlock_kernel.setArg(4, d_needRouteConstructionEndElements);
+          _cl_routeInterBlock_kernel.setArg(5, d_needRouteConstructionElements);
+          _cl_routeInterBlock_kernel.setArg(6, requiredElements);
+          _cl_routeInterBlock_kernel.setArg(7, 2 * sizeof(cl_int), _blockSize);
+          _cl_routeInterBlock_kernel.setArg(8, 2 * sizeof(cl_int), _blocks);
+          _cl_routeInterBlock_kernel.setArg(9, 2 * sizeof(cl_int), bufferDim);
+          _cl_routeInterBlock_kernel.setArg(10, d_blockRoutes);
+          _cl_routeInterBlock_kernel.setArg(11, maxBlocksForRoute);
+          _cl_routeInterBlock_kernel.setArg(12, sizeof(float)*(_blockSize[0]+2)*(_blockSize[1]+2), NULL);
+          _cl_routeInterBlock_kernel.setArg(13, sizeof(float)*(_blockSize[0]+2)*(_blockSize[1]+2), NULL);
+
+
+          cl::Event routingRouteInterBlockEvent;
+          _cl_command_queue.enqueueNDRangeKernel
+          (
+            _cl_routeInterBlock_kernel,
+            cl::NullRange,
+            cl::NDRange(_blockSize[0],_blockSize[1],needRouteConstructionElements.size()),
+            cl::NDRange(_blockSize[0],_blockSize[1],1),
+            0,
+            &routingRouteInterBlockEvent
+          );
+          _cl_command_queue.finish();
+          routingRouteInterBlockEvent.getProfilingInfo(CL_PROFILING_COMMAND_END, &end);
+          routingRouteInterBlockEvent.getProfilingInfo(CL_PROFILING_COMMAND_START, &start);
+          std::cout << " - routingRouteInterBlock: " << (end-start)/1000000.0  << "ms\n";
+
+          std::vector<uint> blockRoutes(needRouteConstructionElements.size()*maxBlocksForRoute);
+          _cl_command_queue.enqueueReadBuffer(d_blockRoutes, true, 0, blockRoutes.size()*sizeof(uint), &blockRoutes[0]);
+          
+          //debug
+          for(auto it = blockRoutes.begin(); it != blockRoutes.end(); it += maxBlocksForRoute)
+            std::cout << "blocks: " << *it << "\n";
+
+
         // _cl_routeConstruct_kernel;
+        }
       }
     }
     
