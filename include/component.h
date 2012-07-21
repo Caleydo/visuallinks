@@ -73,7 +73,7 @@ namespace LinksRouting
 
       virtual bool startup(Core* core, unsigned int type) { return true; };
       virtual void init() {};
-      virtual void initGL() {};
+      virtual bool initGL() { return true; };
       virtual void shutdown() {};
       virtual bool supports(unsigned int type) const { return false; };
       virtual const std::string& name() const = 0;

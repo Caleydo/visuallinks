@@ -40,7 +40,7 @@ namespace LinksRouting
 
       bool startup(Core* core, unsigned int type);
       void init();
-      void initGL();
+      bool initGL();
       void shutdown();
       bool supports(unsigned int type) const
       {
@@ -132,7 +132,6 @@ namespace LinksRouting
       cl::Kernel        _cl_routeConstruct_kernel;
 
       int _blockSize[2];
-      bool _enabled;
       bool _noQueue;
 
       friend std::ostream& operator<<( std::ostream&,

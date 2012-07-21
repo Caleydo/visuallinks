@@ -30,7 +30,7 @@ namespace LinksRouting
 
       bool startup(Core* core, unsigned int type);
       void init();
-      void initGL();
+      bool initGL();
       void shutdown();
       bool supports(unsigned int type) const
       {

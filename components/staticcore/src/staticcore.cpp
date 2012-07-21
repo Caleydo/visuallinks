@@ -101,9 +101,19 @@ namespace LinksRouting
     else
       std::cout << "LinksRouting StaticCore Warning: no config provided." << std::endl;
 
+    _slot_select_routing =
+      getSlotCollector().create<SlotType::ComponentSelection>("/router");
+
     for( auto c = _components.begin(); c != _components.end(); ++c )
       if(c->comp != static_cast<Component*>(_config))
+      {
         c->comp->init();
+        if( c->comp->supports(Component::Routing) )
+          _slot_select_routing->_data->available.push_back(c->comp->name());
+      }
+
+    for( size_t i = 0; i < _slot_select_routing->_data->available.size(); ++i)
+      std::cout << _slot_select_routing->_data->available[i] << std::endl;
 
     SlotCollector slot_collector(_slots);
     for( auto c = _components.begin(); c != _components.end(); ++c )
@@ -121,7 +131,14 @@ namespace LinksRouting
   bool StaticCore::initGL()
   {
     for( auto c = _components.begin(); c != _components.end(); ++c )
-      c->comp->initGL();
+    {
+      if( !c->comp->initGL() )
+      {
+        LOG_INFO("Shutting down unusable component: " << c->comp->name());
+        c->comp->shutdown();
+        c->is = 0;
+      }
+    }
 
     return true;
   }
@@ -139,7 +156,7 @@ namespace LinksRouting
   {
     for( auto c = _components.begin(); c != _components.end(); ++c )
     {
-      if( c->comp->supports(type) )
+      if( c->is && c->comp->supports(type) )
       {
 //        std::cout << "+->" << c->comp->name() << std::endl;
         c->comp->process(type);

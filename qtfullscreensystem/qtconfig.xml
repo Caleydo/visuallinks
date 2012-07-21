@@ -12,25 +12,19 @@
   </QtWebsocketServer>
  -->
   <ComponentCostanalysis>
-	<DownsampleSaliency type="Integer" val="2" />
-	<DownsampleCost type="Integer" val="4" />
+    <DownsampleSaliency type="Integer" val="2" />
+    <DownsampleCost type="Integer" val="4" />
   </ComponentCostanalysis>
 
   <CPURouting>
-    <enabled type="Bool" val="true" />
   </CPURouting>
 
   <GPURouting>
-    <enabled type="Bool" val="false" />
     <NoQueue type="Bool" val="true" />
     <BlockSizeX type="Integer" val="8" />
     <BlockSizeY type="Integer" val="8" />
   </GPURouting>
   
-  
-  <!-- <ComponentRenderer>
-    <TestDouble type="Float" val="0.25" />
-  </ComponentRenderer> -->
   <GLRenderer>
     <enabled type="Bool" val="true" />
     <link-color type="String" val="228 26 28" />

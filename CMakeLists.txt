@@ -6,7 +6,7 @@ set(LINKS_INCLUDE_DIR ${PROJROOT}/include)
 set(COMPONENTS_DIR ${PROJROOT}/components)
 set(COMPONENTS_INC_DIR )
 set(COMPONENTS_LIBS )
-set(BIN_DIR ${PROJROOT}/bin)
+set(BIN_DIR ${CMAKE_BINARY_DIR}/bin)
 set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} ${PROJROOT}/cmake)
 set(LIBRARY_OUTPUT_PATH ${BIN_DIR}/lib) 
 
@@ -14,6 +14,16 @@ set(LIBRARY_OUTPUT_PATH ${BIN_DIR}/lib)
 include( cmake/CopyFiles.cmake )
 include( cmake/AddComponent.cmake )
 include( cmake/AddSubdirOption.cmake )
+
+# ------------------------------------------------------------------------------
+# Warning when using in-source build
+# ------------------------------------------------------------------------------
+
+if("${CMAKE_SOURCE_DIR}" STREQUAL "${CMAKE_BINARY_DIR}")
+    message(WARNING  "Avoid building inside the source tree!")
+    message(WARNING  "Create a separate build directory instead (i.e. 'build') and call CMake from there: ")
+    message(WARNING  "  mkdir ../build && cd ../build && cmake ${CMAKE_SOURCE_DIR}")
+endif()
 
 # ------------------------------------------------------------------------------
 # custom options

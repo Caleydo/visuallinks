@@ -41,7 +41,6 @@ namespace LinksRouting
 
       slot_t<LinkDescription::LinkList>::type _subscribe_links;
 
-      bool _enabled;
   };
 }
 ;

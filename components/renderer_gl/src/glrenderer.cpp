@@ -172,11 +172,11 @@ namespace LinksRouting
   }
 
   //----------------------------------------------------------------------------
-  void GlRenderer::initGL()
+  bool GlRenderer::initGL()
   {
     static bool init = false;
     if( init )
-      return;
+      return true;
 
     GLint vp[4];
     glGetIntegerv(GL_VIEWPORT, vp);
@@ -188,6 +188,7 @@ namespace LinksRouting
     _blur_y_shader = _shader_manager.loadfromFile(0, "blurY.glsl");
 
     init = true;
+    return true;
   }
 
   //----------------------------------------------------------------------------

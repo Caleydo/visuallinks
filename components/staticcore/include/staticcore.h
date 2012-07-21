@@ -8,7 +8,8 @@
 #include <routing.h>
 #include <transparencyanalysis.h>
 
-#include "slots.hpp"
+#include <slots.hpp>
+#include <slotdata/component_selection.hpp>
 
 #include <list>
 #include <stdexcept>
@@ -74,8 +75,10 @@ namespace LinksRouting
       /** Command line arguments */
       std::string _startupstr;
 
+      /** For selecting routing component to be used */
+      slot_t<SlotType::ComponentSelection>::type _slot_select_routing;
+
   };
-}
-;
+} // namespace LinksRouting
 
 #endif

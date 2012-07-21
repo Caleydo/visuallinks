@@ -35,7 +35,6 @@ namespace LinksRouting
   {
     registerArg("BlockSizeX", _blockSize[0] = 8);
     registerArg("BlockSizeY", _blockSize[1] = 8);
-    registerArg("enabled", _enabled = true);
     registerArg("NoQueue", _noQueue = false);
   }
 
@@ -69,227 +68,195 @@ namespace LinksRouting
   }
 
   //----------------------------------------------------------------------------
-  void GPURouting::initGL()
+  bool GPURouting::initGL()
   {
-    // -----------------------------
-    // OpenCL platform
-
-    std::vector<cl::Platform> platforms;
-    cl::Platform::get(&platforms);
-    if( platforms.empty() )
-      throw std::runtime_error("Got no OpenCL platform.");
-
-    //TODO: select devices to use
-    cl::Platform use_platform;
-    std::vector<cl::Device> use_devices;
-    //for now:
-    use_platform = platforms.front();
-
-    //for (cl::Platform &tplatform : platforms)
-    for(size_t i = 0; i < platforms.size(); ++i)
+    try
     {
-      cl::Platform &tplatform = platforms[i];
+      // -----------------------------
+      // OpenCL platform
 
-      const std::string extensions =
-        tplatform.getInfo<CL_PLATFORM_EXTENSIONS>();
+      std::vector<cl::Platform> platforms;
+      cl::Platform::get(&platforms);
+      if( platforms.empty() )
+        throw std::runtime_error("Got no OpenCL platform.");
 
-      std::cout << "OpenCL Platform Info:"
-                << "\n -- platform:\t " << tplatform.getInfo<CL_PLATFORM_NAME>()
-                << "\n -- version:\t " << tplatform.getInfo<CL_PLATFORM_VERSION>()
-                << "\n -- vendor:\t " << tplatform.getInfo<CL_PLATFORM_VENDOR>()
-                << "\n -- profile:\t " << tplatform.getInfo<CL_PLATFORM_PROFILE>()
-                << std::endl;
+      //TODO: select devices to use
+      cl::Platform use_platform;
+      std::vector<cl::Device> use_devices;
+      //for now:
+      use_platform = platforms.front();
 
-      std::vector<cl::Device> devices;
-      tplatform.getDevices(CL_DEVICE_TYPE_GPU, &devices);
-      //for (cl::Device &tdevice : devices)
-      for (size_t j = 0; j < devices.size(); ++j)
+      //for (cl::Platform &tplatform : platforms)
+      for(size_t i = 0; i < platforms.size(); ++i)
       {
-         cl::Device &tdevice = devices[j];
-         const std::string dextensions = tdevice.getInfo<CL_DEVICE_EXTENSIONS>();
-         std::cout << "\tDevice Info:"
-                   << "\n\t -- clock freq:\t " << tdevice.getInfo<CL_DEVICE_MAX_CLOCK_FREQUENCY>()
-                   << "\n\t -- mem size:\t " << tdevice.getInfo<CL_DEVICE_GLOBAL_MEM_SIZE>()
-                   << "\n\t -- extensions:\t " << dextensions
-                   << std::endl;
-         //for now (use first only)
+        cl::Platform &tplatform = platforms[i];
+
+        const std::string extensions =
+          tplatform.getInfo<CL_PLATFORM_EXTENSIONS>();
+
+        std::cout << "OpenCL Platform Info:"
+                  << "\n -- platform:\t " << tplatform.getInfo<CL_PLATFORM_NAME>()
+                  << "\n -- version:\t " << tplatform.getInfo<CL_PLATFORM_VERSION>()
+                  << "\n -- vendor:\t " << tplatform.getInfo<CL_PLATFORM_VENDOR>()
+                  << "\n -- profile:\t " << tplatform.getInfo<CL_PLATFORM_PROFILE>()
+                  << std::endl;
+
+        std::vector<cl::Device> devices;
+        tplatform.getDevices(CL_DEVICE_TYPE_GPU, &devices);
+        //for (cl::Device &tdevice : devices)
+        for (size_t j = 0; j < devices.size(); ++j)
+        {
+           cl::Device &tdevice = devices[j];
+           const std::string dextensions = tdevice.getInfo<CL_DEVICE_EXTENSIONS>();
+           std::cout << "\tDevice Info:"
+                     << "\n\t -- clock freq:\t " << tdevice.getInfo<CL_DEVICE_MAX_CLOCK_FREQUENCY>()
+                     << "\n\t -- mem size:\t " << tdevice.getInfo<CL_DEVICE_GLOBAL_MEM_SIZE>()
+                     << "\n\t -- extensions:\t " << dextensions
+                     << std::endl;
+           //for now (use first only)
 #if defined(__APPLE__) || defined(__MACOSX)
-         if( dextensions.find("cl_apple_gl_sharing") != std::string::npos )
+           if( dextensions.find("cl_apple_gl_sharing") != std::string::npos )
 #else
-         if( extensions.find("cl_khr_gl_sharing") != std::string::npos )
+           if( extensions.find("cl_khr_gl_sharing") != std::string::npos )
 #endif
-         {
-           use_devices.clear();
-           use_devices.push_back(tdevice);
-           break;
-         }
+           {
+             use_devices.clear();
+             use_devices.push_back(tdevice);
+             break;
+           }
+        }
+
       }
 
-    }
 
+      // -----------------------------
+      // OpenCL context
 
-    // -----------------------------
-    // OpenCL context
-
-    std::vector<cl_context_properties> properties;
+      std::vector<cl_context_properties> properties;
 
 #if defined(__APPLE__) || defined(__MACOSX)
-
 # error "Not implemented yet."
 
-    // TODO check
-    properties.push_back( CL_CONTEXT_PROPERTY_USE_CGL_SHAREGROUP_APPLE );
-    properties.push_back( (cl_context_properties)CGLGetShareGroup(CGLGetCurrentContext()) );
+      // TODO check
+      properties.push_back( CL_CONTEXT_PROPERTY_USE_CGL_SHAREGROUP_APPLE );
+      properties.push_back( (cl_context_properties)CGLGetShareGroup(CGLGetCurrentContext()) );
 #else
 
 # ifdef _WIN32
-    properties.push_back( CL_GL_CONTEXT_KHR );
-    properties.push_back( (cl_context_properties)wglGetCurrentContext() );
+      properties.push_back( CL_GL_CONTEXT_KHR );
+      properties.push_back( (cl_context_properties)wglGetCurrentContext() );
 
-    properties.push_back( CL_WGL_HDC_KHR );
-    properties.push_back( (cl_context_properties)wglGetCurrentDC() );
+      properties.push_back( CL_WGL_HDC_KHR );
+      properties.push_back( (cl_context_properties)wglGetCurrentDC() );
 # else
-    properties.push_back( CL_GLX_DISPLAY_KHR );
-    properties.push_back( (cl_context_properties)glXGetCurrentDisplay() );
+      properties.push_back( CL_GLX_DISPLAY_KHR );
+      properties.push_back( (cl_context_properties)glXGetCurrentDisplay() );
 
-    properties.push_back( CL_GL_CONTEXT_KHR );
-    properties.push_back( cl_context_properties(glXGetCurrentContext()) );
+      properties.push_back( CL_GL_CONTEXT_KHR );
+      properties.push_back( cl_context_properties(glXGetCurrentContext()) );
 # endif
 #endif
 
-    properties.push_back( CL_CONTEXT_PLATFORM );
-    properties.push_back( (cl_context_properties)use_platform() );
-    properties.push_back(0);
+      properties.push_back( CL_CONTEXT_PLATFORM );
+      properties.push_back( (cl_context_properties)use_platform() );
+      properties.push_back(0);
 
-    _cl_context = cl::Context(use_devices, &properties[0]);
+      _cl_context = cl::Context(use_devices, &properties[0]);
 
-    //_cl_context = cl::Context(CL_DEVICE_TYPE_GPU, &properties[0]);
+      //_cl_context = cl::Context(CL_DEVICE_TYPE_GPU, &properties[0]);
 
-    // -----------------------------
-    // OpenCL device
+      // -----------------------------
+      // OpenCL device
 
-    std::vector<cl::Device> devices = _cl_context.getInfo<CL_CONTEXT_DEVICES>();
+      std::vector<cl::Device> devices = _cl_context.getInfo<CL_CONTEXT_DEVICES>();
 
-    if( devices.empty() )
-      throw std::runtime_error("Got no OpenCL device.");
-    _cl_device = devices[0];
+      if( devices.empty() )
+        throw std::runtime_error("Got no OpenCL device.");
+      _cl_device = devices[0];
 
-    std::cout << "OpenCL Device Info:"
-              << "\n -- type:\t " << _cl_device.getInfo<CL_DEVICE_TYPE>()
-              << "\n -- vendor:\t " << _cl_device.getInfo<CL_DEVICE_VENDOR>()
-              << "\n -- name:\t " << _cl_device.getInfo<CL_DEVICE_NAME>()
-              << "\n -- profile:\t " << _cl_device.getInfo<CL_DEVICE_PROFILE>()
-              << "\n -- device version:\t " << _cl_device.getInfo<CL_DEVICE_VERSION>()
-              << "\n -- driver version:\t " << _cl_device.getInfo<CL_DRIVER_VERSION>()
-              << "\n -- compute units:\t " << _cl_device.getInfo<CL_DEVICE_MAX_COMPUTE_UNITS>()
-              << "\n -- workgroup size:\t " << _cl_device.getInfo<CL_DEVICE_MAX_WORK_GROUP_SIZE>()
-              << "\n -- global memory:\t " << (_cl_device.getInfo<CL_DEVICE_GLOBAL_MEM_SIZE>() >> 20) << " MiB"
-              << "\n -- local memory:\t " << (_cl_device.getInfo<CL_DEVICE_LOCAL_MEM_SIZE>() >> 10) << " KiB"
-              << "\n -- clock frequency:\t " << _cl_device.getInfo<CL_DEVICE_MAX_CLOCK_FREQUENCY>()
-              << std::endl;
-
-
-    _cl_command_queue = cl::CommandQueue(_cl_context, _cl_device, CL_QUEUE_PROFILING_ENABLE);
-
-    // -----------------------------
-    // And now the OpenCL program
-
-
-    std::ifstream source_file("routing.cl");
-    if( !source_file )
-      throw std::runtime_error("Failed to open routing.cl");
-    std::string source( std::istreambuf_iterator<char>(source_file),
-                       (std::istreambuf_iterator<char>()) );
-
-    //now handled via include
-    //std::ifstream source_file2("sorting.cl");
-    //if( !source_file2 )
-    //  throw std::runtime_error("Failed to open sorting.cl");
-    //std::string source2( std::istreambuf_iterator<char>(source_file2),
-    //                   (std::istreambuf_iterator<char>()) );
-
-    cl::Program::Sources sources;
-    sources.push_back( std::make_pair(source.c_str(), source.length()) );
-    //sources.push_back( std::make_pair(source2.c_str(), source2.length()) );
-
-    _cl_program = cl::Program(_cl_context, sources);
-
-    char c_cdir[1024];
-    if (!GetCurrentDir(c_cdir, 1024))
-      throw std::runtime_error("Failed to retrieve current working directory");
-    try
-    {
-      std::string buildargs;
-      buildargs += "-cl-fast-relaxed-math";
-      buildargs += " -I ";
-      buildargs += c_cdir;
-      //std::cout << buildargs << std::endl;
-      _cl_program.build(devices, buildargs.c_str());
-    }
-    catch(cl::Error& ex)
-    {
-      std::cerr << "Failed to build OpenCL program: "
-                << " -- Log: " << _cl_program.getBuildInfo<CL_PROGRAM_BUILD_LOG>(_cl_device)
+      std::cout << "OpenCL Device Info:"
+                << "\n -- type:\t " << _cl_device.getInfo<CL_DEVICE_TYPE>()
+                << "\n -- vendor:\t " << _cl_device.getInfo<CL_DEVICE_VENDOR>()
+                << "\n -- name:\t " << _cl_device.getInfo<CL_DEVICE_NAME>()
+                << "\n -- profile:\t " << _cl_device.getInfo<CL_DEVICE_PROFILE>()
+                << "\n -- device version:\t " << _cl_device.getInfo<CL_DEVICE_VERSION>()
+                << "\n -- driver version:\t " << _cl_device.getInfo<CL_DRIVER_VERSION>()
+                << "\n -- compute units:\t " << _cl_device.getInfo<CL_DEVICE_MAX_COMPUTE_UNITS>()
+                << "\n -- workgroup size:\t " << _cl_device.getInfo<CL_DEVICE_MAX_WORK_GROUP_SIZE>()
+                << "\n -- global memory:\t " << (_cl_device.getInfo<CL_DEVICE_GLOBAL_MEM_SIZE>() >> 20) << " MiB"
+                << "\n -- local memory:\t " << (_cl_device.getInfo<CL_DEVICE_LOCAL_MEM_SIZE>() >> 10) << " KiB"
+                << "\n -- clock frequency:\t " << _cl_device.getInfo<CL_DEVICE_MAX_CLOCK_FREQUENCY>()
                 << std::endl;
-      throw;
+
+
+      _cl_command_queue = cl::CommandQueue(_cl_context, _cl_device, CL_QUEUE_PROFILING_ENABLE);
+
+      // -----------------------------
+      // And now the OpenCL program
+
+
+      std::ifstream source_file("routing.cl");
+      if( !source_file )
+        throw std::runtime_error("Failed to open routing.cl");
+      std::string source( std::istreambuf_iterator<char>(source_file),
+                         (std::istreambuf_iterator<char>()) );
+
+      //now handled via include
+      //std::ifstream source_file2("sorting.cl");
+      //if( !source_file2 )
+      //  throw std::runtime_error("Failed to open sorting.cl");
+      //std::string source2( std::istreambuf_iterator<char>(source_file2),
+      //                   (std::istreambuf_iterator<char>()) );
+
+      cl::Program::Sources sources;
+      sources.push_back( std::make_pair(source.c_str(), source.length()) );
+      //sources.push_back( std::make_pair(source2.c_str(), source2.length()) );
+
+      _cl_program = cl::Program(_cl_context, sources);
+
+      char c_cdir[1024];
+      if (!GetCurrentDir(c_cdir, 1024))
+        throw std::runtime_error("Failed to retrieve current working directory");
+      try
+      {
+        std::string buildargs;
+        buildargs += "-cl-fast-relaxed-math";
+        buildargs += " -I ";
+        buildargs += c_cdir;
+        //std::cout << buildargs << std::endl;
+        _cl_program.build(devices, buildargs.c_str());
+      }
+      catch(cl::Error& ex)
+      {
+        std::cerr << "Failed to build OpenCL program: "
+                  << " -- Log: " << _cl_program.getBuildInfo<CL_PROGRAM_BUILD_LOG>(_cl_device)
+                  << std::endl;
+        throw;
+      }
+
+      std::cout << "OpenCL Program Build:"
+                << "\n -- Status:\t" << _cl_program.getBuildInfo<CL_PROGRAM_BUILD_STATUS>(_cl_device)
+                << "\n -- Options:\t" << _cl_program.getBuildInfo<CL_PROGRAM_BUILD_OPTIONS>(_cl_device)
+                << "\n -- Log: " << _cl_program.getBuildInfo<CL_PROGRAM_BUILD_LOG>(_cl_device)
+                << std::endl;
+
+      _cl_clearQueue_kernel  = cl::Kernel(_cl_program, "clearQueue");
+      _cl_clearQueueLink_kernel = cl::Kernel(_cl_program, "clearQueueLink");
+      _cl_prepare_kernel = cl::Kernel(_cl_program, "prepareRouting");
+     	_cl_shortestpath_kernel = cl::Kernel(_cl_program, _noQueue ? "route_no_queue" : "routing");
+      _cl_getMinimum_kernel = cl::Kernel(_cl_program, "getMinimum");
+      _cl_routeInOut_kernel = cl::Kernel(_cl_program, "calcInOut");
+      _cl_routeInterBlock_kernel = cl::Kernel(_cl_program, "calcInterBlockRoute");
+      _cl_routeConstruct_kernel = cl::Kernel(_cl_program, "constructRoute");
     }
-
-    std::cout << "OpenCL Program Build:"
-              << "\n -- Status:\t" << _cl_program.getBuildInfo<CL_PROGRAM_BUILD_STATUS>(_cl_device)
-              << "\n -- Options:\t" << _cl_program.getBuildInfo<CL_PROGRAM_BUILD_OPTIONS>(_cl_device)
-              << "\n -- Log: " << _cl_program.getBuildInfo<CL_PROGRAM_BUILD_LOG>(_cl_device)
-              << std::endl;
-
-    _cl_clearQueue_kernel  = cl::Kernel(_cl_program, "clearQueue");
-    _cl_clearQueueLink_kernel = cl::Kernel(_cl_program, "clearQueueLink");
-    _cl_prepare_kernel = cl::Kernel(_cl_program, "prepareRouting");
-   	_cl_shortestpath_kernel = cl::Kernel(_cl_program, _noQueue ? "route_no_queue" : "routing");
-    _cl_getMinimum_kernel = cl::Kernel(_cl_program, "getMinimum");
-    _cl_routeInOut_kernel = cl::Kernel(_cl_program, "calcInOut");
-    _cl_routeInterBlock_kernel = cl::Kernel(_cl_program, "calcInterBlockRoute");
-    _cl_routeConstruct_kernel = cl::Kernel(_cl_program, "constructRoute");
-    
-
-   // //test
-   // int blocksize = 64;
-   // int datasize = 4*blocksize;
-   // cl::Kernel sorting_test = cl::Kernel(_cl_program, "sortTest");
-   // cl::Buffer keys(_cl_context, CL_MEM_READ_WRITE, datasize*sizeof(cl_float));
-   // cl::Buffer values(_cl_context, CL_MEM_READ_WRITE, datasize*sizeof(cl_uint));
-   // std::vector<float> h_keys;
-   // std::vector<int> h_values;
-   // h_keys.reserve(datasize);
-   // h_values.reserve(datasize);
-   // for(int i = 0; i < datasize; ++i)
-   // {
-   //   int v = rand();
-   //   h_keys.push_back(v/1000.0f);
-   //   h_values.push_back(v);
-   // }
-
-   // _cl_command_queue.enqueueWriteBuffer(keys, true, 0, datasize*sizeof(cl_float), &h_keys[0]);
-   // _cl_command_queue.enqueueWriteBuffer(values, true, 0, datasize*sizeof(cl_uint), &h_values[0]);
-
-   // sorting_test.setArg(0, keys);
-   // sorting_test.setArg(1, values);
-   // sorting_test.setArg(2, 2*blocksize*sizeof(cl_float), NULL);
-   // sorting_test.setArg(3, 2*blocksize*sizeof(cl_uint), NULL);
-
-   //_cl_command_queue.enqueueNDRangeKernel
-   // (
-   //   sorting_test,
-   //   cl::NullRange,
-   //   cl::NDRange(datasize/2),
-   //   cl::NDRange(blocksize)
-   // );
-
-   // _cl_command_queue.finish();
-   // _cl_command_queue.enqueueReadBuffer(keys, true, 0, datasize*sizeof(cl_float), &h_keys[0]);
-   // _cl_command_queue.enqueueReadBuffer(values, true, 0, datasize*sizeof(cl_uint), &h_values[0]);
-
-   // for(int i = 0; i < datasize; ++i)
-   //   std::cout <<  "<" << h_keys[i] << "," << h_values[i] << ">,\n";
-   // std::cout << std::endl;
+    catch(std::exception& ex)
+    {
+      std::cerr << "Failed to initialize GPURouting: "
+                << ex.what()
+                << std::endl;
+      return false;
+    }
+    return true;
   }
 
   //----------------------------------------------------------------------------
@@ -411,8 +378,6 @@ namespace LinksRouting
   //----------------------------------------------------------------------------
   void GPURouting::process(unsigned int type)
   {
-    if( !_enabled )
-      return;
 
     //----------------------
     // Many sanity checks :)

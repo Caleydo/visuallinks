@@ -9,7 +9,7 @@ namespace LinksRouting
   CPURouting::CPURouting() :
     myname("CPURouting")
   {
-    registerArg("enabled", _enabled = true);
+
   }
 
   //------------------------------------------------------------------------------
@@ -46,9 +46,6 @@ namespace LinksRouting
   //----------------------------------------------------------------------------
   void CPURouting::process(unsigned int type)
   {
-    if( !_enabled )
-      return;
-
     if( !_subscribe_links->isValid() )
     {
       LOG_DEBUG("No valid routing data available.");
