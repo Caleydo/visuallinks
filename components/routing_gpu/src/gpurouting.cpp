@@ -1214,7 +1214,9 @@ bool route_data(float const * l_cost,
                               *accessLocalCostConst(l_cost, localid + offset));
         float r_other = *accessLocalCost(l_route, localid + offset);
         //TODO use custom params here
-        *myval = std::min(*myval, r_other + 0.01f*d + d*penalty);
+        const float a = 1.0f; //a must be 1 !!!!
+        const float b = 100.0f;
+        *myval = std::min(*myval, r_other + a*d + b*d*penalty);
       }
 
     if(*myval != lastmyval)
@@ -2032,6 +2034,301 @@ void prepareIndividualRoutingDummy(const float* costmap,
   } while(advanceThread());
 }
 
+
+int dir8FromBorderId(int borderId, int2 lsize)
+{
+  int borderElements = 2*(lsize.x+lsize.y-2);
+  if(borderId < 0 || borderId >= borderElements) return 0;
+  int mask =  (borderId == 0) | 
+              ((borderId < lsize.x) << 1) |
+              ((borderId == lsize.x-1) << 2) |
+              ((borderId >= lsize.x-1 && borderId < lsize.x+lsize.y-1) << 3) |
+              ((borderId ==  lsize.x+lsize.y-2) << 4) |
+              ((borderId >= lsize.x+lsize.y-2 && borderId < 2*lsize.x+lsize.y-2) << 5) |
+              ((borderId == 2*lsize.x+lsize.y-3) << 6) |
+              ((borderId >= lsize.x+lsize.y-3) << 7);
+  return mask;
+}
+
+int2 getOffsetFromDir8Element(int element)
+{
+  int2 offset = int2(0,0);
+  if(element == 0 || element > 5) offset.x = -1;
+  else if(element > 1 && element < 5) offset.x = 1;
+  if(element < 3) offset.y = -1;
+  else if(element > 3 && element < 7) offset.y = 1;
+  return offset;
+}
+
+int writeOutBlock(uint* interblockResult, const int interblockSize, const int layer, const int2 blockId, const int2 blockSize, const int2 numBlocks, const int2 enter, const int written)
+{
+  //ran out of space :/
+  if(written + 3 >= interblockSize)
+    return written;
+  interblockResult[interblockSize*layer] = (written + 2)/2;
+  interblockResult = interblockResult + interblockSize*layer + written;
+
+  uint blockEncode = blockId.x + blockId.y*numBlocks.x;
+  interblockResult[1] = blockEncode;
+
+  int innerBlockEncode = (enter.x - blockId.x*(blockSize.x-1)) + (enter.y - blockId.y*(blockSize.y-1))*blockSize.x;
+  interblockResult[2] = innerBlockEncode;
+
+  return written+2;
+}
+
+bool isContainedInBlock(const int4 target, const int2 block, const int2 blockSize)
+{
+  int4 blockBounds = int4(block.x * (blockSize.x -1), block.y * (blockSize.y -1), 
+                            (block.x+1) * (blockSize.x -1), (block.y+1) * (blockSize.y -1));
+  bool xoverlap =  target.x <= blockBounds.z && target.z >= blockBounds.x;
+  bool yoverlap =  target.y <= blockBounds.w && target.w >= blockBounds.y;
+  return xoverlap && yoverlap;
+}
+
+float2 checkRoutes(int2 blockId, int startLid, const float* routecost, const float* routeMap, int layer, int2 numBlocks, int2 blockSize, int routeDataPerNode)
+{
+  const float MAXFLOAT = std::numeric_limits<float>::max();
+  float minresX, minresY;
+  minresX = 0.1f*MAXFLOAT;
+  minresY = 0.1f*MAXFLOAT;
+
+  std::vector<float2> newmincosts(get_local_size(0)*get_local_size(1), float2(0.1f*MAXFLOAT,  0.1f*MAXFLOAT));
+  
+  do
+  {
+    int linid = get_local_id(0) + get_local_id(1)*get_local_size(0);
+    int lid =  borderId(int2(get_local_id(0),get_local_id(1)), blockSize);
+    //avoid going back the same way
+    if(lid >= 0 && lid != startLid)
+    {
+
+      int borderElements = 2*(blockSize.x + blockSize.y - 2);
+      const float* ourRouteMap = routeMap + borderElements*(borderElements+1)/2*(blockId.x + blockId.y*numBlocks.x);
+      int gid = getCostGlobalId(lid, blockId, blockSize, numBlocks);
+      newmincosts[linid].x = routecost[routeDataPerNode*layer + gid];
+      //increase value for close neighbours (we want to make progress and not jump between blocks)
+      int neg_dist = (borderElements-std::min(abs(lid - startLid) , abs(abs(lid - startLid)-borderElements+2)));
+      newmincosts[linid].y = 0.0001f*neg_dist + newmincosts[linid].x + getRouteMapCost(ourRouteMap, startLid, lid, borderElements); 
+
+      //TODO: reduction..
+      minresY = std::min(minresY, newmincosts[linid].y);
+    }
+  }while(advanceThread());
+
+  do
+  {
+  int linid = get_local_id(0) + get_local_id(1)*get_local_size(0);
+  if(minresY == newmincosts[linid].y)
+    minresX = newmincosts[linid].x; 
+  }while(advanceThread());
+
+  return float2(minresX, minresY);
+}
+
+namespace CalcInterBlockRoute
+{
+  struct LocalData
+  {
+    int2 gid2;
+    int2 lid2;
+    int lid;
+    int mydir;
+    float myoutcost;
+    int written;
+    static int getOffset()
+    {
+      return get_local_id(0) + get_local_id(1)*get_local_size(0);
+    }
+  };
+}
+
+void calcInterBlockRouteDummy(const float* routecost,
+                              const float* routeMap,
+                              const float* costmap,
+                              const uint4* froms,
+                              const int4* tos,
+                              const int* ids,
+                              const int routeDataPerNode,
+                              const int2 blockSize,
+                              const int2 numBlocks,
+                              const int2 dim,
+                              uint* interblockResult,
+                              const int interblockSize,
+                              float* l_cost,
+                              float* l_route)
+{
+  using namespace CalcInterBlockRoute;
+  int layer = ids[0];
+  int2 currentBlock = int2(froms[layer].x/(blockSize.x-1), froms[layer].y/(blockSize.y-1));
+  const float MAXFLOAT = std::numeric_limits<float>::max();
+
+
+  std::vector<LocalData> locals(get_local_size(0)*get_local_size(1));
+
+  do
+  {
+    LocalData& mylocal(locals[LocalData::getOffset()]);
+    mylocal.lid2 = int2(get_local_id(0),get_local_id(1));
+    mylocal.lid =  borderId(mylocal.lid2, blockSize);
+    mylocal.mydir = dir8FromBorderId(mylocal.lid,blockSize);
+    mylocal.written = 0;
+    if(mylocal.lid == 0)
+      mylocal.written = writeOutBlock(interblockResult, interblockSize, layer, currentBlock, blockSize, numBlocks, int2(froms[layer].x,froms[layer].y) , mylocal.written);
+  } while(advanceThread());
+
+ 
+  //early termination
+  if(isContainedInBlock(tos[layer], currentBlock, blockSize))
+    return;
+  
+  do
+  {
+    LocalData& mylocal(locals[LocalData::getOffset()]);
+    //find first out
+    mylocal.myoutcost = 0.1f*MAXFLOAT;
+    if(mylocal.lid >= 0)
+    {
+      int mydata_offset = getCostGlobalId(mylocal.lid, currentBlock, blockSize, numBlocks);
+      mylocal.myoutcost = routecost[layer*routeDataPerNode +  mydata_offset];
+    }
+    mylocal.gid2 = int2(currentBlock.x * (blockSize.x-1) + get_local_id(0),
+                       currentBlock.y * (blockSize.y-1) + get_local_id(1));
+  } while(advanceThread());
+
+  do
+  {
+    int linid = get_local_id(0) + get_local_id(1)*get_local_size(0);
+    for(; linid < (get_local_size(0)+2)*(get_local_size(1)+2); linid += get_local_size(0)*get_local_size(1))
+    {
+      l_cost[linid] = 0.1f*MAXFLOAT;
+      l_route[linid] = 0.1f*MAXFLOAT;
+    }
+  } while(advanceThread());
+  do
+  {
+    LocalData& mylocal(locals[LocalData::getOffset()]);
+    float r_in = 0.1f*MAXFLOAT;
+    if(mylocal.gid2.x < dim.x && mylocal.gid2.y < dim.y)
+    {
+      r_in = readLastPenalty(costmap, mylocal.gid2, dim);
+      *accessLocalCost(l_cost, int2(get_local_id(0), get_local_id(1))) = r_in;
+    }
+  } while(advanceThread());
+
+  do
+  {
+    LocalData& mylocal(locals[LocalData::getOffset()]);
+    float myinit = 0.1f*MAXFLOAT;
+    if(froms[layer].x == mylocal.gid2.x && froms[layer].y == mylocal.gid2.y)
+      myinit = 0;
+    *accessLocalCost(l_route, mylocal.lid2) = myinit;
+  } while(advanceThread());
+
+  
+  //route
+  route_data(l_cost, l_route);
+
+  
+  do
+  {
+    LocalData& mylocal(locals[LocalData::getOffset()]);
+    mylocal.myoutcost += *accessLocalCost(l_route, mylocal.lid2);
+    //there will always be two elements with the same value if we start at the border, so choose the one which goes out
+    if(mylocal.gid2.x == froms[layer].x && mylocal.gid2.y == froms[layer].y)
+      mylocal.myoutcost += 0.0001f;
+    //debug
+    *accessLocalCost(l_route, mylocal.lid2) = mylocal.myoutcost;
+  } while(advanceThread());
+
+  //vote for minimal out cost
+  float minvoter;
+  float incost;
+  int2 localInPos;
+
+  incost = MAXFLOAT;
+  minvoter = MAXFLOAT;
+  
+  do
+  {
+    LocalData& mylocal(locals[LocalData::getOffset()]);
+    if(mylocal.lid >= 0)
+      //TODO: reduction..
+      minvoter = std::min(minvoter, mylocal.myoutcost);
+  } while(advanceThread());
+
+  do
+  {
+    incost = minvoter;
+    //check all dirs
+    float newminval, nextnewminval;
+    int2 newBlock;
+    nextnewminval = newminval = 0.1f*MAXFLOAT;
+    newBlock = int2(-1,-1);
+    
+    for(int outtest = 0; outtest < 8; ++outtest)
+    {
+      int2 testBlock;
+      int testStart;
+      testStart = -1;
+
+      int outdir = 1 << outtest;
+      do
+      {
+      LocalData& mylocal(locals[LocalData::getOffset()]);
+      if(mylocal.myoutcost == minvoter && (mylocal.mydir & outdir))
+      {
+        int2 offset = getOffsetFromDir8Element(outtest);
+        testBlock = currentBlock + offset;
+        if(testBlock.x >= 0 && testBlock.y >= 0 && 
+           testBlock.x < numBlocks.x && testBlock.y < numBlocks.y)
+        {
+          int2 inLid = mylocal.lid2 - int2(offset.x*(blockSize.x-1), offset.y*(blockSize.y-1));
+          testStart = borderId(inLid, blockSize);
+        }
+      }
+      } while(advanceThread());
+
+
+      if(testStart != -1)
+      {
+        float2 nextMinval = checkRoutes(testBlock, testStart, routecost, routeMap, layer, numBlocks, blockSize, routeDataPerNode);
+        do
+        {
+        LocalData& mylocal(locals[LocalData::getOffset()]);
+        if(nextMinval.x < newminval && 
+           nextMinval.y <= newminval + 0.000001f &&
+           testStart == mylocal.lid)
+        {
+          newminval = nextMinval.y;
+          nextnewminval = nextMinval.x;
+          newBlock = testBlock;
+          localInPos = mylocal.lid2;
+        }
+        } while(advanceThread());
+      }
+    }
+
+
+    currentBlock = newBlock;
+    minvoter = nextnewminval;
+
+    do
+    {
+    LocalData& mylocal(locals[LocalData::getOffset()]);
+    if(currentBlock.x != -1 && mylocal.lid >= 0)
+    {
+      int mydata_offset = getCostGlobalId(mylocal.lid, currentBlock, blockSize, numBlocks);
+      mylocal.myoutcost = routecost[layer*routeDataPerNode +  mydata_offset];
+      if(mylocal.lid == 0)
+        mylocal.written = writeOutBlock(interblockResult, interblockSize, layer, currentBlock, blockSize, numBlocks, int2(currentBlock.x*(blockSize.x-1),currentBlock.y*(blockSize.y-1)) + localInPos, mylocal.written);
+    }
+    } while(advanceThread());
+
+
+  } while( !(isContainedInBlock(tos[layer], currentBlock, blockSize)  || minvoter >= incost ) );
+}
+
 ///
 
 
@@ -2835,6 +3132,45 @@ void prepareIndividualRoutingDummy(const float* costmap,
 
         if(needRouteConstructionElements.size() > 0)
         {
+
+          //debug
+          //dummy call
+          {
+          size_t size;
+          _cl_routeMap_buffer.getInfo(CL_MEM_SIZE, &size);
+          std::vector<float> h_routeMap_buffer(size/sizeof(float));
+          _cl_command_queue.enqueueReadBuffer(_cl_routeMap_buffer, true, 0, size, &h_routeMap_buffer[0]);
+          std::vector<float> h_routingData(requiredElements*slices);
+          _cl_command_queue.enqueueReadBuffer(d_routingData, true, 0, h_routingData.size() * sizeof(float), &h_routingData[0]);
+
+          _cl_lastCostMap_buffer.getInfo(CL_MEM_SIZE, &size);
+          std::vector<float> h_lastCostMap_buffer(size/sizeof(float));
+          _cl_command_queue.enqueueReadBuffer(_cl_lastCostMap_buffer, true, 0, size, &h_lastCostMap_buffer[0]);
+          
+          std::vector<uint> blockRoutes(needRouteConstructionElements.size()*_blocks[0]*_blocks[1]/4);
+          float* l_cost = new float[(_blockSize[0]+2)*(_blockSize[1]+2)],
+               * l_route = new float[(_blockSize[0]+2)*(_blockSize[1]+2)];
+
+          initKernelData(int2(_blockSize[0],_blockSize[1]), int2(1,1));
+          calcInterBlockRouteDummy(&h_routingData[0],
+                              &h_routeMap_buffer[0],
+                              &h_lastCostMap_buffer[0],
+                              &needRouteConstructionInfo[0],
+                              &needRouteConstructionEndElements[0],
+                              (int*)&needRouteConstructionElements[0],
+                              requiredElements,
+                              int2(_blockSize[0], _blockSize[1]),
+                              int2(_blocks[0], _blocks[1]),
+                              int2(bufferDim[0], bufferDim[1]),
+                              &blockRoutes[0],
+                              _blocks[0]*_blocks[1]/4,
+                              l_cost,
+                              l_route);
+          delete[] l_cost;
+          delete[] l_route;
+          }
+          //
+
           cl::Buffer d_needRouteConstructionInfo(_cl_context, CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR, needRouteConstructionInfo.size()*sizeof(uint4), &needRouteConstructionInfo[0]);
           cl::Buffer d_needRouteConstructionEndElements(_cl_context, CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR, needRouteConstructionEndElements.size()*sizeof(uint4), &needRouteConstructionEndElements[0]);
           cl::Buffer d_needRouteConstructionElements(_cl_context, CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR, needRouteConstructionElements.size()*sizeof(uint4), &needRouteConstructionElements[0]);
@@ -2877,8 +3213,24 @@ void prepareIndividualRoutingDummy(const float* costmap,
           _cl_command_queue.enqueueReadBuffer(d_blockRoutes, true, 0, blockRoutes.size()*sizeof(uint), &blockRoutes[0]);
           
           //debug
-          for(auto it = blockRoutes.begin(); it != blockRoutes.end(); it += maxBlocksForRoute)
-            std::cout << "blocks: " << *it << "\n";
+          uint j = 0;
+          for(auto it = blockRoutes.begin(); it != blockRoutes.end(); it += maxBlocksForRoute, ++j)
+          {
+            uint rblocks = *it;
+            std::cout << "route blocks: " << *it << "\n";
+            for(int i = 0; i < rblocks; ++i)
+            {
+              uint block = *(it + 2*i+1);
+              uint interblock = *(it + 2*i + 2);
+              int2 gid((block % _blocks[0])*(_blockSize[0]-1) , (block / _blocks[0])*(_blockSize[1]-1));
+              std::cout << "(" << gid.x << "," << gid.y << ")";
+              gid.x += interblock % _blockSize[0];
+              gid.y += interblock / _blockSize[0];
+              std::cout << "[" << gid.x << "," << gid.y << "] -> ";
+            }
+            std::cout << "[" << needRouteConstructionEndElements[j].x << " - " << needRouteConstructionEndElements[j].z << ", "
+              << needRouteConstructionEndElements[j].y << " - " << needRouteConstructionEndElements[j].w << "]\n";
+          }
 
 
         // _cl_routeConstruct_kernel;
