@@ -156,6 +156,13 @@ namespace LinksRouting
   {
     _slot_links = slot_collector.create<LinkDescription::LinkList>("/links");
   }
+  
+  //----------------------------------------------------------------------------
+  void IPCServer::subscribeSlots(SlotSubscriber& slot_subscriber)
+  {
+    _subscribe_routing =
+      slot_subscriber.getSlot<SlotType::ComponentSelection>("/routing");
+  }
 
   //----------------------------------------------------------------------------
   bool IPCServer::startup(Core* core, unsigned int type)
@@ -252,10 +259,58 @@ namespace LinksRouting
 
       QString id = msg.getValue<QString>("id").toLower(),
               title = msg.getValue<QString>("title", "");
+      const std::string& id_str = id.toStdString();
+
+      if( task == "GET" )
+      {
+        if( id == "/routing" )
+        {
+          QString routers = "{\"active\": \""
+                          + QString::fromStdString(_subscribe_routing->_data->active)
+                          + "\", \"available\":[";
+          if( !_subscribe_routing->_data->available.empty() )
+          {
+            for( auto comp = _subscribe_routing->_data->available.begin();
+                 comp != _subscribe_routing->_data->available.end();
+                 ++comp )
+              routers += "[\"" + QString::fromStdString(comp->first) + "\","
+                       + (comp->second ? '1' : '0') + "],";
+            routers.replace(routers.length() - 1, 1, ']');
+          }
+          else
+            routers.push_back(']');
+          routers.push_back('}');
+
+          client->first->write
+          ("{"
+              "\"task\": \"GET-FOUND\","
+              "\"id\": \"" + id.replace('"', "\\\"") + "\","
+              "\"val\":" + routers +
+           "}");
+        }
+        else
+        {
+          LOG_WARN("Requesting unknown value: " << id_str);
+        }
+        return;
+      }
+      else if( task == "SET" )
+      {
+        if( id == "/routing" )
+        {
+          _subscribe_routing->_data->request =
+            msg.getValue<QString>("val").toStdString();
+          _cond_data_ready->wakeAll();
+        }
+        else
+          LOG_WARN("Request setting unknown value: " << id_str);
+
+        return;
+      }
+
       uint32_t stamp = msg.getValue<uint32_t>("stamp");
       QMutexLocker lock_links(_mutex_slot_links);
 
-      const std::string& id_str = id.toStdString();
       auto link = std::find_if
       (
         _slot_links->_data->begin(),
@@ -354,6 +409,11 @@ namespace LinksRouting
 //          for(auto socket = _clients.begin(); socket != _clients.end(); ++socket)
 //            (*socket)->write(request);
         }
+      }
+      else
+      {
+        LOG_WARN("Unknown task: " << task.toStdString());
+        return;
       }
     }
     catch(std::runtime_error& ex)

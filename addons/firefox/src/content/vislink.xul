@@ -13,6 +13,10 @@
 	             oncommand="onVisLinkButton()"
 	             class="toolbarbutton-1 chromeclass-toolbar-additional vislink">
     <menupopup id="vislink_menu">
+      <div id="routing-selector" orient="vertical">
+        <menuitem label="No routing algorithm1" disabled="true" />
+      </div>
+      <menuseparator />
       <menuitem label="Abort all" oncommand="onAbort('', -1)"/>
       <menuseparator />
     </menupopup>

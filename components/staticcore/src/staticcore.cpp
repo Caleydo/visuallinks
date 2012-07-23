@@ -102,18 +102,24 @@ namespace LinksRouting
       std::cout << "LinksRouting StaticCore Warning: no config provided." << std::endl;
 
     _slot_select_routing =
-      getSlotCollector().create<SlotType::ComponentSelection>("/router");
+      getSlotCollector().create<SlotType::ComponentSelection>("/routing");
 
     for( auto c = _components.begin(); c != _components.end(); ++c )
       if(c->comp != static_cast<Component*>(_config))
       {
         c->comp->init();
         if( c->comp->supports(Component::Routing) )
-          _slot_select_routing->_data->available.push_back(c->comp->name());
+        {
+          _slot_select_routing->_data->available[ c->comp->name() ] = true;
+          c->is = 0;
+        }
       }
 
-    for( size_t i = 0; i < _slot_select_routing->_data->available.size(); ++i)
-      std::cout << _slot_select_routing->_data->available[i] << std::endl;
+    std::cout << "Available routing components: " << std::endl;
+    for( auto comp = _slot_select_routing->_data->available.begin();
+         comp != _slot_select_routing->_data->available.end();
+         ++comp )
+      std::cout << " - " << comp->first << std::endl;
 
     SlotCollector slot_collector(_slots);
     for( auto c = _components.begin(); c != _components.end(); ++c )
@@ -137,6 +143,10 @@ namespace LinksRouting
         LOG_INFO("Shutting down unusable component: " << c->comp->name());
         c->comp->shutdown();
         c->is = 0;
+
+        _slot_select_routing->_data->available[ c->comp->name() ] = false;
+        if( _slot_select_routing->_data->active == c->comp->name() )
+          _slot_select_routing->_data->active.clear();
       }
     }
 
@@ -152,17 +162,47 @@ namespace LinksRouting
         c->is = 0;
       }
   }
+  
+  //----------------------------------------------------------------------------
   void StaticCore::process(unsigned int type)
   {
+    // Check if we need to select a new routing algorithm
+    const std::string request = _slot_select_routing->_data->request,
+                      active = _slot_select_routing->_data->active;
+    if( !request.empty() || active.empty() )
+    {
+      for( auto c = _components.rbegin(); c != _components.rend(); ++c )
+        if(    c->comp->supports(Component::Routing)
+            && _slot_select_routing->_data->available[ c->comp->name() ] )
+        {
+          if( !request.empty() && c->comp->name() != request )
+          {
+            c->is = 0;
+            continue;
+          }
+
+          _slot_select_routing->_data->active = c->comp->name();
+          c->is = Component::Routing;
+
+          if( request.empty() )
+            break;
+        }
+
+      std::cout << "Selected routing algorithm: "
+                << _slot_select_routing->_data->active
+                << std::endl;
+      _slot_select_routing->_data->request.clear();
+    }
+
     for( auto c = _components.begin(); c != _components.end(); ++c )
     {
       if( c->is && c->comp->supports(type) )
       {
-//        std::cout << "+->" << c->comp->name() << std::endl;
+        std::cout << "+->" << c->comp->name() << std::endl;
         c->comp->process(type);
       }
-//      else
-//        std::cout << "!->" << c->comp->name() << std::endl;
+      else
+        std::cout << "!->" << c->comp->name() << std::endl;
     }
   }
 

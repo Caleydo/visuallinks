@@ -12,6 +12,7 @@
 #include "common/componentarguments.h"
 #include "linkdescription.h"
 #include "slotdata/polygon.hpp"
+#include "slotdata/component_selection.hpp"
 
 #include "QWsServer.h"
 #include "QWsSocket.h"
@@ -38,7 +39,7 @@ namespace LinksRouting
       virtual ~IPCServer();
 
       void publishSlots(SlotCollector& slot_collector);
-//      void subscribeSlots(SlotSubscriber& slot_subscriber);
+      void subscribeSlots(SlotSubscriber& slot_subscriber);
 
       bool startup(Core* core, unsigned int type);
       void init();
@@ -75,6 +76,9 @@ namespace LinksRouting
 
       /* List of all open searches */
       slot_t<LinkDescription::LinkList>::type _slot_links;
+      
+      /* List of available routing components */
+      slot_t<SlotType::ComponentSelection>::type _subscribe_routing;
 
       class JSON;
       std::vector<LinkDescription::Node>

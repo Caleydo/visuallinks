@@ -10,7 +10,7 @@
 #define _COMPONENT_SELECTION_HPP_
 
 #include <string>
-#include <vector>
+#include <map>
 
 namespace LinksRouting
 {
@@ -19,12 +19,14 @@ namespace SlotType
 
   struct ComponentSelection
   {
-    ComponentSelection():
-      active(0)
-    {}
+    /** name -> available */
+    std::map<std::string, bool> available;
 
-    std::vector<std::string> available;
-    int active;
+    /** Name of active component */
+    std::string active;
+
+    /** Name of request component (should get active) */
+    std::string request;
   };
 
 } // namespace SlotType

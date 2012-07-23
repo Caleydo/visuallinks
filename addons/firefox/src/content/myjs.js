@@ -7,7 +7,8 @@ var last_stamp = null;
 var offset = [0,0];
 var scale = 1;
 var win = null;
-var menu = document.getElementById("vislink_menu");
+var menu = null;
+var items_routing = null;
 var active_routes = new Object();
 var timeout = null;
 
@@ -39,10 +40,17 @@ function send(data)
   }
 }
 
+function removeAllChildren(el)
+{
+  while( el.hasChildNodes() )
+    el.removeChild(el.firstChild);
+}
+
 //------------------------------------------------------------------------------
 function onVisLinkButton()
 {
   menu = document.getElementById("vislink_menu");
+  items_routing = document.getElementById("routing-selector");
 
   if( status == 'active')
     selectVisLink();
@@ -174,6 +182,16 @@ function reportVisLinks(id, found)
 }
 
 //------------------------------------------------------------------------------
+function reportSelectRouting(routing)
+{
+  send({
+    'task': 'SET',
+    'id': '/routing',
+    'val': routing
+  });
+}
+
+//------------------------------------------------------------------------------
 function windowChanged()
 {
   if( timeout )
@@ -226,6 +244,10 @@ function register()
           'name': "Firefox",
           'pos': [box.screenX + box.width / 2, box.screenY + box.height / 2]
         });
+        send({
+          'task': 'GET',
+          'id': '/routing'
+        });
       };
       socket.onclose = function(event)
       {
@@ -252,6 +274,38 @@ function register()
   
           setTimeout('reportVisLinks("'+msg.id+'", true)',0);
         }
+        else if( msg.task == 'GET-FOUND')
+        {
+          if( msg.id == '/routing' )
+          {
+            removeAllChildren(items_routing);
+            for(var router in msg.val.available)
+            {
+              var name = msg.val.available[router][0];
+              var valid = msg.val.available[router][1];
+
+              var item = document.createElement("menuitem");
+              item.setAttribute("label", name);
+              item.setAttribute("type", "radio");
+              item.setAttribute("name", "routing-algorithm");
+              item.setAttribute("tooltiptext", "Use '" + name + "' for routing.");
+
+              // Mark available (Routers not able to route are disabled)
+              if( !valid )
+                item.setAttribute("disabled", true);
+              else
+                item.setAttribute("oncommand", "reportSelectRouting('"+name+"')");
+
+              // Mark current router
+              if( msg.val.active == name )
+                item.setAttribute("checked", true);
+
+              items_routing.appendChild(item);
+            }
+          }
+        }
+        else
+          alert(event.data);
       }
 	}
 	catch (err)
