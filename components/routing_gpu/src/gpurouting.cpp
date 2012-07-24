@@ -261,7 +261,7 @@ namespace LinksRouting
     _cl_voteMinimum_kernel = cl::Kernel(_cl_program, "voteMinimum");
     _cl_getMinimum_kernel = cl::Kernel(_cl_program, "getMinimum");
     _cl_routeInterBlock_kernel = cl::Kernel(_cl_program, "calcInterBlockRoute");
-    //_cl_routeConstruct_kernel = cl::Kernel(_cl_program, "constructRoute");
+    _cl_routeConstruct_kernel = cl::Kernel(_cl_program, "routeConstruct");
     
 
   }
@@ -2500,6 +2500,37 @@ void calcInterBlockRouteDummy(const float* routecost,
         checkLevels(levelNodeMap, levelHyperEdgeMap, *(*it), level + 1);
     }
   }
+  template<class Vec2>
+  float2 idToPos(Vec2 id, int downsample)
+  {
+    return float2(id.x,id.y) * downsample + 0.5f*downsample;
+  }
+  int2 posToId(float2 pos, int downsample)
+  {
+    int2 out;
+    out.x = pos.x / downsample;
+    out.y = pos.y / downsample;
+    return out;
+  }
+  template<class Iterator>
+  void addTrailFor(std::vector<float2>& trail, Iterator begin, int downsample, const int _blockSize[2])
+  {
+    Iterator it = begin + 2;
+    float2 blockoffset(*it & 0xFFFF, (*it >> 16) & 0xFFFF);
+    blockoffset.x *= _blockSize[0]-1;
+    blockoffset.y *= _blockSize[1]-1;
+    ++it;
+    uint count = *it++;
+    Iterator end = it + count;
+    while(it != end)
+    {
+      float2 inneroffset(*it & 0xFFFF, (*it >> 16) & 0xFFFF);
+      float2 point = blockoffset + inneroffset;
+      point = idToPos(point,downsample);
+      trail.push_back(point);
+      ++it;
+    }
+  }
   void GPURouting::createRoutes(LinksRouting::LinkDescription::HyperEdge& hedge)
   {
 
@@ -3077,8 +3108,8 @@ void calcInterBlockRouteDummy(const float* routecost,
 
 
 
-        std::vector<const LinkDescription::Node* > needRouteConstructionNodes;
-        std::vector<const LinkDescription::HyperEdge* > needRouteConstructionEdges;
+        std::vector< LinkDescription::Node* > needRouteConstructionNodes;
+        std::vector< LinkDescription::HyperEdge* > needRouteConstructionEdges;
 
         std::vector< uint4 > needRouteConstructionInfo;
         std::vector< uint >  needRouteConstructionElements;
@@ -3133,43 +3164,43 @@ void calcInterBlockRouteDummy(const float* routecost,
         if(needRouteConstructionElements.size() > 0)
         {
 
-          //debug
-          //dummy call
-          {
-          size_t size;
-          _cl_routeMap_buffer.getInfo(CL_MEM_SIZE, &size);
-          std::vector<float> h_routeMap_buffer(size/sizeof(float));
-          _cl_command_queue.enqueueReadBuffer(_cl_routeMap_buffer, true, 0, size, &h_routeMap_buffer[0]);
-          std::vector<float> h_routingData(requiredElements*slices);
-          _cl_command_queue.enqueueReadBuffer(d_routingData, true, 0, h_routingData.size() * sizeof(float), &h_routingData[0]);
+          ////debug
+          ////dummy call
+          //{
+          //size_t size;
+          //_cl_routeMap_buffer.getInfo(CL_MEM_SIZE, &size);
+          //std::vector<float> h_routeMap_buffer(size/sizeof(float));
+          //_cl_command_queue.enqueueReadBuffer(_cl_routeMap_buffer, true, 0, size, &h_routeMap_buffer[0]);
+          //std::vector<float> h_routingData(requiredElements*slices);
+          //_cl_command_queue.enqueueReadBuffer(d_routingData, true, 0, h_routingData.size() * sizeof(float), &h_routingData[0]);
 
-          _cl_lastCostMap_buffer.getInfo(CL_MEM_SIZE, &size);
-          std::vector<float> h_lastCostMap_buffer(size/sizeof(float));
-          _cl_command_queue.enqueueReadBuffer(_cl_lastCostMap_buffer, true, 0, size, &h_lastCostMap_buffer[0]);
-          
-          std::vector<uint> blockRoutes(needRouteConstructionElements.size()*_blocks[0]*_blocks[1]/4);
-          float* l_cost = new float[(_blockSize[0]+2)*(_blockSize[1]+2)],
-               * l_route = new float[(_blockSize[0]+2)*(_blockSize[1]+2)];
-
-          initKernelData(int2(_blockSize[0],_blockSize[1]), int2(1,1));
-          calcInterBlockRouteDummy(&h_routingData[0],
-                              &h_routeMap_buffer[0],
-                              &h_lastCostMap_buffer[0],
-                              &needRouteConstructionInfo[0],
-                              &needRouteConstructionEndElements[0],
-                              (int*)&needRouteConstructionElements[0],
-                              requiredElements,
-                              int2(_blockSize[0], _blockSize[1]),
-                              int2(_blocks[0], _blocks[1]),
-                              int2(bufferDim[0], bufferDim[1]),
-                              &blockRoutes[0],
-                              _blocks[0]*_blocks[1]/4,
-                              l_cost,
-                              l_route);
-          delete[] l_cost;
-          delete[] l_route;
-          }
+          //_cl_lastCostMap_buffer.getInfo(CL_MEM_SIZE, &size);
+          //std::vector<float> h_lastCostMap_buffer(size/sizeof(float));
+          //_cl_command_queue.enqueueReadBuffer(_cl_lastCostMap_buffer, true, 0, size, &h_lastCostMap_buffer[0]);
           //
+          //std::vector<uint> blockRoutes(needRouteConstructionElements.size()*_blocks[0]*_blocks[1]/4);
+          //float* l_cost = new float[(_blockSize[0]+2)*(_blockSize[1]+2)],
+          //     * l_route = new float[(_blockSize[0]+2)*(_blockSize[1]+2)];
+
+          //initKernelData(int2(_blockSize[0],_blockSize[1]), int2(1,1));
+          //calcInterBlockRouteDummy(&h_routingData[0],
+          //                    &h_routeMap_buffer[0],
+          //                    &h_lastCostMap_buffer[0],
+          //                    &needRouteConstructionInfo[0],
+          //                    &needRouteConstructionEndElements[0],
+          //                    (int*)&needRouteConstructionElements[0],
+          //                    requiredElements,
+          //                    int2(_blockSize[0], _blockSize[1]),
+          //                    int2(_blocks[0], _blocks[1]),
+          //                    int2(bufferDim[0], bufferDim[1]),
+          //                    &blockRoutes[0],
+          //                    _blocks[0]*_blocks[1]/4,
+          //                    l_cost,
+          //                    l_route);
+          //delete[] l_cost;
+          //delete[] l_route;
+          //}
+          ////
 
           cl::Buffer d_needRouteConstructionInfo(_cl_context, CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR, needRouteConstructionInfo.size()*sizeof(uint4), &needRouteConstructionInfo[0]);
           cl::Buffer d_needRouteConstructionEndElements(_cl_context, CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR, needRouteConstructionEndElements.size()*sizeof(uint4), &needRouteConstructionEndElements[0]);
@@ -3212,28 +3243,170 @@ void calcInterBlockRouteDummy(const float* routecost,
           std::vector<uint> blockRoutes(needRouteConstructionElements.size()*maxBlocksForRoute);
           _cl_command_queue.enqueueReadBuffer(d_blockRoutes, true, 0, blockRoutes.size()*sizeof(uint), &blockRoutes[0]);
           
-          //debug
-          uint j = 0;
-          for(auto it = blockRoutes.begin(); it != blockRoutes.end(); it += maxBlocksForRoute, ++j)
+          ////debug
+          //uint j = 0;
+          //for(auto it = blockRoutes.begin(); it != blockRoutes.end(); it += maxBlocksForRoute, ++j)
+          //{
+          //  uint rblocks = *it;
+          //  std::cout << j << ": route blocks: " << *it << "\n";
+          //  for(int i = 0; i < rblocks; ++i)
+          //  {
+          //    uint block = *(it + 2*i+1);
+          //    uint interblock = *(it + 2*i + 2);
+          //    int2 gid((block & 0xFFFF) , (block >> 16)& 0xFFFF);
+          //    std::cout << "(" << gid.x << "," << gid.y << ")";
+          //    gid.x = gid.x*(_blockSize[0]-1) + (interblock & 0xFFFF);
+          //    gid.y = gid.y*(_blockSize[1]-1) + ((interblock >> 16)& 0xFFFF);
+          //    std::cout << "[" << gid.x << "," << gid.y << "] -> ";
+          //  }
+          //  std::cout << "[" << needRouteConstructionEndElements[j].x << " - " << needRouteConstructionEndElements[j].z << ", "
+          //    << needRouteConstructionEndElements[j].y << " - " << needRouteConstructionEndElements[j].w << "]\n";
+          //}
+          ////
+          
+          //compute requirements for launch
+          uint maxBlocks = 0;
+          uint sumBlocks = 0;
+          for(auto it = blockRoutes.begin(); it != blockRoutes.end(); it += maxBlocksForRoute)
           {
-            uint rblocks = *it;
-            std::cout << "route blocks: " << *it << "\n";
-            for(int i = 0; i < rblocks; ++i)
-            {
-              uint block = *(it + 2*i+1);
-              uint interblock = *(it + 2*i + 2);
-              int2 gid((block % _blocks[0])*(_blockSize[0]-1) , (block / _blocks[0])*(_blockSize[1]-1));
-              std::cout << "(" << gid.x << "," << gid.y << ")";
-              gid.x += interblock % _blockSize[0];
-              gid.y += interblock / _blockSize[0];
-              std::cout << "[" << gid.x << "," << gid.y << "] -> ";
-            }
-            std::cout << "[" << needRouteConstructionEndElements[j].x << " - " << needRouteConstructionEndElements[j].z << ", "
-              << needRouteConstructionEndElements[j].y << " - " << needRouteConstructionEndElements[j].w << "]\n";
+            sumBlocks += *it;
+            maxBlocks = std::max(*it, maxBlocks);
           }
 
+          uint innerBlockRoutesSize = sumBlocks*(4 + 3*(_blockSize[0] + _blockSize[1])/2);
+          cl::Buffer d_innerBlockRoutes(_cl_context, CL_MEM_READ_WRITE, innerBlockRoutesSize*sizeof(uint));
+          uint one = 1;
+          _cl_command_queue.enqueueWriteBuffer(d_innerBlockRoutes, true, 0, sizeof(uint), &one);
 
-        // _cl_routeConstruct_kernel;
+          _cl_routeConstruct_kernel.setArg(0, d_routingData);
+          _cl_routeConstruct_kernel.setArg(1, _cl_lastCostMap_buffer);
+          _cl_routeConstruct_kernel.setArg(2, d_needRouteConstructionEndElements);
+          _cl_routeConstruct_kernel.setArg(3, d_needRouteConstructionElements);
+          _cl_routeConstruct_kernel.setArg(4, requiredElements);
+          _cl_routeConstruct_kernel.setArg(5, 2 * sizeof(cl_int), _blockSize);
+          _cl_routeConstruct_kernel.setArg(6, 2 * sizeof(cl_int), _blocks);
+          _cl_routeConstruct_kernel.setArg(7, 2 * sizeof(cl_int), bufferDim);
+          _cl_routeConstruct_kernel.setArg(8, d_blockRoutes);
+          _cl_routeConstruct_kernel.setArg(9, maxBlocksForRoute);
+          _cl_routeConstruct_kernel.setArg(10, d_innerBlockRoutes);
+          _cl_routeConstruct_kernel.setArg(11, sizeof(float)*(_blockSize[0]+2)*(_blockSize[1]+2), NULL);
+          _cl_routeConstruct_kernel.setArg(12, sizeof(float)*(_blockSize[0]+2)*(_blockSize[1]+2), NULL);
+
+          cl::Event routingRouteConstructEvent;
+          _cl_command_queue.enqueueNDRangeKernel
+          (
+            _cl_routeConstruct_kernel,
+            cl::NullRange,
+            cl::NDRange(_blockSize[0]*maxBlocks,_blockSize[1],needRouteConstructionElements.size()),
+            cl::NDRange(_blockSize[0],_blockSize[1],1),
+            0,
+            &routingRouteConstructEvent
+          );
+          _cl_command_queue.finish();
+          routingRouteConstructEvent.getProfilingInfo(CL_PROFILING_COMMAND_END, &end);
+          routingRouteConstructEvent.getProfilingInfo(CL_PROFILING_COMMAND_START, &start);
+          std::cout << " - routingRouteConstruct: " << (end-start)/1000000.0  << "ms\n";
+          
+          std::vector<uint> innerBlockRoutes(innerBlockRoutesSize);
+          _cl_command_queue.enqueueReadBuffer(d_innerBlockRoutes, true, 0, innerBlockRoutesSize*sizeof(uint), &innerBlockRoutes[0]);
+          
+
+          std::vector< std::map<uint, uint> > innerBlockRoutesOffsets(needRouteConstructionElements.size());
+          auto ibrIt = innerBlockRoutes.begin();
+          auto ibrEnd = ibrIt + *ibrIt;
+          ibrIt++;
+          uint offset = 1;
+          while(ibrIt != ibrEnd)
+          {
+            uint edge = *ibrIt++;
+            uint segmentInEdge = *ibrIt++;
+            ++ibrIt;
+            uint count = *ibrIt++;
+            ibrIt += count;
+            //std::cout << edge << "->" << segmentInEdge << "\n";
+            innerBlockRoutesOffsets[edge].insert(std::pair<uint,uint>(segmentInEdge, offset));
+            offset += count + 4;
+          }
+          ////debug
+          //ibrIt = innerBlockRoutes.begin()+1;
+          //while(ibrIt != ibrEnd)
+          //{
+          //  
+          //  std::cout << "found route segment:\n";
+          //  std::cout << "(edge: " << *ibrIt++;
+          //  std::cout << ", offset: " << *ibrIt++;
+          //  int2 blockId = int2(*ibrIt & 0xFFFF, (*ibrIt >> 16) & 0xFFFF);
+          //  std::cout << ", block: " << blockId.x << "," << blockId.y << ")   ";
+          //  ++ibrIt;
+          //  uint count = *ibrIt++;
+          //  for(uint i = 0; i < count; ++i, ++ibrIt)
+          //  {
+          //    int2 innerOffset(*ibrIt & 0xFFFF, (*ibrIt >> 16) & 0xFFFF);
+          //    int2 point;
+          //    point.x = blockId.x * (_blockSize[0]-1) + innerOffset.x;
+          //    point.y = blockId.y * (_blockSize[1]-1) + innerOffset.y;
+          //    std::cout << "[" << point.x << "," << point.y << "]->";
+          //  }
+          //  std::cout << "\n";
+          //}
+          ////
+
+          //put the routes together
+          uint edge = 0;
+          for( auto needRouteNodesIt = needRouteConstructionNodes.begin();
+            needRouteNodesIt != needRouteConstructionNodes.end();
+            ++needRouteNodesIt)
+          {
+            auto nodeChildren = (*needRouteNodesIt)->getChildren();
+            for(auto childrenIt = nodeChildren.begin();
+              childrenIt != nodeChildren.end();
+              ++childrenIt)
+            {
+              if((*childrenIt)->getHyperEdgeDescription() == 0)
+                (*childrenIt)->setHyperEdgeDescription(new LinkDescription::HyperEdgeDescriptionForkation());
+              LinkDescription::HyperEdgeDescriptionForkation *fork = (*childrenIt)->getHyperEdgeDescription();
+              fork->incoming.trail.clear();
+
+              float2 startpos = idToPos(nodePositions.find(*needRouteNodesIt)->second, downsample);
+              fork->incoming.trail.push_back(startpos);
+              auto iBRBegin = innerBlockRoutes.begin();
+              for(auto edgesegmentit = innerBlockRoutesOffsets[edge].begin();
+                edgesegmentit != innerBlockRoutesOffsets[edge].end();
+                ++edgesegmentit)
+                addTrailFor(fork->incoming.trail, iBRBegin + edgesegmentit->second, downsample, _blockSize);
+              ++edge;
+              fork->position = fork->incoming.trail.back();
+              hyperEdgeCenters.insert(std::make_pair(*childrenIt, posToId(fork->incoming.trail.back(), downsample)));
+            }
+          }
+          for( auto needRouteEdgesIt = needRouteConstructionEdges.begin();
+            needRouteEdgesIt != needRouteConstructionEdges.end();
+            ++needRouteEdgesIt)
+          {
+            auto hyperedgeChildren = (*needRouteEdgesIt)->getNodes();
+            if((*needRouteEdgesIt)->getHyperEdgeDescription() == 0)
+                (*needRouteEdgesIt)->setHyperEdgeDescription(new LinkDescription::HyperEdgeDescriptionForkation());
+            LinkDescription::HyperEdgeDescriptionForkation *fork = (*needRouteEdgesIt)->getHyperEdgeDescription();
+            fork->position = idToPos(hyperEdgeCenters.find((*needRouteEdgesIt))->second, downsample);
+
+            for(auto childrenIt = hyperedgeChildren.begin();
+              childrenIt != hyperedgeChildren.end();
+              ++childrenIt)
+            {
+              fork->outgoing.push_back(LinkDescription::HyperEdgeDescriptionSegment());
+              LinkDescription::HyperEdgeDescriptionSegment& segment(fork->outgoing.back());
+              segment.nodes.push_back(&(*childrenIt));
+              segment.trail.push_back(fork->position);
+
+              auto iBRBegin = innerBlockRoutes.begin();
+              for(auto edgesegmentit = innerBlockRoutesOffsets[edge].begin();
+                edgesegmentit != innerBlockRoutesOffsets[edge].end();
+                ++edgesegmentit)
+                addTrailFor(segment.trail, iBRBegin + edgesegmentit->second, downsample, _blockSize);
+              ++edge;
+              nodePositions.insert(std::make_pair(&(*childrenIt), posToId(segment.trail.back(), downsample)));
+            }
+          }
         }
       }
     }

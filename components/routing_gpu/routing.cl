@@ -365,6 +365,10 @@ int getCostGlobalId(const int lid, const int2 blockId, const int2 blockSize, con
     return myoffset + rowelements + blockId.x*(blockSize.y - 2)    + 2*(blockSize.x+blockSize.y-2)-1 - lid;
 }
 
+local int* accessLocalConstruct(local int* l_construct, int2 id)
+{
+  return l_construct + (id.x+1 + (id.y+1)*(get_local_size(0)+2));
+}
 
 local float* accessLocalCost(local float* l_costs, int2 id)
 {
@@ -374,6 +378,14 @@ local float* accessLocalCost(local float* l_costs, int2 id)
 local const float* accessLocalCostConst(local float const * l_costs, int2 id)
 {
   return l_costs + (id.x+1 + (id.y+1)*(get_local_size(0)+2));
+}
+
+float routeCost(float dist, float other, float penalty)
+{
+  //TODO use custom params here
+  const float a = 1.0f; //a must be 1 !!!!
+  const float b = 100.0f;
+  return other + a*dist + b*dist*penalty;
 }
 
 bool route_data(local float const * l_cost,
@@ -407,11 +419,9 @@ bool route_data(local float const * l_cost,
         float penalty = 0.5f*(*accessLocalCostConst(l_cost, localid) +
                               *accessLocalCostConst(l_cost, localid + offset));
         float r_other = *accessLocalCost(l_route, localid + offset);
-        //TODO use custom params here
-        const float a = 1.0f; //a must be 1 !!!!
-        const float b = 100.0f;
-        tval = min(tval, r_other + a*d + b*d*penalty);
-        //tval = min(tval, r_other + offset.x*offset.x+offset.y*offset.y);
+
+        float newval = routeCost(d, r_other, penalty);
+        tval = min(tval, newval);
       }
 
     if(tval != lastmyval)
@@ -427,7 +437,83 @@ bool route_data(local float const * l_cost,
   return counter > 0;
 }
 
+int encode2(int2 id)
+{
+  return (id.y << 16) | id.x;
+}
+int2 decode2(int val)
+{
+  return (int2)(val & 0xFFFF, (val >> 16) & 0xFFFF );
+}
 
+
+int construct_route_single(local float* l_route, local float* l_cost, local int* l_construct)
+{
+  int2 localid = (int2)(get_local_id(0),get_local_id(1));
+  
+  //get mindir
+  int2 offset;
+  float mincost = 0.1f*MAXFLOAT;
+  int2 minoffset = (int2)(0,0);
+  for(offset.y = -1; offset.y  <= 1; ++offset.y)
+    for(offset.x = -1; offset.x <= 1; ++offset.x)
+    {
+      float d = native_sqrt((float)(offset.x*offset.x+offset.y*offset.y));
+      float penalty = 0.5f*(*accessLocalCostConst(l_cost, localid) +
+                            *accessLocalCostConst(l_cost, localid + offset));
+      float r_other = *accessLocalCost(l_route, localid + offset);
+      float thiscost = routeCost(d, r_other, penalty);
+      
+      //avoid sticking to self
+      if(offset.x == 0 && offset.y == 0)
+        thiscost += 0.0001f;
+
+      if(thiscost < mincost)
+      {
+        mincost = thiscost;
+        minoffset = offset;
+      }
+    }
+  int2 mymin_id = localid + minoffset;
+  barrier(CLK_LOCAL_MEM_FENCE);
+
+  //init construct
+  int myval = encode2(mymin_id);
+  *accessLocalConstruct(l_construct, localid) = myval;
+  return myval;
+}
+
+void construct_route(local float* l_route, local float* l_cost, local int* l_construct)
+{
+  int2 localid = (int2)(get_local_id(0),get_local_id(1));
+  //route as long as there is change
+  local bool change;
+  change = true;
+
+
+  int myval = construct_route_single(l_route, l_cost, l_construct);
+  int2 mymin_id = decode2(myval);
+  barrier(CLK_LOCAL_MEM_FENCE);
+
+  //iterate over it
+  while(change)
+  {
+    barrier(CLK_LOCAL_MEM_FENCE);
+    change = false;
+    barrier(CLK_LOCAL_MEM_FENCE);
+
+    int lastmyval = myval;
+    myval = *accessLocalConstruct(l_construct, mymin_id);
+    
+    if(myval != lastmyval)
+    {
+      change = true;  
+      *accessLocalConstruct(l_construct, localid) = myval;
+    }
+    
+    barrier(CLK_LOCAL_MEM_FENCE);
+  }
+}
 
 float loadCostToLocalAndSetRoute(const int2 group_id, const int2 gid, const int2 dim, global const float* g_cost, local float* l_cost, local float* l_route)
 {
@@ -1096,7 +1182,6 @@ __kernel void routeLocal(global const float* routeMap,
 }
 
 
-
 __kernel void voteMinimum( global const float* routecost,
                            global const uint* ids,
                            const int routeDataPerNode,
@@ -1222,19 +1307,16 @@ bool isContainedInBlock(const int4 target, const int2 block, const int2 blockSiz
 }
 
 
-int writeOutBlock(global uint* interblockResult, const int interblockSize, const int layer, const int2 blockId, const int2 blockSize, const int2 numBlocks, const int2 enter, const int written)
+int writeOutBlock(global uint* interblockResult, const int interblockSize, const int outpart, const int2 blockId, const int2 blockSize, const int2 numBlocks, const int2 enter, const int written)
 {
   //ran out of space :/
   if(written + 3 >= interblockSize)
     return written;
-  interblockResult[interblockSize*layer] = (written + 2)/2;
-  interblockResult = interblockResult + interblockSize*layer + written;
+  interblockResult[interblockSize*outpart] = (written + 2)/2;
+  interblockResult = interblockResult + interblockSize*outpart + written;
 
-  uint blockEncode = blockId.x + blockId.y*numBlocks.x;
-  interblockResult[1] = blockEncode;
-
-  int innerBlockEncode = (enter.x - blockId.x*(blockSize.x-1)) + (enter.y - blockId.y*(blockSize.y-1))*blockSize.x;
-  interblockResult[2] = innerBlockEncode;
+  interblockResult[1] = encode2(blockId);
+  interblockResult[2] = encode2(enter - blockId*(blockSize-1));
 
   return written+2;
 }
@@ -1268,6 +1350,68 @@ float2 checkRoutes(int2 blockId, int startLid, global const float* routecost, gl
 
   return (float2)(minresX, minresY);
 }
+float2 checkFinalBlock(int2 blockId, int startLid, global const float* routecost, global const float* costmap, int layer, int2 numBlocks, int2 blockSize, int2 dim, int lid, int routeDataPerNode, int4 to, local float* l_cost, local float* l_route)
+{
+  //load routing data
+  int2 gid2 = (int2)(blockId.x * (blockSize.x-1) + get_local_id(0),
+                     blockId.y * (blockSize.y-1) + get_local_id(1));
+  int2 lid2 = (int2)(get_local_id(0), get_local_id(1));
+  loadCostToLocalAndSetRoute(blockId, gid2, dim, costmap, l_cost, l_route);
+
+  float myinit = 0.1f*MAXFLOAT;
+  if(to.x <= gid2.x && gid2.x <= to.z &&
+     to.y <= gid2.y && gid2.y <= to.w)
+    myinit = 0;
+  else if(lid >= 0)
+  {
+    int mydata_offset = getCostGlobalId(lid, blockId, blockSize, numBlocks);
+    myinit = routecost[layer*routeDataPerNode +  mydata_offset];
+  }
+
+  *accessLocalCost(l_route, lid2) = myinit;
+  barrier(CLK_LOCAL_MEM_FENCE);
+  
+  //route
+  route_data(l_cost, l_route);
+  barrier(CLK_LOCAL_MEM_FENCE);
+
+  float myOutCost = *accessLocalCost(l_cost, lid2);
+  barrier(CLK_LOCAL_MEM_FENCE);
+
+  local int* l_construct = (local int*)(l_cost);
+  construct_route(l_route, l_cost, l_construct);
+  barrier(CLK_LOCAL_MEM_FENCE);
+
+  int2 outLid = decode2(*accessLocalConstruct(l_construct, lid2));
+  barrier(CLK_LOCAL_MEM_FENCE);
+
+  *accessLocalCost(l_cost, lid2) = myOutCost;
+  barrier(CLK_LOCAL_MEM_FENCE);
+
+
+  //voting
+  local float minresX, minresY;
+  minresX = 0.1f*MAXFLOAT;
+  minresY = 0.1f*MAXFLOAT;
+  barrier(CLK_LOCAL_MEM_FENCE);
+
+  float2 newmincosts = (float2)(0.1f*MAXFLOAT,  0.1f*MAXFLOAT);
+  if(lid >= 0)
+  {
+    newmincosts.x = *accessLocalCost(l_cost, outLid);
+    newmincosts.y = myOutCost;
+    //TODO: reduction..
+    atomic_min((volatile local uint*)(&minresY), as_uint(newmincosts.y));
+  }
+  barrier(CLK_LOCAL_MEM_FENCE);
+
+  if(minresY == newmincosts.y)
+    minresX = newmincosts.x; 
+  barrier(CLK_LOCAL_MEM_FENCE);
+
+  return (float2)(minresX, minresY);
+}
+
 __kernel void calcInterBlockRoute(global const float* routecost,
                                   global const float* routeMap,
                                   global const float* costmap,
@@ -1292,7 +1436,7 @@ __kernel void calcInterBlockRoute(global const float* routecost,
   int written = 0;
 
   if(lid == 0)
-    written = writeOutBlock(interblockResult, interblockSize, layer, currentBlock, blockSize, numBlocks, (int2)(froms[layer].x,froms[layer].y) , written);
+    written = writeOutBlock(interblockResult, interblockSize, get_global_id(2), currentBlock, blockSize, numBlocks, (int2)(froms[layer].x,froms[layer].y) , written);
   //early termination
   if(isContainedInBlock(tos[layer], currentBlock, blockSize))
     return;
@@ -1335,6 +1479,7 @@ __kernel void calcInterBlockRoute(global const float* routecost,
     //TODO: reduction..
     atomic_min((volatile local uint*)(&minvoter), as_uint(myoutcost));
 
+
   do
   {
     barrier(CLK_LOCAL_MEM_FENCE);
@@ -1367,7 +1512,11 @@ __kernel void calcInterBlockRoute(global const float* routecost,
       barrier(CLK_LOCAL_MEM_FENCE);
       if(testStart != -1)
       {
-        float2 nextMinval = checkRoutes(testBlock, testStart, routecost, routeMap, layer, numBlocks, blockSize, lid, routeDataPerNode);
+        float2 nextMinval;
+        if(isContainedInBlock(tos[layer], testBlock, blockSize))
+          nextMinval = checkFinalBlock(testBlock, testStart, routecost, costmap, layer, numBlocks, blockSize, dim, lid, routeDataPerNode, tos[layer], l_cost, l_route);
+        else
+          nextMinval = checkRoutes(testBlock, testStart, routecost, routeMap, layer, numBlocks, blockSize, lid, routeDataPerNode);
         if(nextMinval.x < newminval && 
            nextMinval.y <= newminval + 0.000001f &&
            testStart == lid)
@@ -1389,12 +1538,113 @@ __kernel void calcInterBlockRoute(global const float* routecost,
       int mydata_offset = getCostGlobalId(lid, currentBlock, blockSize, numBlocks);
       myoutcost = routecost[layer*routeDataPerNode +  mydata_offset];
       if(lid == 0)
-        written = writeOutBlock(interblockResult, interblockSize, layer, currentBlock, blockSize, numBlocks, currentBlock*(blockSize-1) + localInPos, written);
+        written = writeOutBlock(interblockResult, interblockSize, get_global_id(2), currentBlock, blockSize, numBlocks, currentBlock*(blockSize-1) + localInPos, written);
     }
     barrier(CLK_LOCAL_MEM_FENCE);
 
-  } while( !(isContainedInBlock(tos[layer], currentBlock, blockSize)  || minvoter >= incost ) );
+  } while( !( minvoter == 0 || minvoter >= incost ) );
 }
+
+__kernel void routeConstruct( global const float* routecost,
+                              global const float* costmap,
+                              global const int4* tos,
+                              global const int* ids,
+                              const int routeDataPerNode,
+                              const int2 blockSize,
+                              const int2 numBlocks,
+                              const int2 dim,
+                              global const uint* interblockResult,
+                              const int interblockSize,
+                              global uint* blockRoutes,
+                              local float* l_cost,
+                              local float* l_route)
+{
+  uint myedge = get_global_id(2);
+  uint myblockoffset = get_group_id(0);
+  interblockResult = interblockResult + myedge*interblockSize;
+  uint blocksForEdge = interblockResult[0];
+
+  if(myblockoffset >= blocksForEdge)
+    return;
+
+  int layer = ids[get_global_id(2)];
+  int2 blockId = decode2(interblockResult[2*myblockoffset+1]);
+  int2 innerblock = decode2(interblockResult[2*myblockoffset+2]);
+
+
+
+  int2 gid2 = (int2)(blockId.x * (blockSize.x-1) + get_local_id(0),
+                     blockId.y * (blockSize.y-1) + get_local_id(1));
+  int2 lid2 = (int2)(get_local_id(0), get_local_id(1));
+  int lid =  borderId(lid2, blockSize);
+
+  loadCostToLocalAndSetRoute(blockId, gid2, dim, costmap, l_cost, l_route);
+
+  float myinit = 0.1f*MAXFLOAT;
+  if(tos[layer].x <= gid2.x && gid2.x <= tos[layer].z &&
+     tos[layer].y <= gid2.y && gid2.y <= tos[layer].w)
+    myinit = 0;
+  else if(lid >= 0)
+  {
+    int mydata_offset = getCostGlobalId(lid, blockId, blockSize, numBlocks);
+    myinit = routecost[layer*routeDataPerNode +  mydata_offset];
+  }
+
+  *accessLocalCost(l_route, lid2) = myinit;
+  barrier(CLK_LOCAL_MEM_FENCE);
+  
+  //route
+  route_data(l_cost, l_route);
+  barrier(CLK_LOCAL_MEM_FENCE);
+
+
+  local int* l_construct = (local int*)(l_cost);
+  construct_route_single(l_route, l_cost, l_construct);
+  barrier(CLK_LOCAL_MEM_FENCE);
+
+  //starting point
+  if(lid2.x == innerblock.x && lid2.y == innerblock.y)
+  {
+    //count required elements
+    int count = 0;
+    int2 current = lid2;
+    int next;
+    while( (next = *accessLocalConstruct(l_construct, current)) != encode2(current))
+    {
+      current = decode2(next);
+      ++count;
+    }
+    if(count != 0)
+    {
+      //get space to write to
+      uint writeoffset = atomic_add((global volatile uint*)(blockRoutes), count + 4);
+
+      //write info
+      blockRoutes[writeoffset++] = myedge;
+      blockRoutes[writeoffset++] = myblockoffset;
+      blockRoutes[writeoffset++] = encode2(blockId);
+      blockRoutes[writeoffset++] = count;
+
+      //construct
+      int2 current = lid2;
+      int next;
+      count = 0;
+      while( (next = *accessLocalConstruct(l_construct, current)) != encode2(current))
+      {
+        blockRoutes[writeoffset++] = next;
+        current = decode2(next);
+        ++count;
+      }
+    }
+  }
+}
+
+__kernel void initMem(__global uint* data, uint val)
+{
+  uint id = get_global_id(0) + get_global_id(1)*get_global_size(0);
+  data[id] = val;
+}
+
 
 //__kernel void calcInOut(global const float* routecost,
 //                        global uint* blockroutes,
@@ -1600,12 +1850,6 @@ __kernel void calcInterBlockRoute(global const float* routecost,
 //  }
 //}
 
-
-__kernel void initMem(__global uint* data, uint val)
-{
-  uint id = get_global_id(0) + get_global_id(1)*get_global_size(0);
-  data[id] = val;
-}
 
 
 //#define KEY_TYPE float

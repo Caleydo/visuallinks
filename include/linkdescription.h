@@ -132,13 +132,8 @@ namespace LinkDescription
 
   struct HyperEdgeDescriptionSegment
   {
-      HyperEdgeDescriptionSegment() : parent(0), child(0)
-      {
-      }
       std::vector<const Node*> nodes;
       std::vector<float2> trail;
-
-      HyperEdgeDescriptionForkation *parent, *child;
   };
 
   struct HyperEdgeDescriptionForkation
