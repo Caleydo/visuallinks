@@ -300,6 +300,11 @@ namespace LinksRouting
         {
           _subscribe_routing->_data->request =
             msg.getValue<QString>("val").toStdString();
+          for( auto link = _slot_links->_data->begin();
+                   link != _slot_links->_data->end();
+                   ++link )
+            link->_stamp += 1;
+          LOG_INFO("Trigger reroute -> routing algorithm changed");
           _cond_data_ready->wakeAll();
         }
         else
