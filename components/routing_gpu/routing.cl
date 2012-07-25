@@ -251,6 +251,35 @@ uint scanLocalWorkEfficient(__local volatile uint* data, size_t linId, size_t el
 }
 
 
+uint localMinUint(uint val, local uint* reducionSpace, uint localId, uint num)
+{
+  if(localId < num)
+    reducionSpace[localId] = val;
+  for(uint next = (num+1)/2; num > 1; next = (next+1)/2)
+  {
+    barrier(CLK_LOCAL_MEM_FENCE);
+    if(next + localId < num)
+      reducionSpace[localId] = min(reducionSpace[localId], reducionSpace[next + localId]);
+    num = next;
+  }
+  barrier(CLK_LOCAL_MEM_FENCE);
+  return reducionSpace[0];
+}
+float localMinFloat(float val, local float* reducionSpace, uint localId, uint num)
+{
+  if(localId < num)
+    reducionSpace[localId] = val;
+  for(uint next = (num+1)/2; num > 1; next = (next+1)/2)
+  {
+    barrier(CLK_LOCAL_MEM_FENCE);
+    if(next + localId < num)
+      reducionSpace[localId] = min(reducionSpace[localId], reducionSpace[next + localId]);
+    num = next;
+  }
+  barrier(CLK_LOCAL_MEM_FENCE);
+  return reducionSpace[0];
+}
+
 //
 
 float getPenalty(read_only image2d_t costmap, int2 pos)
@@ -681,50 +710,50 @@ float getRouteMapCost(global const float* ourRouteMapBlock, int from, int to, co
 }
 
 
-int routeBorder(global const float* routeMap, 
-                volatile global float* routingData,
-                const int2 blockId, 
-                const int2 blockSize,
-                const int2 numBlocks,
-                local float* routeData,
-                local int* changeData)
-{
-  int lid = get_local_id(0);
-  int lsize = get_local_size(0);
-  int borderElements = 2*(blockSize.x + blockSize.y - 2);
-  int gid = getCostGlobalId(lid, blockId, blockSize, numBlocks);
-
-  *changeData = 0;
-  float mycost = 0.01f*MAXFLOAT;
-  global const float* ourRouteMap = routeMap + borderElements*(borderElements+1)/2*(blockId.x + blockId.y*numBlocks.x);
-  if(lid < borderElements)
-  {    
-    mycost = routingData[gid];
-    routeData[lid] = mycost;
-  }
-  barrier(CLK_LOCAL_MEM_FENCE);
-  if(lid < borderElements)
-  {
-    float origCost = mycost;
-    for(int i = 0; i < borderElements; ++i)
-    {
-      float newcost = routeData[i] + getRouteMapCost(ourRouteMap, i, lid, borderElements);
-      mycost = min(newcost, mycost);
-    }
-    
-    if(mycost + 0.0001f < origCost)
-    {
-      //atomic as multiple might be working on the same
-      atomic_min((volatile global unsigned int*)(routingData + gid), as_uint(mycost));
-      routeData[lid] = mycost;
-      
-      //TODO: this is already an extension for opencl 1.0 so maybe do them individually...
-      atomic_or(changeData,dir4FromBorderId(lid, blockSize));
-    }
-  }
-  barrier(CLK_LOCAL_MEM_FENCE);
-  return *changeData;
-}
+//int routeBorder(global const float* routeMap, 
+//                volatile global float* routingData,
+//                const int2 blockId, 
+//                const int2 blockSize,
+//                const int2 numBlocks,
+//                local float* routeData,
+//                local int* changeData)
+//{
+//  int lid = get_local_id(0);
+//  int lsize = get_local_size(0);
+//  int borderElements = 2*(blockSize.x + blockSize.y - 2);
+//  int gid = getCostGlobalId(lid, blockId, blockSize, numBlocks);
+//
+//  *changeData = 0;
+//  float mycost = 0.01f*MAXFLOAT;
+//  global const float* ourRouteMap = routeMap + borderElements*(borderElements+1)/2*(blockId.x + blockId.y*numBlocks.x);
+//  if(lid < borderElements)
+//  {    
+//    mycost = routingData[gid];
+//    routeData[lid] = mycost;
+//  }
+//  barrier(CLK_LOCAL_MEM_FENCE);
+//  if(lid < borderElements)
+//  {
+//    float origCost = mycost;
+//    for(int i = 0; i < borderElements; ++i)
+//    {
+//      float newcost = routeData[i] + getRouteMapCost(ourRouteMap, i, lid, borderElements);
+//      mycost = min(newcost, mycost);
+//    }
+//    
+//    if(mycost + 0.0001f < origCost)
+//    {
+//      //atomic as multiple might be working on the same
+//      atomic_min((volatile global unsigned int*)(routingData + gid), as_uint(mycost));
+//      routeData[lid] = mycost;
+//      
+//      //TODO: this is already an extension for opencl 1.0 so maybe do them individually...
+//      atomic_or(changeData,dir4FromBorderId(lid, blockSize));
+//    }
+//  }
+//  barrier(CLK_LOCAL_MEM_FENCE);
+//  return *changeData;
+//}
 
 uint createDummyQueueEntry()
 {
@@ -1021,7 +1050,6 @@ __kernel void routeLocal(global const float* routeMap,
           route_mycost = min(newcost, route_mycost);
         }
     
-        //TODO: extension in opencl 1.0!
         if(route_mycost + 0.0001f < route_origCost)
           //atomic as multiple might be working on the same
           atomic_min((volatile global unsigned int*)(routingData + route_gid), as_uint(route_mycost));
@@ -1058,6 +1086,7 @@ __kernel void routeLocal(global const float* routeMap,
             //else if(element >= 5 && element <= 6) offset.y = 1;
             int2 offset = (int2)(element>0?2-element:0, element<3?element-1:0);
             int2 newId = blockId + offset;
+            //TODO: use reduction
             if(newId.x >= 0 && newId.y >= 0 &&
                newId.x < numBlocks.x && newId.y < numBlocks.y)
               atomic_min(&l_queueElement, createQueueEntry(newId, route_mycost,1));
@@ -1187,7 +1216,8 @@ __kernel void voteMinimum( global const float* routecost,
                            const int routeDataPerNode,
                            const int2 blockSize,
                            const int2 numBlocks,
-                           global volatile float* vote)
+                           global volatile float* vote,
+                           local float* l_reduction)
 {
   __local volatile float mymin;
   mymin = 0.1f*MAXFLOAT;
@@ -1199,8 +1229,10 @@ __kernel void voteMinimum( global const float* routecost,
   int mydata_offset = mynode*routeDataPerNode + getCostGlobalId(lid, blockId, blockSize, numBlocks);
   float myval = routecost[mydata_offset];
 
-  //TODO: do that in shared memory..
-  atomic_min((volatile local uint*)(&mymin), as_uint(myval));
+  //replaced by reduction..
+  //atomic_min((volatile local uint*)(&mymin), as_uint(myval));
+  mymin = localMinFloat(myval, l_reduction, get_local_id(0), get_local_size(0));
+
   barrier(CLK_LOCAL_MEM_FENCE);
 
   if(lid == 0)
@@ -1220,7 +1252,8 @@ __kernel void getMinimum( global const float* costmap,
                           local float* l_route,
                           local float* l_cost,
                           global volatile uint* results,
-                          const int maxresults)
+                          const int maxresults,
+                          local float* l_reduction)
 {
   __local bool should_try;
   should_try = false;
@@ -1241,7 +1274,6 @@ __kernel void getMinimum( global const float* costmap,
     myroutecost = routecost[mynode*routeDataPerNode +  mydata_offset];
   }
 
-  //TODO: do that in shared memory..
   barrier(CLK_LOCAL_MEM_FENCE);
 
   if(myroutecost <= vote[get_global_id(2)] + 0.0001f)
@@ -1279,8 +1311,10 @@ __kernel void getMinimum( global const float* costmap,
     accumulate += *accessLocalCost(l_route, lid2);
   }
 
-  //get the minimum TODO: reduction..
-  atomic_min((volatile local uint*)(&mymin), as_uint(accumulate));
+  //get the minimum by reduction..
+  //atomic_min((volatile local uint*)(&mymin), as_uint(accumulate));
+  mymin = localMinFloat(accumulate, l_reduction, get_local_id(0)+get_local_id(1)*get_local_size(0), get_local_size(0)*get_local_size(1));
+
   barrier(CLK_LOCAL_MEM_FENCE);
 
   if(mymin == accumulate)
@@ -1320,7 +1354,7 @@ int writeOutBlock(global uint* interblockResult, const int interblockSize, const
 
   return written+2;
 }
-float2 checkRoutes(int2 blockId, int startLid, global const float* routecost, global const float* routeMap, int layer, int2 numBlocks, int2 blockSize, int lid, int routeDataPerNode)
+float2 checkRoutes(int2 blockId, int startLid, global const float* routecost, global const float* routeMap, int layer, int2 numBlocks, int2 blockSize, int lid, int routeDataPerNode, local float* l_reduction)
 {
   local float minresX, minresY;
   minresX = 0.1f*MAXFLOAT;
@@ -1339,9 +1373,12 @@ float2 checkRoutes(int2 blockId, int startLid, global const float* routecost, gl
     int neg_dist = (borderElements-min(abs(lid - startLid) , abs(abs(lid - startLid)-borderElements-2)));
     newmincosts.y = 0.0001f*neg_dist + newmincosts.x + getRouteMapCost(ourRouteMap, startLid, lid, borderElements); 
 
-    //TODO: reduction..
-    atomic_min((volatile local uint*)(&minresY), as_uint(newmincosts.y));
+    ////replaced by reduction..
+    //atomic_min((volatile local uint*)(&minresY), as_uint(newmincosts.y));
   }
+
+  minresY = localMinFloat(newmincosts.y, l_reduction, get_local_id(0)+get_local_id(1)*get_local_size(0), get_local_size(0)*get_local_size(1));
+
   barrier(CLK_LOCAL_MEM_FENCE);
 
   if(minresY == newmincosts.y)
@@ -1350,7 +1387,7 @@ float2 checkRoutes(int2 blockId, int startLid, global const float* routecost, gl
 
   return (float2)(minresX, minresY);
 }
-float2 checkFinalBlock(int2 blockId, int startLid, global const float* routecost, global const float* costmap, int layer, int2 numBlocks, int2 blockSize, int2 dim, int lid, int routeDataPerNode, int4 to, local float* l_cost, local float* l_route)
+float2 checkFinalBlock(int2 blockId, int startLid, global const float* routecost, global const float* costmap, int layer, int2 numBlocks, int2 blockSize, int2 dim, int lid, int routeDataPerNode, int4 to, local float* l_cost, local float* l_route, local float* l_reduction)
 {
   //load routing data
   int2 gid2 = (int2)(blockId.x * (blockSize.x-1) + get_local_id(0),
@@ -1400,9 +1437,10 @@ float2 checkFinalBlock(int2 blockId, int startLid, global const float* routecost
   {
     newmincosts.x = *accessLocalCost(l_cost, outLid);
     newmincosts.y = myOutCost;
-    //TODO: reduction..
-    atomic_min((volatile local uint*)(&minresY), as_uint(newmincosts.y));
+    ////replaced by reduction..
+    //atomic_min((volatile local uint*)(&minresY), as_uint(newmincosts.y));
   }
+  minresY = localMinFloat(newmincosts.y, l_reduction, get_local_id(0)+get_local_id(1)*get_local_size(0), get_local_size(0)*get_local_size(1));
   barrier(CLK_LOCAL_MEM_FENCE);
 
   if(minresY == newmincosts.y)
@@ -1425,7 +1463,8 @@ __kernel void calcInterBlockRoute(global const float* routecost,
                                   global uint* interblockResult,
                                   const int interblockSize,
                                   local float* l_cost,
-                                  local float* l_route)
+                                  local float* l_route,
+                                  local float* l_reduction)
 {
   int layer = ids[get_global_id(2)];
   int2 currentBlock = (int2)(froms[layer].x/(blockSize.x-1), froms[layer].y/(blockSize.y-1));
@@ -1475,9 +1514,10 @@ __kernel void calcInterBlockRoute(global const float* routecost,
   incost = MAXFLOAT;
   minvoter = MAXFLOAT;
   barrier(CLK_LOCAL_MEM_FENCE);
-  if(lid >= 0)
-    //TODO: reduction..
-    atomic_min((volatile local uint*)(&minvoter), as_uint(myoutcost));
+  //if(lid >= 0)
+  //  //replaced by reduction..
+  //  atomic_min((volatile local uint*)(&minvoter), as_uint(myoutcost));
+  minvoter = localMinFloat(myoutcost, l_reduction, get_local_id(0)+get_local_id(1)*get_local_size(0), get_local_size(0)*get_local_size(1));
 
 
   do
@@ -1514,9 +1554,9 @@ __kernel void calcInterBlockRoute(global const float* routecost,
       {
         float2 nextMinval;
         if(isContainedInBlock(tos[layer], testBlock, blockSize))
-          nextMinval = checkFinalBlock(testBlock, testStart, routecost, costmap, layer, numBlocks, blockSize, dim, lid, routeDataPerNode, tos[layer], l_cost, l_route);
+          nextMinval = checkFinalBlock(testBlock, testStart, routecost, costmap, layer, numBlocks, blockSize, dim, lid, routeDataPerNode, tos[layer], l_cost, l_route, l_reduction);
         else
-          nextMinval = checkRoutes(testBlock, testStart, routecost, routeMap, layer, numBlocks, blockSize, lid, routeDataPerNode);
+          nextMinval = checkRoutes(testBlock, testStart, routecost, routeMap, layer, numBlocks, blockSize, lid, routeDataPerNode, l_reduction);
         if(nextMinval.x < newminval && 
            nextMinval.y <= newminval + 0.000001f &&
            testStart == lid)

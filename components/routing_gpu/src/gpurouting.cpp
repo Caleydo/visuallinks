@@ -3005,6 +3005,7 @@ void calcInterBlockRouteDummy(const float* routecost,
           _cl_voteMinimum_kernel.setArg(3, 2 * sizeof(cl_int), _blockSize);
           _cl_voteMinimum_kernel.setArg(4, 2 * sizeof(cl_int), _blocks);
           _cl_voteMinimum_kernel.setArg(5, d_voteMin);
+          _cl_voteMinimum_kernel.setArg(6, sizeof(float)*boundaryElements, NULL);
           
           cl::Event routingVoteMinEvent;
           _cl_command_queue.enqueueNDRangeKernel
@@ -3045,6 +3046,7 @@ void calcInterBlockRouteDummy(const float* routecost,
           _cl_getMinimum_kernel.setArg(11, sizeof(float)*(_blockSize[0]+2)*(_blockSize[1]+2), NULL);
           _cl_getMinimum_kernel.setArg(12, d_minSearchResults);
           _cl_getMinimum_kernel.setArg(13, maxResults);
+          _cl_getMinimum_kernel.setArg(14, sizeof(float)*_blockSize[0]*_blockSize[1], NULL);
 
           cl::Event routingGetMinEvent;
           _cl_command_queue.enqueueNDRangeKernel
@@ -3223,7 +3225,7 @@ void calcInterBlockRouteDummy(const float* routecost,
           _cl_routeInterBlock_kernel.setArg(11, maxBlocksForRoute);
           _cl_routeInterBlock_kernel.setArg(12, sizeof(float)*(_blockSize[0]+2)*(_blockSize[1]+2), NULL);
           _cl_routeInterBlock_kernel.setArg(13, sizeof(float)*(_blockSize[0]+2)*(_blockSize[1]+2), NULL);
-
+          _cl_routeInterBlock_kernel.setArg(14, sizeof(float)*_blockSize[0]*_blockSize[1], NULL);
 
           cl::Event routingRouteInterBlockEvent;
           _cl_command_queue.enqueueNDRangeKernel
@@ -3243,26 +3245,26 @@ void calcInterBlockRouteDummy(const float* routecost,
           std::vector<uint> blockRoutes(needRouteConstructionElements.size()*maxBlocksForRoute);
           _cl_command_queue.enqueueReadBuffer(d_blockRoutes, true, 0, blockRoutes.size()*sizeof(uint), &blockRoutes[0]);
           
-          //debug
-          uint j = 0;
-          for(auto it = blockRoutes.begin(); it != blockRoutes.end(); it += maxBlocksForRoute, ++j)
-          {
-            uint rblocks = *it;
-            std::cout << j << ": route blocks: " << *it << "\n";
-            for(int i = 0; i < rblocks; ++i)
-            {
-              uint block = *(it + 2*i+1);
-              uint interblock = *(it + 2*i + 2);
-              int2 gid((block & 0xFFFF) , (block >> 16)& 0xFFFF);
-              std::cout << "(" << gid.x << "," << gid.y << ")";
-              gid.x = gid.x*(_blockSize[0]-1) + (interblock & 0xFFFF);
-              gid.y = gid.y*(_blockSize[1]-1) + ((interblock >> 16)& 0xFFFF);
-              std::cout << "[" << gid.x << "," << gid.y << "] -> ";
-            }
-            std::cout << "[" << needRouteConstructionEndElements[j].x << " - " << needRouteConstructionEndElements[j].z << ", "
-              << needRouteConstructionEndElements[j].y << " - " << needRouteConstructionEndElements[j].w << "]\n";
-          }
-          //
+          ////debug
+          //uint j = 0;
+          //for(auto it = blockRoutes.begin(); it != blockRoutes.end(); it += maxBlocksForRoute, ++j)
+          //{
+          //  uint rblocks = *it;
+          //  std::cout << j << ": route blocks: " << *it << "\n";
+          //  for(int i = 0; i < rblocks; ++i)
+          //  {
+          //    uint block = *(it + 2*i+1);
+          //    uint interblock = *(it + 2*i + 2);
+          //    int2 gid((block & 0xFFFF) , (block >> 16)& 0xFFFF);
+          //    std::cout << "(" << gid.x << "," << gid.y << ")";
+          //    gid.x = gid.x*(_blockSize[0]-1) + (interblock & 0xFFFF);
+          //    gid.y = gid.y*(_blockSize[1]-1) + ((interblock >> 16)& 0xFFFF);
+          //    std::cout << "[" << gid.x << "," << gid.y << "] -> ";
+          //  }
+          //  std::cout << "[" << needRouteConstructionEndElements[j].x << " - " << needRouteConstructionEndElements[j].z << ", "
+          //    << needRouteConstructionEndElements[j].y << " - " << needRouteConstructionEndElements[j].w << "]\n";
+          //}
+          ////
           
           //compute requirements for launch
           uint maxBlocks = 0;
