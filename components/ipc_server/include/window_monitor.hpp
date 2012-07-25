@@ -16,6 +16,25 @@
 
 namespace LinksRouting
 {
+  struct WindowInfo
+  {
+    WId         id;
+    QRect       region;
+    std::string title;
+
+    WindowInfo(WId id, const QRect& region, const std::string& title):
+      id(id),
+      region(region),
+      title(title)
+    {}
+
+    bool operator==(const WindowInfo& rhs) const
+    {
+      // We don't care about title changes -> Only compare id and region
+      return id == rhs.id && region == rhs.region;
+    }
+  };
+
   class WindowMonitor:
     public QThread
   {
@@ -26,7 +45,7 @@ namespace LinksRouting
 
     protected:
 
-      typedef std::map<WId, QRect> WindowRegions;
+      typedef std::vector<WindowInfo> WindowRegions;
       WindowRegions _regions;
 
       void run();
