@@ -3243,26 +3243,26 @@ void calcInterBlockRouteDummy(const float* routecost,
           std::vector<uint> blockRoutes(needRouteConstructionElements.size()*maxBlocksForRoute);
           _cl_command_queue.enqueueReadBuffer(d_blockRoutes, true, 0, blockRoutes.size()*sizeof(uint), &blockRoutes[0]);
           
-          ////debug
-          //uint j = 0;
-          //for(auto it = blockRoutes.begin(); it != blockRoutes.end(); it += maxBlocksForRoute, ++j)
-          //{
-          //  uint rblocks = *it;
-          //  std::cout << j << ": route blocks: " << *it << "\n";
-          //  for(int i = 0; i < rblocks; ++i)
-          //  {
-          //    uint block = *(it + 2*i+1);
-          //    uint interblock = *(it + 2*i + 2);
-          //    int2 gid((block & 0xFFFF) , (block >> 16)& 0xFFFF);
-          //    std::cout << "(" << gid.x << "," << gid.y << ")";
-          //    gid.x = gid.x*(_blockSize[0]-1) + (interblock & 0xFFFF);
-          //    gid.y = gid.y*(_blockSize[1]-1) + ((interblock >> 16)& 0xFFFF);
-          //    std::cout << "[" << gid.x << "," << gid.y << "] -> ";
-          //  }
-          //  std::cout << "[" << needRouteConstructionEndElements[j].x << " - " << needRouteConstructionEndElements[j].z << ", "
-          //    << needRouteConstructionEndElements[j].y << " - " << needRouteConstructionEndElements[j].w << "]\n";
-          //}
-          ////
+          //debug
+          uint j = 0;
+          for(auto it = blockRoutes.begin(); it != blockRoutes.end(); it += maxBlocksForRoute, ++j)
+          {
+            uint rblocks = *it;
+            std::cout << j << ": route blocks: " << *it << "\n";
+            for(int i = 0; i < rblocks; ++i)
+            {
+              uint block = *(it + 2*i+1);
+              uint interblock = *(it + 2*i + 2);
+              int2 gid((block & 0xFFFF) , (block >> 16)& 0xFFFF);
+              std::cout << "(" << gid.x << "," << gid.y << ")";
+              gid.x = gid.x*(_blockSize[0]-1) + (interblock & 0xFFFF);
+              gid.y = gid.y*(_blockSize[1]-1) + ((interblock >> 16)& 0xFFFF);
+              std::cout << "[" << gid.x << "," << gid.y << "] -> ";
+            }
+            std::cout << "[" << needRouteConstructionEndElements[j].x << " - " << needRouteConstructionEndElements[j].z << ", "
+              << needRouteConstructionEndElements[j].y << " - " << needRouteConstructionEndElements[j].w << "]\n";
+          }
+          //
           
           //compute requirements for launch
           uint maxBlocks = 0;
@@ -3357,7 +3357,7 @@ void calcInterBlockRouteDummy(const float* routecost,
             needRouteNodesIt != needRouteConstructionNodes.end();
             ++needRouteNodesIt)
           {
-            auto nodeChildren = (*needRouteNodesIt)->getChildren();
+            auto &nodeChildren((*needRouteNodesIt)->getChildren());
             for(auto childrenIt = nodeChildren.begin();
               childrenIt != nodeChildren.end();
               ++childrenIt)
@@ -3383,7 +3383,7 @@ void calcInterBlockRouteDummy(const float* routecost,
             needRouteEdgesIt != needRouteConstructionEdges.end();
             ++needRouteEdgesIt)
           {
-            auto hyperedgeChildren = (*needRouteEdgesIt)->getNodes();
+            auto &hyperedgeChildren((*needRouteEdgesIt)->getNodes());
             if((*needRouteEdgesIt)->getHyperEdgeDescription() == 0)
                 (*needRouteEdgesIt)->setHyperEdgeDescription(new LinkDescription::HyperEdgeDescriptionForkation());
             LinkDescription::HyperEdgeDescriptionForkation *fork = (*needRouteEdgesIt)->getHyperEdgeDescription();
