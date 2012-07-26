@@ -13,6 +13,7 @@
 #include "linkdescription.h"
 #include "slotdata/polygon.hpp"
 #include "slotdata/component_selection.hpp"
+#include "window_monitor.hpp"
 
 #include "QWsServer.h"
 #include "QWsSocket.h"
@@ -63,16 +64,16 @@ namespace LinksRouting
       void onPong(quint64 elapsedTime);
       void onClientDisconnection();
 
-      void regionsChanged();
+      void regionsChanged(const WindowRegions regions);
 
     private:
 
       QWsServer          *_server;
       std::map<QWsSocket*, WId> _clients;
+      WindowMonitor       _window_monitor;
 
       QMutex             *_mutex_slot_links;
       QWaitCondition     *_cond_data_ready;
-      QWidget            *_widget;
 
       /* List of all open searches */
       slot_t<LinkDescription::LinkList>::type _slot_links;
@@ -85,8 +86,6 @@ namespace LinksRouting
       parseRegions(JSON& json, WId client_wid);
 
       std::string   _debug_regions;
-
-      WId windowAt(const QPoint& pos) const;
 
   };
 

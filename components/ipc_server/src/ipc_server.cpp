@@ -8,7 +8,6 @@
 
 #include "ipc_server.hpp"
 #include "log.hpp"
-#include "window_monitor.hpp"
 
 #include <QMutex>
 #include <QScriptEngine>
@@ -20,6 +19,9 @@
 
 namespace LinksRouting
 {
+
+  WId windowAt( const WindowRegions& regions,
+                const QPoint& pos );
 
   /**
    * Helper for handling json messages
@@ -137,12 +139,16 @@ namespace LinksRouting
   IPCServer::IPCServer( QMutex* mutex,
                         QWaitCondition* cond_data,
                         QWidget* widget ):
+    _window_monitor(widget),
     _mutex_slot_links(mutex),
-    _cond_data_ready(cond_data),
-    _widget(widget)
+    _cond_data_ready(cond_data)
   {
     assert(widget);
     registerArg("DebugRegions", _debug_regions);
+
+    qRegisterMetaType<WindowRegions>("WindowRegions");
+    assert( connect( &_window_monitor, SIGNAL(regionsChanged(WindowRegions)),
+             this,             SLOT(regionsChanged(WindowRegions)) ) );
   }
 
   //----------------------------------------------------------------------------
@@ -167,9 +173,7 @@ namespace LinksRouting
   //----------------------------------------------------------------------------
   bool IPCServer::startup(Core* core, unsigned int type)
   {
-    static WindowMonitor m;
-    connect(&m, SIGNAL(regionsChanged()), this, SLOT(regionsChanged()));
-    m.start();
+    _window_monitor.start();
     return true;
   }
 
@@ -253,7 +257,7 @@ namespace LinksRouting
         }
 
         QPoint pos(pos_list.at(0).toInt(), pos_list.at(1).toInt());
-        client_wid = windowAt(pos);
+        client_wid = windowAt(_window_monitor.getWindows(), pos);
         return;
       }
 
@@ -455,10 +459,8 @@ namespace LinksRouting
   }
 
   //----------------------------------------------------------------------------
-  void IPCServer::regionsChanged()
+  void IPCServer::regionsChanged(const WindowRegions regions)
   {
-    WindowList windows = QxtWindowSystem::windows();
-
     for( auto link = _slot_links->_data->begin();
          link != _slot_links->_data->end();
          ++link )
@@ -477,22 +479,7 @@ namespace LinksRouting
              vert != node->getVertices().end();
              ++vert )
         {
-          WId wid = 0;
-          QPoint pos(vert->x, vert->y);
-          for (int i = windows.size() - 1; i >= 0; --i)
-          {
-            WId wid_cur = windows.at(i);
-            if( wid_cur == _widget->winId() )
-              // Ignore own window as it's always on top, but transparent
-              continue;
-            else if( QxtWindowSystem::windowGeometry(wid_cur).contains(pos) )
-            {
-              wid = wid_cur;
-              break;
-            }
-          }
-
-          if( wid != client_wid )
+          if( client_wid != windowAt(regions, QPoint(vert->x, vert->y)) )
             // if point is in other window don't show region
             props["hidden"] = "true";
         }
@@ -514,7 +501,7 @@ namespace LinksRouting
   {
     std::cout << "Parse regions (" << client_wid << ")" << std::endl;
 
-    WindowList windows = QxtWindowSystem::windows();
+    const WindowRegions windows = _window_monitor.getWindows();
     std::vector<LinkDescription::Node> nodes;
 
     if( !json.isSet("regions") )
@@ -545,22 +532,7 @@ namespace LinksRouting
           );
           points.push_back(point);
 
-          WId wid = 0;
-          QPoint pos(point.x, point.y);
-          for (int i = windows.size() - 1; i >= 0; --i)
-          {
-            WId wid_cur = windows.at(i);
-            if( wid_cur == _widget->winId() )
-              // Ignore own window as it's always on top, but transparent
-              continue;
-            else if( QxtWindowSystem::windowGeometry(wid_cur).contains(pos) )
-            {
-              wid = wid_cur;
-              break;
-            }
-          }
-
-          if( wid != client_wid )
+          if( client_wid != windowAt(windows, QPoint(point.x, point.y)) )
             // if point is in other window don't show region
             props["hidden"] = "true";
         }
@@ -584,15 +556,13 @@ namespace LinksRouting
   }
 
   //----------------------------------------------------------------------------
-  WId IPCServer::windowAt(const QPoint& pos) const
+  WId windowAt( const WindowRegions& regions,
+                const QPoint& pos )
   {
-    WindowList list = QxtWindowSystem::windows();
-    for (int i = list.size() - 1; i >= 0; --i)
+    for( auto reg = regions.rbegin(); reg != regions.rend(); ++reg )
     {
-        WId wid = list.at(i);
-        if(    wid != _widget->winId()
-            && QxtWindowSystem::windowGeometry(wid).contains(pos) )
-          return wid;
+      if( reg->region.contains(pos) )
+        return reg->id;
     }
     return 0;
   }

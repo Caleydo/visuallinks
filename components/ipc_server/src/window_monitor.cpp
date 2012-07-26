@@ -6,6 +6,10 @@
  */
 
 #include "window_monitor.hpp"
+#include "log.hpp"
+
+#include <QApplication>
+#include <QDesktopWidget>
 
 namespace LinksRouting
 {
@@ -17,62 +21,21 @@ namespace LinksRouting
   }
 
   //----------------------------------------------------------------------------
-  void WindowMonitor::run()
+  WindowMonitor::WindowMonitor(const QWidget* own_widget):
+    _own_widget(own_widget)
   {
-    int timeout = -1;
-    for(;;)
-    {
-      WindowRegions regions = getWindows();
-      if( regions != _regions )
-      {
-        _regions = regions;
-        timeout = 2;
-      }
 
-//      for( auto cur_reg = regions.begin();
-//           cur_reg != regions.end();
-//           ++cur_reg )
-//      {
-//        auto old_reg = _regions.find(cur_reg->first);
-//        if( old_reg == _regions.end() )
-//        {
-//          std::cout << "New (" << title << ") "
-//                    << cur_reg->second
-//                    << std::endl;
-//          timeout = 2;
-//          continue;
-//        }
-//
-//        if( cur_reg->second != old_reg->second )
-//        {
-//          std::cout << "Chg (" << title << ") "
-//                    << cur_reg->second
-//                    << std::endl;
-//          timeout = 2;
-//        }
-//      }
-      if( timeout >= 0 )
-      {
-        if( timeout == 0 )
-        {
-          std::cout << "Reroute..." << std::endl;
-          for( auto reg = regions.begin(); reg != regions.end(); ++reg )
-            std::cout << reg->title << " -> " << reg->region << std::endl;
-          emit regionsChanged();
-        }
-        timeout -= 1;
-      }
-
-      usleep(300);
-    }
   }
 
   //----------------------------------------------------------------------------
-  WindowMonitor::WindowRegions WindowMonitor::getWindows() const
+  WindowRegions WindowMonitor::getWindows() const
   {
     WindowRegions regions;
     foreach(WId id, QxtWindowSystem::windows())
     {
+      if( id == _own_widget->winId() )
+        continue;
+
       QRect region = QxtWindowSystem::windowGeometry(id);
 
       // Ignore small regions (tooltips, etc.) and not visible regions
@@ -90,4 +53,41 @@ namespace LinksRouting
     }
     return regions;
   }
+
+  //----------------------------------------------------------------------------
+  void WindowMonitor::run()
+  {
+    std::cout << "Starting window monitor..." << std::endl;
+    int timeout = -1;
+    WindowRegions last_regions;
+    for(;;)
+    {
+      WindowRegions regions = getWindows();
+      if( regions != last_regions )
+        timeout = 2;
+      last_regions = regions;
+
+      if( regions == _regions )
+        timeout = -1;
+
+      if( timeout >= 0 )
+      {
+        if( timeout == 0 )
+        {
+          _regions = regions;
+
+          LOG_INFO("Trigger reroute...");
+
+          for( auto reg = regions.begin(); reg != regions.end(); ++reg )
+            std::cout << "(" << reg->id << ") "
+                      << reg->title << " -> " << reg->region << std::endl;
+
+          emit regionsChanged(regions);
+        }
+        timeout -= 1;
+      }
+      msleep(100);
+    }
+  }
+
 } // namespace LinksRouting

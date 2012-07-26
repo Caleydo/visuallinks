@@ -198,11 +198,11 @@ namespace LinksRouting
     {
       if( c->is && c->comp->supports(type) )
       {
-        std::cout << "+->" << c->comp->name() << std::endl;
+//        std::cout << "+->" << c->comp->name() << std::endl;
         c->comp->process(type);
       }
-      else
-        std::cout << "!->" << c->comp->name() << std::endl;
+//      else
+//        std::cout << "!->" << c->comp->name() << std::endl;
     }
   }
 

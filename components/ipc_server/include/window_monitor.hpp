@@ -34,23 +34,36 @@ namespace LinksRouting
       return id == rhs.id && region == rhs.region;
     }
   };
+  typedef std::vector<WindowInfo> WindowRegions;
 
   class WindowMonitor:
     public QThread
   {
     Q_OBJECT
 
+    public:
+
+      /**
+       * @param own_id  id of own window where links are renderd (will be
+       *                ignored)
+       */
+      WindowMonitor(const QWidget* own_widget);
+
+
+      /**
+       * Get all visible windows in stacking order and filtered by minimum size
+       */
+      WindowRegions getWindows() const;
+
     signals:
-      void regionsChanged();
+      void regionsChanged(WindowRegions regions);
 
     protected:
 
-      typedef std::vector<WindowInfo> WindowRegions;
-      WindowRegions _regions;
-
+      const QWidget *_own_widget;
+      WindowRegions  _regions;
       void run();
 
-      WindowRegions getWindows() const;
   };
 
 } // namespace LinksRouting
