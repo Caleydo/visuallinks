@@ -55,6 +55,7 @@ namespace LinksRouting
     LinkDescription::LinkList& links = *_subscribe_links->_data;
     for( auto it = links.begin(); it != links.end(); ++it )
     {
+#if 0
 //      auto info = _link_infos.find(it->_id);
 //
 //      if(    info != _link_infos.end()
@@ -126,6 +127,7 @@ namespace LinksRouting
 
         fork->outgoing.back().nodes.push_back(&*node);
       }
+#endif
     }
   }
 }

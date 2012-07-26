@@ -474,7 +474,16 @@ namespace LinksRouting
            ++node )
       {
         LinkDescription::props_t& props = node->getProps();
-        WId client_wid = reinterpret_cast<WId>(std::stoul(props.at("client_wid")));
+        WId client_wid =
+#ifdef _WIN32
+          reinterpret_cast<WId>
+          (
+#endif
+            std::stoul(props.at("client_wid")
+#ifdef _WIN32
+          )
+#endif
+        );
         int hidden_count = 0;
 
         for( auto vert = node->getVertices().begin();
@@ -570,7 +579,14 @@ namespace LinksRouting
           LOG_WARN("Wrong data type: " << point->typeName());
       }
 
-      props["client_wid"] = std::to_string(reinterpret_cast<unsigned long long>(client_wid));
+      props["client_wid"] = std::to_string(
+#ifdef _WIN32
+        reinterpret_cast<unsigned long long>(client_wid)
+#else
+        client_wid
+#endif
+      );
+
       if( hidden_count >= 2 )
         // if at least 2 points are in another window don't show region
         props["hidden"] = "true";

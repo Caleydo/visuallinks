@@ -17,6 +17,8 @@ struct uint4
       unsigned int x,y,z,w;
     };
   };
+  uint4() {}
+  uint4 operator - (unsigned int a) const { return uint4(x-a,y-a,z-a,w-a); }  
   uint4(unsigned int _x, unsigned int _y, unsigned int _z, unsigned int _w) : x(_x), y(_y), z(_z), w(_w) { }
 };
 
@@ -30,6 +32,7 @@ struct int4
       int x,y,z,w;
     };
   };
+  int4() { }
   int4( int _x, int _y, int _z, int _w) : x(_x), y(_y), z(_z), w(_w) { }
   bool operator < (const int4& other) const
   {
@@ -46,6 +49,19 @@ struct int4
     }
     return false;
   }
+};
+struct int3
+{
+  union
+  {
+    int v[3];
+    struct
+    {
+      int x,y,z;
+    };
+  };
+  int3() { }
+  int3(int _x, int _y, int _z) : x(_x), y(_y), z(_z) { }
 };
 template<class T>
 struct int4Aug

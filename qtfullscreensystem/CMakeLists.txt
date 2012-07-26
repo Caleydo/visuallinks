@@ -34,6 +34,10 @@ set (ADDITIONAL_LIBS
 # dependencies & build
 find_package(OpenGL REQUIRED)
 find_package(Qt4 REQUIRED)
+if(LinksComponent_routing_gpu)
+  find_package(OpenCL REQUIRED)
+  include_directories(${OPENCL_INCLUDE_DIRS})
+endif()
 
 # windows stuff
 if(WIN32)
