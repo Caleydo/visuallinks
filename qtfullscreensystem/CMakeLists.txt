@@ -34,7 +34,6 @@ set (ADDITIONAL_LIBS
 # dependencies & build
 find_package(OpenGL REQUIRED)
 find_package(Qt4 REQUIRED)
-find_package(OpenCL REQUIRED)
 
 # windows stuff
 if(WIN32)
@@ -53,7 +52,6 @@ include_directories(
   ${SYSTEMROOT}
   ${QT_INCLUDES}
   ${OPENGL_INCLUDE_DIR}
-  ${OPENCL_INCLUDE_DIRS}
   ${ADDITIONAL_INCLUDE_DIRS}
   include
 )
