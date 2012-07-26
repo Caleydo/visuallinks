@@ -1612,7 +1612,7 @@ glShader* glShaderManager::loadfromFile(const char* vertexFile, const char* frag
    if (vertexFile!=0)
    if (tVertexShader->load(vertexFile) != 0)
    { 
-     cout << "error: can't load vertex shader!\n"; 
+     cout << "error: can't load vertex shader " << vertexFile << "!\n"; 
      delete o;
      delete tVertexShader;
      delete tFragmentShader;
@@ -1624,7 +1624,7 @@ glShader* glShaderManager::loadfromFile(const char* vertexFile, const char* frag
   if (fragmentFile!=0)
   if (tFragmentShader->load(fragmentFile) != 0)
   {
-     cout << "error: can't load fragment shader!\n";
+     cout << "error: can't load fragment shader " << fragmentFile << "!\n";
      delete o;
      delete tVertexShader;
      delete tFragmentShader;
@@ -1635,7 +1635,7 @@ glShader* glShaderManager::loadfromFile(const char* vertexFile, const char* frag
   if (vertexFile!=0)
   if (!tVertexShader->compile())
   {
-      cout << "***COMPILER ERROR (Vertex Shader):\n";
+      cout << "***COMPILER ERROR (Vertex Shader " << vertexFile << "):\n";
       cout << tVertexShader->getCompilerLog() << endl;
       delete o;
       delete tVertexShader;
@@ -1649,7 +1649,7 @@ glShader* glShaderManager::loadfromFile(const char* vertexFile, const char* frag
   if (fragmentFile!=0)
   if (!tFragmentShader->compile())
   {
-     cout << "***COMPILER ERROR (Fragment Shader):\n";
+     cout << "***COMPILER ERROR (Fragment Shader " << fragmentFile << "):\n";
      cout << tFragmentShader->getCompilerLog() << endl;
      
      delete o;
@@ -1702,7 +1702,7 @@ glShader* glShaderManager::loadfromFile(const char* vertexFile, const char* geom
    if (vertexFile!=0)
       if (tVertexShader->load(vertexFile) != 0)
       { 
-        cout << "error: can't load vertex shader!\n"; 
+        cout << "error: can't load vertex shader " << vertexFile << "!\n"; 
         delete o;
         delete tVertexShader;
         delete tFragmentShader;
@@ -1714,7 +1714,7 @@ glShader* glShaderManager::loadfromFile(const char* vertexFile, const char* geom
   if (geometryFile!=0)
      if (tGeometryShader->load(geometryFile) != 0)
      {
-        cout << "error: can't load geometry shader!\n";
+        cout << "error: can't load geometry shader " << geometryFile << "!\n";
         delete o;
         delete tVertexShader;
         delete tFragmentShader;
@@ -1726,7 +1726,7 @@ glShader* glShaderManager::loadfromFile(const char* vertexFile, const char* geom
   if (fragmentFile!=0)
      if (tFragmentShader->load(fragmentFile) != 0)
      {
-        cout << "error: can't load fragment shader!\n";
+        cout << "error: can't load fragment shader " << fragmentFile << "!\n";
         delete o;
         delete tVertexShader;
         delete tFragmentShader;
@@ -1738,7 +1738,7 @@ glShader* glShaderManager::loadfromFile(const char* vertexFile, const char* geom
   if (vertexFile!=0)
      if (!tVertexShader->compile())
      {
-         cout << "***COMPILER ERROR (Vertex Shader):\n";
+         cout << "***COMPILER ERROR (Vertex Shader " << vertexFile << "):\n";
          cout << tVertexShader->getCompilerLog() << endl;
          delete o;
          delete tVertexShader;
@@ -1755,7 +1755,7 @@ glShader* glShaderManager::loadfromFile(const char* vertexFile, const char* geom
      
      if (!tGeometryShader->compile())
      {
-        cout << "***COMPILER ERROR (Geometry Shader):\n";
+        cout << "***COMPILER ERROR (Geometry Shader " << geometryFile << "):\n";
         cout << tGeometryShader->getCompilerLog() << endl;
         
         delete o;
@@ -1773,7 +1773,7 @@ glShader* glShaderManager::loadfromFile(const char* vertexFile, const char* geom
   if (fragmentFile!=0)
      if (!tFragmentShader->compile())
      {
-        cout << "***COMPILER ERROR (Fragment Shader):\n";
+        cout << "***COMPILER ERROR (Fragment Shader " << fragmentFile << "):\n";
         cout << tFragmentShader->getCompilerLog() << endl;
         
         delete o;

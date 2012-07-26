@@ -123,7 +123,7 @@ namespace LinksRouting
 #if defined(__APPLE__) || defined(__MACOSX)
          if( dextensions.find("cl_apple_gl_sharing") != std::string::npos )
 #else
-         if( extensions.find("cl_khr_gl_sharing") != std::string::npos )
+         if( dextensions.find("cl_khr_gl_sharing") != std::string::npos )
 #endif
          {
            use_devices.clear();

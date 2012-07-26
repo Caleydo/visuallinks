@@ -14,7 +14,7 @@ void main()
   for(int i = -size + 1; i < size; ++i)
     color += weights[abs(i)] * texture2D(inputTex, gl_TexCoord[0].xy + vec2(0,i) * dims_inv);
 
-  if( normalize_color && color.a > 0.0001 )
+  if( normalize_color > 0 && color.a > 0.0001 )
     color.rgb /= color.a;
 
   gl_FragColor = color;
