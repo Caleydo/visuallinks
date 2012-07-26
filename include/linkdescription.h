@@ -12,23 +12,29 @@ namespace LinksRouting
 {
 namespace LinkDescription
 {
+  class Node;
   class HyperEdge;
   struct HyperEdgeDescriptionSegment;
   struct HyperEdgeDescriptionForkation;
 
+  typedef std::vector<float2> points_t;
   typedef std::map<std::string, std::string> props_t;
+  typedef std::vector<Node> nodes_t;
 
   class Node
   {
     public:
 
-      explicit Node( const std::vector<float2>& points,
+      explicit Node( const points_t& points,
                      const props_t& props = props_t() ):
         _points( points ),
         _props( props )
       {}
 
-      const std::vector<float2>& getVertices() const { return _points; }
+      points_t& getVertices() { return _points; }
+      const points_t& getVertices() const { return _points; }
+
+      props_t& getProps() { return _props; }
       const props_t& getProps() const { return _props; }
 
 //        virtual float positionDistancePenalty() const = 0;
@@ -41,15 +47,15 @@ namespace LinkDescription
 
     private:
 
-      std::vector<float2>  _points;
-      std::map<std::string, std::string> _props;
+      points_t  _points;
+      props_t   _props;
   };
 
   class HyperEdge
   {
     public:
 
-      explicit HyperEdge( const std::vector<Node>& nodes,
+      explicit HyperEdge( const nodes_t& nodes,
                           const props_t& props = props_t() ):
         _nodes( nodes ),
         _props( props ),
@@ -57,11 +63,15 @@ namespace LinkDescription
         _fork( 0 )
       {}
 
-      const std::vector<Node>& getNodes() const { return _nodes; }
+      nodes_t& getNodes() { return _nodes; }
+      const nodes_t& getNodes() const { return _nodes; }
+
+      props_t& getProps() { return _props; }
       const props_t& getProps() const { return _props; }
+
       uint32_t getRevision() const { return _revision; }
 
-      void addNodes( const std::vector<Node>& nodes )
+      void addNodes( const nodes_t& nodes )
       {
         if( nodes.empty() )
           return;
@@ -73,18 +83,18 @@ namespace LinkDescription
 //      virtual bool hasFixedColor(Color &color) const = 0;
 //      virtual const std::vector<Node*>& getConnections() const = 0;
 //
-        void setHyperEdgeDescription(HyperEdgeDescriptionForkation* desc)
-        {
-          _fork = desc;
-        }
-        const HyperEdgeDescriptionForkation* getHyperEdgeDescription() const
-        {
-          return _fork;
-        }
+      void setHyperEdgeDescription(HyperEdgeDescriptionForkation* desc)
+      {
+        _fork = desc;
+      }
+      const HyperEdgeDescriptionForkation* getHyperEdgeDescription() const
+      {
+        return _fork;
+      }
 
     private:
 
-      std::vector<Node> _nodes;
+      nodes_t _nodes;
       props_t _props;
       uint32_t _revision; ///!< Track modifications
       HyperEdgeDescriptionForkation *_fork;
@@ -110,7 +120,7 @@ namespace LinkDescription
       {
       }
       std::vector<const Node*> nodes;
-      std::vector<float2> trail;
+      points_t trail;
 
       HyperEdgeDescriptionForkation *parent, *child;
   };

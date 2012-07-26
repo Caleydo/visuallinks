@@ -461,36 +461,60 @@ namespace LinksRouting
   //----------------------------------------------------------------------------
   void IPCServer::regionsChanged(const WindowRegions regions)
   {
+    bool need_update = false;
     for( auto link = _slot_links->_data->begin();
          link != _slot_links->_data->end();
          ++link )
     {
-      link->_stamp += 1;
-      std::vector<LinkDescription::Node> new_nodes;
-      auto nodes = link->_link.getNodes();
+      bool modified = false;
+
+      LinkDescription::nodes_t& nodes = link->_link.getNodes();
       for( auto node = nodes.begin();
            node != nodes.end();
            ++node )
       {
-        LinkDescription::props_t props;
-        props["client_wid"] = node->getProps().at("client_wid");
-        WId client_wid = std::stoul(node->getProps().at("client_wid"));
+        LinkDescription::props_t& props = node->getProps();
+        WId client_wid = std::stoul(props.at("client_wid"));
+        int hidden_count = 0;
+
         for( auto vert = node->getVertices().begin();
              vert != node->getVertices().end();
              ++vert )
         {
           if( client_wid != windowAt(regions, QPoint(vert->x, vert->y)) )
-            // if point is in other window don't show region
-            props["hidden"] = "true";
+            ++hidden_count;
         }
-        new_nodes.push_back( LinkDescription::Node(node->getVertices(), props) );
+
+        LinkDescription::props_t::iterator hidden = props.find("hidden");
+        if( hidden_count >= 2 )
+        {
+          if( hidden == props.end() )
+          {
+            // if at least 2 points are in another window don't show region
+            props["hidden"] = "true";
+            modified = true;
+          }
+        }
+        else
+        {
+          if( hidden != props.end() )
+          {
+            props.erase(hidden);
+            modified = true;
+          }
+        }
       }
 
-      link->_link = LinkDescription::HyperEdge(
-        new_nodes,
-        link->_link.getProps()
-      );
+      if( modified )
+      {
+        link->_stamp += 1;
+        need_update = true;
+      }
     }
+
+    if( !need_update )
+      return;
+
     LOG_INFO("Windows changed -> trigger reroute");
     _cond_data_ready->wakeAll();
   }
@@ -512,6 +536,7 @@ namespace LinksRouting
     {
       std::vector<float2> points;
       LinkDescription::props_t props;
+      int hidden_count = 0;
 
       //for(QVariant point: region.toList())
       auto regionlist = region->toList();
@@ -533,8 +558,7 @@ namespace LinksRouting
           points.push_back(point);
 
           if( client_wid != windowAt(windows, QPoint(point.x, point.y)) )
-            // if point is in other window don't show region
-            props["hidden"] = "true";
+            ++hidden_count;
         }
         else if( point->type() == QVariant::Map )
         {
@@ -547,6 +571,9 @@ namespace LinksRouting
       }
 
       props["client_wid"] = std::to_string(client_wid);
+      if( hidden_count >= 2 )
+        // if at least 2 points are in another window don't show region
+        props["hidden"] = "true";
 
       if( !points.empty() )
         nodes.push_back( LinkDescription::Node(points, props) );
