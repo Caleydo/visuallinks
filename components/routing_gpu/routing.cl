@@ -251,10 +251,8 @@ uint scanLocalWorkEfficient(__local volatile uint* data, size_t linId, size_t el
 }
 
 
-uint localMinUint(uint val, local uint* reducionSpace, uint localId, uint num)
+uint localMinUint(local uint* reducionSpace, uint localId, uint num)
 {
-  if(localId < num)
-    reducionSpace[localId] = val;
   for(uint next = (num+1)/2; num > 1; next = (next+1)/2)
   {
     barrier(CLK_LOCAL_MEM_FENCE);
@@ -977,7 +975,8 @@ __kernel void routeLocal(global const float* routeMap,
                          local volatile uint* queue,
                          const int queueSize,
                          volatile global uint* activeBuffer,
-                         const int2 activeBufferSize)
+                         const int2 activeBufferSize,
+                         local uint* l_reduction)
 {
   int borderElements = 2*(blockSize.x + blockSize.y - 2);
   int workerId = get_local_id(1);
@@ -1076,22 +1075,29 @@ __kernel void routeLocal(global const float* routeMap,
           l_queueElement = 0xFFFFFFFF;
           barrier(CLK_LOCAL_MEM_FENCE);
           //generate new entry
-          if(w == workerId && ((1 << element) & dir4FromBorderId(lid,blockSize))
-            && route_mycost + 0.0001f < route_origCost)
+          if(w == workerId)
           {
-            //int2 offset = (int2)(0,0);
-            //if(element == 0 || element >= 6) offset.x = -1;
-            //else if(element >= 2 && element <= 4) offset.x = 1;
-            //if(element >= 0 && element <= 2) offset.y = -1;
-            //else if(element >= 5 && element <= 6) offset.y = 1;
-            int2 offset = (int2)(element>0?2-element:0, element<3?element-1:0);
-            int2 newId = blockId + offset;
-            //TODO: use reduction
-            if(newId.x >= 0 && newId.y >= 0 &&
-               newId.x < numBlocks.x && newId.y < numBlocks.y)
-              atomic_min(&l_queueElement, createQueueEntry(newId, route_mycost,1));
+            uint rElement = 0xFFFFFFFF;
+            if(((1 << element) & dir4FromBorderId(lid,blockSize))
+              && route_mycost + 0.0001f < route_origCost)
+            {
+              //int2 offset = (int2)(0,0);
+              //if(element == 0 || element >= 6) offset.x = -1;
+              //else if(element >= 2 && element <= 4) offset.x = 1;
+              //if(element >= 0 && element <= 2) offset.y = -1;
+              //else if(element >= 5 && element <= 6) offset.y = 1;
+              int2 offset = (int2)(element>0?2-element:0, element<3?element-1:0);
+              int2 newId = blockId + offset;
+              //TODO: use reduction
+              if(newId.x >= 0 && newId.y >= 0 &&
+                 newId.x < numBlocks.x && newId.y < numBlocks.y)
+                 rElement = createQueueEntry(newId, route_mycost,1);
+              //replaced with reduction
+              //  atomic_min(&l_queueElement, createQueueEntry(newId, route_mycost,1));
+            }
+            l_reduction[lid] = rElement;
           }
-
+          l_queueElement = localMinUint(l_reduction, lid, workerSize);
           barrier(CLK_LOCAL_MEM_FENCE);
           if(l_queueElement == 0xFFFFFFFF)
             continue;
