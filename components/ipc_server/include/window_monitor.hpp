@@ -10,6 +10,7 @@
 
 #include <QxtGui/qxtwindowsystem.h>
 #include <QThread>
+#include <QTimer>
 
 #include <iostream>
 #include <map>
@@ -56,13 +57,18 @@ namespace LinksRouting
       WindowRegions getWindows() const;
 
     signals:
-      void regionsChanged(WindowRegions regions);
+      void regionsChanged(const WindowRegions regions);
 
     protected:
 
       const QWidget *_own_widget;
-      WindowRegions  _regions;
-      void run();
+      WindowRegions  _regions,
+		             _last_regions;
+	  int            _timeout;
+      QTimer         _timer;
+
+	protected slots:
+      void check();
 
   };
 

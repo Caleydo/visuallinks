@@ -22,9 +22,11 @@ namespace LinksRouting
 
   //----------------------------------------------------------------------------
   WindowMonitor::WindowMonitor(const QWidget* own_widget):
-    _own_widget(own_widget)
+    _own_widget(own_widget),
+	_timeout(-1)
   {
-
+	connect(&_timer, SIGNAL(timeout()), this, SLOT(check()));
+	_timer.start(300);
   }
 
   //----------------------------------------------------------------------------
@@ -55,38 +57,31 @@ namespace LinksRouting
   }
 
   //----------------------------------------------------------------------------
-  void WindowMonitor::run()
+  void WindowMonitor::check()
   {
-    std::cout << "Starting window monitor..." << std::endl;
-    int timeout = -1;
-    WindowRegions last_regions;
-    for(;;)
+    WindowRegions regions = getWindows();
+    if( regions != _last_regions )
+    _timeout = 2;
+    _last_regions = regions;
+
+    if( regions == _regions )
+    _timeout = -1;
+
+    if( _timeout >= 0 )
     {
-      WindowRegions regions = getWindows();
-      if( regions != last_regions )
-        timeout = 2;
-      last_regions = regions;
+    if( _timeout == 0 )
+    {
+        _regions = regions;
 
-      if( regions == _regions )
-        timeout = -1;
+        LOG_INFO("Trigger reroute...");
 
-      if( timeout >= 0 )
-      {
-        if( timeout == 0 )
-        {
-          _regions = regions;
+        for( auto reg = regions.begin(); reg != regions.end(); ++reg )
+        std::cout << "(" << reg->id << ") "
+                    << reg->title << " -> " << reg->region << std::endl;
 
-          LOG_INFO("Trigger reroute...");
-
-          for( auto reg = regions.begin(); reg != regions.end(); ++reg )
-            std::cout << "(" << reg->id << ") "
-                      << reg->title << " -> " << reg->region << std::endl;
-
-          emit regionsChanged(regions);
-        }
-        timeout -= 1;
-      }
-      msleep(100);
+        emit regionsChanged(regions);
+    }
+    _timeout -= 1;
     }
   }
 
