@@ -415,20 +415,23 @@ float routeCost(float dist, float other, float penalty)
   return other + a*dist + b*dist*penalty;
 }
 
+
 bool route_data(local float const * l_cost,
-                local float* l_route)
+                local float* l_route,
+                local int* locals)
 {
+  const int L_CHANGE = 0;
   //route as long as there is change
-  local bool change;
-  change = true;
+  //local bool change;
+  locals[L_CHANGE] = true;
   
   int2 localid = (int2)(get_local_id(0),get_local_id(1));
   //iterate over it
   int counter = -1;
-  while(change)
+  while(locals[L_CHANGE])
   {
     barrier(CLK_LOCAL_MEM_FENCE);
-    change = false;
+    locals[L_CHANGE] = false;
     barrier(CLK_LOCAL_MEM_FENCE);
 
     float lastmyval = *accessLocalCost(l_route, localid);
@@ -453,7 +456,7 @@ bool route_data(local float const * l_cost,
 
     if(tval != lastmyval)
     {
-      change = true;  
+      locals[L_CHANGE] = true;  
       *accessLocalCost(l_route, localid) = tval;
     }
     
@@ -510,12 +513,13 @@ int construct_route_single(local float* l_route, local float* l_cost, local int*
   return myval;
 }
 
-void construct_route(local float* l_route, local float* l_cost, local int* l_construct)
+void construct_route(local float* l_route, local float* l_cost, local int* l_construct, local int* locals)
 {
+  const int L_CHANGE = 0;
   int2 localid = (int2)(get_local_id(0),get_local_id(1));
   //route as long as there is change
-  local bool change;
-  change = true;
+  //local bool change;
+  locals[L_CHANGE] = true;
 
 
   int myval = construct_route_single(l_route, l_cost, l_construct);
@@ -523,10 +527,10 @@ void construct_route(local float* l_route, local float* l_cost, local int* l_con
   barrier(CLK_LOCAL_MEM_FENCE);
 
   //iterate over it
-  while(change)
+  while(locals[L_CHANGE])
   {
     barrier(CLK_LOCAL_MEM_FENCE);
-    change = false;
+    locals[L_CHANGE] = false;
     barrier(CLK_LOCAL_MEM_FENCE);
 
     int lastmyval = myval;
@@ -534,7 +538,7 @@ void construct_route(local float* l_route, local float* l_cost, local int* l_con
     
     if(myval != lastmyval)
     {
-      change = true;  
+      locals[L_CHANGE] = true;  
       *accessLocalConstruct(l_construct, localid) = myval;
     }
     
@@ -567,10 +571,14 @@ __kernel void updateRouteMap(read_only image2d_t costmap,
                              global float* routeMap,
                              const int2 dim,
                              int computeAll,
-                             local float* l_data)
+                             local float* l_data,
+                             local int* locals)
 {
-  local bool changed;
-  changed = computeAll>0?true:false;
+  //local bool changed;
+  const int L_CHANGE = 0;
+  const int L_ROUTEDATA_OFFSET = 0;
+  
+  locals[L_CHANGE] = computeAll>0?true:false;
   barrier(CLK_LOCAL_MEM_FENCE);
 
   local float* l_cost = l_data;
@@ -585,11 +593,11 @@ __kernel void updateRouteMap(read_only image2d_t costmap,
   {
     writeLastPenalty(lastCostmap, gid2, dim, newcost);
     *accessLocalCost(l_cost, (int2)(get_local_id(0), get_local_id(1))) = newcost;
-    changed = true;
+    locals[L_CHANGE] = true;
   }
 
   barrier(CLK_LOCAL_MEM_FENCE);
-  if(!changed) return;
+  if(!locals[L_CHANGE]) return;
 
   
   float inside = 0.1f*MAXFLOAT;
@@ -610,7 +618,7 @@ __kernel void updateRouteMap(read_only image2d_t costmap,
     barrier(CLK_LOCAL_MEM_FENCE);
 
     //route
-    route_data(l_cost, l_routing_data);
+    route_data(l_cost, l_routing_data, locals + L_ROUTEDATA_OFFSET);
     barrier(CLK_LOCAL_MEM_FENCE);
 
     //write result
@@ -661,7 +669,8 @@ __kernel void prepareIndividualRouting(const global float* costmap,
                                        const int2 dim,
                                        const int2 numBlocks,
                                        const int routeDataPerNode,
-                                       local float* l_data)
+                                       local float* l_data,
+                                       local int* locals)
 {
   uint4 mapping = blockToDataMapping[get_group_id(0)];
 
@@ -687,7 +696,7 @@ __kernel void prepareIndividualRouting(const global float* costmap,
   barrier(CLK_LOCAL_MEM_FENCE);
   *accessLocalCost(l_route, (int2)(get_local_id(0),get_local_id(1))) = startcost;
   //route
-  route_data(l_cost, l_route);
+  route_data(l_cost, l_route, locals);
 
 
   int lid =  borderId((int2)(get_local_id(0),get_local_id(1)), (int2) (get_local_size(0), get_local_size(1)));
@@ -1225,9 +1234,9 @@ __kernel void voteMinimum( global const float* routecost,
                            global volatile float* vote,
                            local float* l_reduction)
 {
-  __local volatile float mymin;
-  mymin = 0.1f*MAXFLOAT;
-  barrier(CLK_LOCAL_MEM_FENCE);
+  //__local volatile float mymin;
+  //mymin = 0.1f*MAXFLOAT;
+  //barrier(CLK_LOCAL_MEM_FENCE);
 
   int lid = get_local_id(0);
   int2 blockId = (int2)(get_group_id(0), get_group_id(1));
@@ -1237,7 +1246,7 @@ __kernel void voteMinimum( global const float* routecost,
 
   //replaced by reduction..
   //atomic_min((volatile local uint*)(&mymin), as_uint(myval));
-  mymin = localMinFloat(myval, l_reduction, get_local_id(0), get_local_size(0));
+  float mymin = localMinFloat(myval, l_reduction, get_local_id(0), get_local_size(0));
 
   barrier(CLK_LOCAL_MEM_FENCE);
 
@@ -1259,10 +1268,13 @@ __kernel void getMinimum( global const float* costmap,
                           local float* l_cost,
                           global volatile uint* results,
                           const int maxresults,
-                          local float* l_reduction)
+                          local float* l_reduction,
+                          local int* locals)
 {
-  __local bool should_try;
-  should_try = false;
+  const int L_SHOULD_TRY = 0;
+  const int L_ROUTE_DATA_OFFSET = 0;
+  //__local bool should_try;
+  locals[L_SHOULD_TRY] = false;
   barrier(CLK_LOCAL_MEM_FENCE);
 
   int2 blockId = (int2)(get_group_id(0), get_group_id(1));
@@ -1283,17 +1295,15 @@ __kernel void getMinimum( global const float* costmap,
   barrier(CLK_LOCAL_MEM_FENCE);
 
   if(myroutecost <= vote[get_global_id(2)] + 0.0001f)
-    should_try = true;
+    locals[L_SHOULD_TRY] = true;
 
   barrier(CLK_LOCAL_MEM_FENCE);
 
-  if(!should_try)
+  if(!locals[L_SHOULD_TRY])
     return;
 
   
   //this block could contain the minimum, so construct all routes
-  __local float mymin;
-  mymin = MAXFLOAT;
 
   float accumulate = 0;
   loadCostToLocalAndSetRoute(blockId, gid2, dim, costmap, l_cost, l_route);
@@ -1310,7 +1320,7 @@ __kernel void getMinimum( global const float* costmap,
     barrier(CLK_LOCAL_MEM_FENCE);
 
     //route
-    route_data(l_cost, l_route);
+    route_data(l_cost, l_route, locals + L_ROUTE_DATA_OFFSET);
     barrier(CLK_LOCAL_MEM_FENCE);
 
     //accumulate
@@ -1319,7 +1329,7 @@ __kernel void getMinimum( global const float* costmap,
 
   //get the minimum by reduction..
   //atomic_min((volatile local uint*)(&mymin), as_uint(accumulate));
-  mymin = localMinFloat(accumulate, l_reduction, get_local_id(0)+get_local_id(1)*get_local_size(0), get_local_size(0)*get_local_size(1));
+  float mymin = localMinFloat(accumulate, l_reduction, get_local_id(0)+get_local_id(1)*get_local_size(0), get_local_size(0)*get_local_size(1));
 
   barrier(CLK_LOCAL_MEM_FENCE);
 
@@ -1360,12 +1370,13 @@ int writeOutBlock(global uint* interblockResult, const int interblockSize, const
 
   return written+2;
 }
-float2 checkRoutes(int2 blockId, int startLid, global const float* routecost, global const float* routeMap, int layer, int2 numBlocks, int2 blockSize, int lid, int routeDataPerNode, local float* l_reduction)
+float2 checkRoutes(int2 blockId, int startLid, global const float* routecost, global const float* routeMap, int layer, int2 numBlocks, int2 blockSize, int lid, int routeDataPerNode, local float* l_reduction, local int* locals)
 {
-  local float minresX, minresY;
-  minresX = 0.1f*MAXFLOAT;
-  minresY = 0.1f*MAXFLOAT;
-  barrier(CLK_LOCAL_MEM_FENCE);
+  //local float minresX, minresY;
+  //minresX = 0.1f*MAXFLOAT;
+  //minresY = 0.1f*MAXFLOAT;
+  //barrier(CLK_LOCAL_MEM_FENCE);
+  local float* minresX = (local float*)(locals);
 
   float2 newmincosts = (float2)(0.1f*MAXFLOAT,  0.1f*MAXFLOAT);
   
@@ -1383,17 +1394,17 @@ float2 checkRoutes(int2 blockId, int startLid, global const float* routecost, gl
     //atomic_min((volatile local uint*)(&minresY), as_uint(newmincosts.y));
   }
 
-  minresY = localMinFloat(newmincosts.y, l_reduction, get_local_id(0)+get_local_id(1)*get_local_size(0), get_local_size(0)*get_local_size(1));
+  float minresY = localMinFloat(newmincosts.y, l_reduction, get_local_id(0)+get_local_id(1)*get_local_size(0), get_local_size(0)*get_local_size(1));
 
   barrier(CLK_LOCAL_MEM_FENCE);
 
   if(minresY == newmincosts.y)
-    minresX = newmincosts.x; 
+    *minresX = newmincosts.x; 
   barrier(CLK_LOCAL_MEM_FENCE);
 
-  return (float2)(minresX, minresY);
+  return (float2)(*minresX, minresY);
 }
-float2 checkFinalBlock(int2 blockId, int startLid, global const float* routecost, global const float* costmap, int layer, int2 numBlocks, int2 blockSize, int2 dim, int lid, int routeDataPerNode, int4 to, local float* l_cost, local float* l_route, local float* l_reduction)
+float2 checkFinalBlock(int2 blockId, int startLid, global const float* routecost, global const float* costmap, int layer, int2 numBlocks, int2 blockSize, int2 dim, int lid, int routeDataPerNode, int4 to, local float* l_cost, local float* l_route, local float* l_reduction, local int* locals)
 {
   //load routing data
   int2 gid2 = (int2)(blockId.x * (blockSize.x-1) + get_local_id(0),
@@ -1415,14 +1426,14 @@ float2 checkFinalBlock(int2 blockId, int startLid, global const float* routecost
   barrier(CLK_LOCAL_MEM_FENCE);
   
   //route
-  route_data(l_cost, l_route);
+  route_data(l_cost, l_route, locals);
   barrier(CLK_LOCAL_MEM_FENCE);
 
   float myOutCost = *accessLocalCost(l_cost, lid2);
   barrier(CLK_LOCAL_MEM_FENCE);
 
   local int* l_construct = (local int*)(l_cost);
-  construct_route(l_route, l_cost, l_construct);
+  construct_route(l_route, l_cost, l_construct, locals);
   barrier(CLK_LOCAL_MEM_FENCE);
 
   int2 outLid = decode2(*accessLocalConstruct(l_construct, lid2));
@@ -1433,10 +1444,9 @@ float2 checkFinalBlock(int2 blockId, int startLid, global const float* routecost
 
 
   //voting
-  local float minresX, minresY;
-  minresX = 0.1f*MAXFLOAT;
-  minresY = 0.1f*MAXFLOAT;
-  barrier(CLK_LOCAL_MEM_FENCE);
+  //local float minresX, minresY;
+  //minresX = 0.1f*MAXFLOAT;
+  local float* minresX = (local float*)(locals);
 
   float2 newmincosts = (float2)(0.1f*MAXFLOAT,  0.1f*MAXFLOAT);
   if(lid >= 0)
@@ -1446,14 +1456,14 @@ float2 checkFinalBlock(int2 blockId, int startLid, global const float* routecost
     ////replaced by reduction..
     //atomic_min((volatile local uint*)(&minresY), as_uint(newmincosts.y));
   }
-  minresY = localMinFloat(newmincosts.y, l_reduction, get_local_id(0)+get_local_id(1)*get_local_size(0), get_local_size(0)*get_local_size(1));
+  float minresY = localMinFloat(newmincosts.y, l_reduction, get_local_id(0)+get_local_id(1)*get_local_size(0), get_local_size(0)*get_local_size(1));
   barrier(CLK_LOCAL_MEM_FENCE);
 
   if(minresY == newmincosts.y)
-    minresX = newmincosts.x; 
+    *minresX = newmincosts.x; 
   barrier(CLK_LOCAL_MEM_FENCE);
 
-  return (float2)(minresX, minresY);
+  return (float2)(*minresX, minresY);
 }
 
 __kernel void calcInterBlockRoute(global const float* routecost,
@@ -1470,8 +1480,21 @@ __kernel void calcInterBlockRoute(global const float* routecost,
                                   const int interblockSize,
                                   local float* l_cost,
                                   local float* l_route,
-                                  local float* l_reduction)
+                                  local float* l_reduction,
+                                  local int* localsI,
+                                  local float* localsF,
+                                  local int2* localsI2)
 {
+  const int L_OFFSET = 1;
+  const int L_TESTSTART = 0;
+  const int LF_MINVOTER = 0;
+  const int LF_INCOST = 1;
+  const int LF_NEWMINVAL = 2;
+  const int LF_NEXTNEWMINVAL = 3;
+  const int LI2_LOCALINPOS = 0;
+  const int LI2_TESTBLOCK = 1;
+  const int LI2_NEWBLOCK = 2;
+
   int layer = ids[get_global_id(2)];
   int2 currentBlock = (int2)(froms[layer].x/(blockSize.x-1), froms[layer].y/(blockSize.y-1));
   
@@ -1504,7 +1527,7 @@ __kernel void calcInterBlockRoute(global const float* routecost,
   barrier(CLK_LOCAL_MEM_FENCE);
   
   //route
-  route_data(l_cost, l_route);
+  route_data(l_cost, l_route, localsI + L_OFFSET);
   barrier(CLK_LOCAL_MEM_FENCE);
   
   myoutcost += *accessLocalCost(l_route, lid2);
@@ -1513,82 +1536,82 @@ __kernel void calcInterBlockRoute(global const float* routecost,
     myoutcost += 0.0001f;
 
   //vote for minimal out cost
-  local float minvoter;
-  local float incost;
-  local int2 localInPos;
+  //local float minvoter;
+  //local float incost;
+  //local int2 localInPos;
 
-  incost = MAXFLOAT;
-  minvoter = MAXFLOAT;
+  localsF[LF_INCOST] = MAXFLOAT;
+  localsF[LF_MINVOTER] = MAXFLOAT;
   barrier(CLK_LOCAL_MEM_FENCE);
   //if(lid >= 0)
   //  //replaced by reduction..
   //  atomic_min((volatile local uint*)(&minvoter), as_uint(myoutcost));
-  minvoter = localMinFloat(myoutcost, l_reduction, get_local_id(0)+get_local_id(1)*get_local_size(0), get_local_size(0)*get_local_size(1));
+  localsF[LF_MINVOTER] = localMinFloat(myoutcost, l_reduction, get_local_id(0)+get_local_id(1)*get_local_size(0), get_local_size(0)*get_local_size(1));
 
 
   do
   {
     barrier(CLK_LOCAL_MEM_FENCE);
-    incost = minvoter;
+    localsF[LF_INCOST] = localsF[LF_MINVOTER] ;
     //check all dirs
-    local float newminval, nextnewminval;
-    local int2 newBlock;
-    nextnewminval = newminval = 0.1f*MAXFLOAT;
-    newBlock = (int2)(-1,-1);
+    //local float newminval, nextnewminval;
+    //local int2 newBlock;
+    localsF[LF_NEXTNEWMINVAL] = localsF[LF_NEWMINVAL] = 0.1f*MAXFLOAT;
+    localsI2[LI2_NEWBLOCK] = (int2)(-1,-1);
     
     for(int outtest = 0; outtest < 8; ++outtest)
     {
-      local int2 testBlock;
-      local int testStart;
-      testStart = -1;
+      //local int2 testBlock;
+      //local int testStart;
+      localsI[L_TESTSTART] = -1;
       barrier(CLK_LOCAL_MEM_FENCE);
 
       int outdir = 1 << outtest;
-      if(myoutcost == minvoter && (mydir & outdir))
+      if(myoutcost == localsF[LF_MINVOTER]  && (mydir & outdir))
       {
         int2 offset = getOffsetFromDir8Element(outtest);
-        testBlock = currentBlock + offset;
-        if(testBlock.x >= 0 && testBlock.y >= 0 && 
-           testBlock.x < numBlocks.x && testBlock.y < numBlocks.y)
+        localsI2[LI2_TESTBLOCK] = currentBlock + offset;
+        if(localsI2[LI2_TESTBLOCK] .x >= 0 && localsI2[LI2_TESTBLOCK] .y >= 0 && 
+           localsI2[LI2_TESTBLOCK] .x < numBlocks.x && localsI2[LI2_TESTBLOCK] .y < numBlocks.y)
         {
           int2 inLid = lid2 - offset*(blockSize-1);
-          testStart = borderId(inLid, blockSize);
+          localsI[L_TESTSTART] = borderId(inLid, blockSize);
         }
       }
       barrier(CLK_LOCAL_MEM_FENCE);
-      if(testStart != -1)
+      if(localsI[L_TESTSTART] != -1)
       {
         float2 nextMinval;
-        if(isContainedInBlock(tos[layer], testBlock, blockSize))
-          nextMinval = checkFinalBlock(testBlock, testStart, routecost, costmap, layer, numBlocks, blockSize, dim, lid, routeDataPerNode, tos[layer], l_cost, l_route, l_reduction);
+        if(isContainedInBlock(tos[layer], localsI2[LI2_TESTBLOCK] , blockSize))
+          nextMinval = checkFinalBlock(localsI2[LI2_TESTBLOCK] , localsI[L_TESTSTART], routecost, costmap, layer, numBlocks, blockSize, dim, lid, routeDataPerNode, tos[layer], l_cost, l_route, l_reduction, localsI + L_OFFSET);
         else
-          nextMinval = checkRoutes(testBlock, testStart, routecost, routeMap, layer, numBlocks, blockSize, lid, routeDataPerNode, l_reduction);
-        if(nextMinval.x < newminval && 
-           nextMinval.y <= newminval + 0.000001f &&
-           testStart == lid)
+          nextMinval = checkRoutes(localsI2[LI2_TESTBLOCK] , localsI[L_TESTSTART], routecost, routeMap, layer, numBlocks, blockSize, lid, routeDataPerNode, l_reduction, localsI + L_OFFSET);
+        if(nextMinval.x < localsF[LF_NEWMINVAL] && 
+           nextMinval.y <= localsF[LF_NEWMINVAL] + 0.000001f &&
+           localsI[L_TESTSTART] == lid)
         {
-          newminval = nextMinval.y;
-          nextnewminval = nextMinval.x;
-          newBlock = testBlock;
-          localInPos = lid2;
+          localsF[LF_NEWMINVAL] = nextMinval.y;
+          localsF[LF_NEXTNEWMINVAL] = nextMinval.x;
+          localsI2[LI2_NEWBLOCK] = localsI2[LI2_TESTBLOCK] ;
+          localsI2[LI2_LOCALINPOS] = lid2;
         }
       }
     }
     barrier(CLK_LOCAL_MEM_FENCE);
 
-    currentBlock = newBlock;
-    minvoter = nextnewminval;
+    currentBlock = localsI2[LI2_NEWBLOCK];
+    localsF[LF_MINVOTER]  = localsF[LF_NEXTNEWMINVAL];
 
     if(currentBlock.x != -1 && lid >= 0)
     {
       int mydata_offset = getCostGlobalId(lid, currentBlock, blockSize, numBlocks);
       myoutcost = routecost[layer*routeDataPerNode +  mydata_offset];
       if(lid == 0)
-        written = writeOutBlock(interblockResult, interblockSize, get_global_id(2), currentBlock, blockSize, numBlocks, currentBlock*(blockSize-1) + localInPos, written);
+        written = writeOutBlock(interblockResult, interblockSize, get_global_id(2), currentBlock, blockSize, numBlocks, currentBlock*(blockSize-1) + localsI2[LI2_LOCALINPOS], written);
     }
     barrier(CLK_LOCAL_MEM_FENCE);
 
-  } while( !( minvoter == 0 || minvoter >= incost ) );
+  } while( !( localsF[LF_MINVOTER]  == 0 || localsF[LF_MINVOTER]  >= localsF[LF_INCOST] ) );
 }
 
 __kernel void routeConstruct( global const float* routecost,
@@ -1603,7 +1626,8 @@ __kernel void routeConstruct( global const float* routecost,
                               const int interblockSize,
                               global uint* blockRoutes,
                               local float* l_cost,
-                              local float* l_route)
+                              local float* l_route,
+                              local int* locals)
 {
   uint myedge = get_global_id(2);
   uint myblockoffset = get_group_id(0);
@@ -1640,7 +1664,7 @@ __kernel void routeConstruct( global const float* routecost,
   barrier(CLK_LOCAL_MEM_FENCE);
   
   //route
-  route_data(l_cost, l_route);
+  route_data(l_cost, l_route, locals);
   barrier(CLK_LOCAL_MEM_FENCE);
 
 
