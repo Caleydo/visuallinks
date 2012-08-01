@@ -2919,6 +2919,7 @@ void calcInterBlockRouteDummy(const float* routecost,
           _cl_routing_kernel.setArg(9, _routingQueueSize);
           _cl_routing_kernel.setArg(10, d_routeActive);
           _cl_routing_kernel.setArg(11, 2 * sizeof(cl_int), activeBufferSize);
+          _cl_routing_kernel.setArg(12, boundaryElements * sizeof(cl_uint), NULL);
           
           int localWorkerSize = divup(boundaryElements,_routingLocalWorkersWarpSize)*_routingLocalWorkersWarpSize;
 
