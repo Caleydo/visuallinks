@@ -295,6 +295,10 @@ for( int i = 0; i < 1; ++i )
              node != link->_link.getNodes().end();
              ++node )
         {
+          LinkDescription::props_t const& props = node->getProps();
+          if( props.find("hidden") != props.end() )
+            continue;
+
           line_borders_t region = calcLineBorders(node->getVertices(), 3, true);
           glBegin(GL_TRIANGLE_STRIP);
           for( auto first = std::begin(region.first),

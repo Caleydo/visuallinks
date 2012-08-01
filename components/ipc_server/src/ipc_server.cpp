@@ -19,6 +19,7 @@
 
 namespace LinksRouting
 {
+  using namespace std::placeholders;
 
   WId windowAt( const WindowRegions& regions,
                 const QPoint& pos );
@@ -139,16 +140,16 @@ namespace LinksRouting
   IPCServer::IPCServer( QMutex* mutex,
                         QWaitCondition* cond_data,
                         QWidget* widget ):
-    _window_monitor(widget),
+    _window_monitor(widget, std::bind(&IPCServer::regionsChanged, this, _1)),
     _mutex_slot_links(mutex),
     _cond_data_ready(cond_data)
   {
     assert(widget);
     registerArg("DebugRegions", _debug_regions);
 
-    qRegisterMetaType<WindowRegions>("WindowRegions");
-    assert( connect( &_window_monitor, SIGNAL(regionsChanged(WindowRegions)),
-             this,             SLOT(regionsChanged(WindowRegions)) ) );
+//    qRegisterMetaType<WindowRegions>("WindowRegions");
+//    assert( connect( &_window_monitor, SIGNAL(regionsChanged(WindowRegions)),
+//             this,             SLOT(regionsChanged(WindowRegions)) ) );
   }
 
   //----------------------------------------------------------------------------
@@ -459,8 +460,9 @@ namespace LinksRouting
   }
 
   //----------------------------------------------------------------------------
-  void IPCServer::regionsChanged(const WindowRegions regions)
+  void IPCServer::regionsChanged(const WindowRegions& regions)
   {
+    _mutex_slot_links->lock();
     bool need_update = false;
     for( auto link = _slot_links->_data->begin();
          link != _slot_links->_data->end();
@@ -520,6 +522,7 @@ namespace LinksRouting
         need_update = true;
       }
     }
+    _mutex_slot_links->unlock();
 
     if( !need_update )
       return;

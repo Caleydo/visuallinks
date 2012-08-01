@@ -64,7 +64,9 @@ namespace LinksRouting
       void onPong(quint64 elapsedTime);
       void onClientDisconnection();
 
-      void regionsChanged(const WindowRegions regions);
+    protected:
+
+      void regionsChanged(const WindowRegions& regions);
 
     private:
 

@@ -12,6 +12,7 @@
 #include <QThread>
 #include <QTimer>
 
+#include <functional>
 #include <iostream>
 #include <map>
 
@@ -44,20 +45,20 @@ namespace LinksRouting
 
     public:
 
+      typedef std::function<void(const WindowRegions&)> RegionsCallback;
+
       /**
        * @param own_id  id of own window where links are renderd (will be
        *                ignored)
        */
-      WindowMonitor(const QWidget* own_widget);
+      WindowMonitor( const QWidget* own_widget,
+                     RegionsCallback cb_regions_changed );
 
 
       /**
        * Get all visible windows in stacking order and filtered by minimum size
        */
       WindowRegions getWindows() const;
-
-    signals:
-      void regionsChanged(const WindowRegions regions);
 
     protected:
 
@@ -66,6 +67,7 @@ namespace LinksRouting
 		             _last_regions;
 	  int            _timeout;
       QTimer         _timer;
+      RegionsCallback _cb_regions_changed;
 
 	protected slots:
       void check();

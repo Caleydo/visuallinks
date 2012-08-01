@@ -21,9 +21,11 @@ namespace LinksRouting
   }
 
   //----------------------------------------------------------------------------
-  WindowMonitor::WindowMonitor(const QWidget* own_widget):
+  WindowMonitor::WindowMonitor( const QWidget* own_widget,
+                                RegionsCallback cb_regions_changed ):
     _own_widget(own_widget),
-	_timeout(-1)
+	_timeout(-1),
+	_cb_regions_changed(cb_regions_changed)
   {
 	connect(&_timer, SIGNAL(timeout()), this, SLOT(check()));
 	_timer.start(300);
@@ -65,23 +67,23 @@ namespace LinksRouting
     _last_regions = regions;
 
     if( regions == _regions )
-    _timeout = -1;
+      _timeout = -1;
 
     if( _timeout >= 0 )
     {
-    if( _timeout == 0 )
-    {
+      if( _timeout == 0 )
+      {
         _regions = regions;
 
         LOG_INFO("Trigger reroute...");
 
         for( auto reg = regions.begin(); reg != regions.end(); ++reg )
         std::cout << "(" << reg->id << ") "
-                    << reg->title << " -> " << reg->region << std::endl;
+                  << reg->title << " -> " << reg->region << std::endl;
 
-        emit regionsChanged(regions);
-    }
-    _timeout -= 1;
+        _cb_regions_changed(regions);
+      }
+      _timeout -= 1;
     }
   }
 
