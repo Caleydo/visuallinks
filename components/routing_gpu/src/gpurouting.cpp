@@ -42,7 +42,7 @@ namespace LinksRouting
     registerArg("BlockSizeY", _blockSize[1] = 8);
     registerArg("enabled", _enabled = true);
     registerArg("QueueSize", _routingQueueSize = 128);
-    registerArg("NumLocalWorkers", _routingNumLocalWorkers = 8);
+    registerArg("NumLocalWorkers", _routingNumLocalWorkers = 4);
     registerArg("WorkersWarpSize", _routingLocalWorkersWarpSize = 32);
     registerArg("BValue",_Bvalue = 1.0);
   }
@@ -2389,6 +2389,7 @@ void calcInterBlockRouteDummy(const float* routecost,
     _cl_updateRouteMap_kernel.setArg(3, 2 * sizeof(cl_int), bufferDim);
     _cl_updateRouteMap_kernel.setArg(4, computeAll);
     _cl_updateRouteMap_kernel.setArg(5, 2*(_blockSize[0]+2)*(_blockSize[1]+2)*sizeof(float), NULL);
+    _cl_updateRouteMap_kernel.setArg(6, sizeof(int), NULL);
 
 
     cl::Event updateRouteMap_Event;
@@ -2757,6 +2758,7 @@ void calcInterBlockRouteDummy(const float* routecost,
           _cl_prepareIndividualRouting_kernel.setArg(5, 2 * sizeof(cl_int), _blocks);
           _cl_prepareIndividualRouting_kernel.setArg(6, sizeof(cl_int), &requiredElements);
           _cl_prepareIndividualRouting_kernel.setArg(7, 2*(_blockSize[0]+2)*(_blockSize[1]+2)*sizeof(float), NULL);
+          _cl_prepareIndividualRouting_kernel.setArg(8, sizeof(int), NULL);
 
           cl::Event prepareIndividualRoutingEvent;
           _cl_command_queue.enqueueNDRangeKernel
@@ -3047,6 +3049,7 @@ void calcInterBlockRouteDummy(const float* routecost,
           _cl_getMinimum_kernel.setArg(12, d_minSearchResults);
           _cl_getMinimum_kernel.setArg(13, maxResults);
           _cl_getMinimum_kernel.setArg(14, sizeof(float)*_blockSize[0]*_blockSize[1], NULL);
+          _cl_getMinimum_kernel.setArg(15, sizeof(int), NULL);
 
           cl::Event routingGetMinEvent;
           _cl_command_queue.enqueueNDRangeKernel
@@ -3226,6 +3229,9 @@ void calcInterBlockRouteDummy(const float* routecost,
           _cl_routeInterBlock_kernel.setArg(12, sizeof(float)*(_blockSize[0]+2)*(_blockSize[1]+2), NULL);
           _cl_routeInterBlock_kernel.setArg(13, sizeof(float)*(_blockSize[0]+2)*(_blockSize[1]+2), NULL);
           _cl_routeInterBlock_kernel.setArg(14, sizeof(float)*_blockSize[0]*_blockSize[1], NULL);
+          _cl_routeInterBlock_kernel.setArg(15, sizeof(int)*2, NULL);
+          _cl_routeInterBlock_kernel.setArg(16, sizeof(float)*4, NULL);
+          _cl_routeInterBlock_kernel.setArg(17, sizeof(cl_int2)*3, NULL);
 
           cl::Event routingRouteInterBlockEvent;
           _cl_command_queue.enqueueNDRangeKernel
@@ -3293,6 +3299,7 @@ void calcInterBlockRouteDummy(const float* routecost,
           _cl_routeConstruct_kernel.setArg(10, d_innerBlockRoutes);
           _cl_routeConstruct_kernel.setArg(11, sizeof(float)*(_blockSize[0]+2)*(_blockSize[1]+2), NULL);
           _cl_routeConstruct_kernel.setArg(12, sizeof(float)*(_blockSize[0]+2)*(_blockSize[1]+2), NULL);
+          _cl_routeConstruct_kernel.setArg(13, sizeof(int), NULL);
 
           cl::Event routingRouteConstructEvent;
           _cl_command_queue.enqueueNDRangeKernel
