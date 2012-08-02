@@ -2449,36 +2449,6 @@ void calcInterBlockRouteDummy(const float* routecost,
     target.w = std::min(target.w, buffer_height-1);
     return (target.z - target.x > 0 && target.w - target.y > 0);
   }
-            
-
-          
-
-  void checkLevels(std::map<LinkDescription::Node*, size_t>& levelNodeMap, std::map<LinkDescription::HyperEdge*, size_t>& levelHyperEdgeMap, LinkDescription::HyperEdge& hedge, size_t level = 0)
-  {
-    auto found = levelHyperEdgeMap.find(&hedge);
-    if(found != levelHyperEdgeMap.end())
-      found->second = std::max(found->second,level);
-    else
-      levelHyperEdgeMap.insert(std::make_pair(&hedge, level));
-    ++level;
-    for( auto node = hedge.getNodes().begin();
-              node != hedge.getNodes().end();
-            ++node )
-    {
-      if( node->get<bool>("hidden", false) )
-        continue;
-      auto found = levelNodeMap.find(&*node);
-      if(found != levelNodeMap.end())
-        found->second = std::max(found->second,level);
-      else
-        levelNodeMap.insert(std::make_pair(&*node, level));
-      //has child hyperedges
-      for( auto it = node->getChildren().begin();
-                it != node->getChildren().end();
-              ++it )
-        checkLevels(levelNodeMap, levelHyperEdgeMap, *(*it), level + 1);
-    }
-  }
 
   template<class Vec2>
   float2 idToPos(Vec2 id, int downsample)
@@ -2528,8 +2498,8 @@ void calcInterBlockRouteDummy(const float* routecost,
     //  std::cout << '\n';
     //}
 
-    std::map< LinkDescription::Node*, size_t > levelNodeMap;
-    std::map< LinkDescription::HyperEdge*, size_t > levelHyperEdgeMap;
+    LevelNodeMap levelNodeMap;
+    LevelHyperEdgeMap levelHyperEdgeMap;
 
     std::map< LinkDescription::Node*, size_t > nodeMemMap;
     std::map< LinkDescription::HyperEdge*, size_t > hyperEdgeMemMap;

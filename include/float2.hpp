@@ -71,6 +71,11 @@ struct float2
     y /= rhs;
     return *this;
   }
+
+  bool operator==(const float2& rhs)
+  {
+    return x == rhs.x && y == rhs.y;
+  }
 };
 
 /**

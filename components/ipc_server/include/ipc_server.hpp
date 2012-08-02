@@ -67,6 +67,8 @@ namespace LinksRouting
     protected:
 
       void regionsChanged(const WindowRegions& regions);
+      bool updateHedge( const WindowRegions& regions,
+                        LinkDescription::HyperEdge* hedge );
 
     private:
 

@@ -470,55 +470,7 @@ namespace LinksRouting
          link != _slot_links->_data->end();
          ++link )
     {
-      bool modified = false;
-
-      LinkDescription::nodes_t& nodes = link->_link.getNodes();
-      for( auto node = nodes.begin();
-           node != nodes.end();
-           ++node )
-      {
-        LinkDescription::props_t& props = node->getProps();
-        WId client_wid =
-#ifdef _WIN32
-          reinterpret_cast<WId>
-          (
-#endif
-            std::stoul(props.at("client_wid")
-#ifdef _WIN32
-          )
-#endif
-        );
-        int hidden_count = 0;
-
-        for( auto vert = node->getVertices().begin();
-             vert != node->getVertices().end();
-             ++vert )
-        {
-          if( client_wid != windowAt(regions, QPoint(vert->x, vert->y)) )
-            ++hidden_count;
-        }
-
-        LinkDescription::props_t::iterator hidden = props.find("hidden");
-        if( hidden_count >= 2 )
-        {
-          if( hidden == props.end() )
-          {
-            // if at least 2 points are in another window don't show region
-            props["hidden"] = "true";
-            modified = true;
-          }
-        }
-        else
-        {
-          if( hidden != props.end() )
-          {
-            props.erase(hidden);
-            modified = true;
-          }
-        }
-      }
-
-      if( modified )
+      if( updateHedge(regions, &link->_link) )
       {
         link->_stamp += 1;
         need_update = true;
@@ -531,6 +483,71 @@ namespace LinksRouting
 
     LOG_INFO("Windows changed -> trigger reroute");
     _cond_data_ready->wakeAll();
+  }
+
+  //----------------------------------------------------------------------------
+  bool IPCServer::updateHedge( const WindowRegions& regions,
+                               LinkDescription::HyperEdge* hedge )
+  {
+    bool modified = false;
+
+    for( auto node = hedge->getNodes().begin();
+              node != hedge->getNodes().end();
+            ++node )
+    {
+      WId client_wid =
+#ifdef _WIN32
+        reinterpret_cast<WId>
+        (
+#endif
+          node->get<WId>("client_wid", 0)
+#ifdef _WIN32
+        )
+#endif
+      ;
+
+      for(auto child = node->getChildren().begin();
+               child != node->getChildren().end();
+             ++child )
+      {
+        if( updateHedge(regions, *child) )
+          modified = true;
+      }
+
+      if( !client_wid )
+        continue;
+
+      int hidden_count = 0;
+      for( auto vert = node->getVertices().begin();
+           vert != node->getVertices().end();
+           ++vert )
+      {
+        if( client_wid != windowAt(regions, QPoint(vert->x, vert->y)) )
+          ++hidden_count;
+      }
+
+      LinkDescription::props_t& props = node->getProps();
+      LinkDescription::props_t::iterator hidden = props.find("hidden");
+      if( hidden_count >= 2 )
+      {
+        if( hidden == props.end() )
+        {
+          // if at least 2 points are in another window don't show region
+          props["hidden"] = "true";
+          modified = true;
+        }
+      }
+      else
+      {
+        if( hidden != props.end() )
+        {
+          props.erase(hidden);
+          modified = true;
+        }
+      }
+    }
+
+    return modified;
   }
 
   //----------------------------------------------------------------------------
