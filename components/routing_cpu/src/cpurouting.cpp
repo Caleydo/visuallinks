@@ -78,7 +78,8 @@ namespace LinksRouting
         if( node->get<bool>("hidden", false) )
           continue;
 
-        assert( !node->getVertices().empty() );
+        if( !node->getVertices().empty() )
+          continue;
 
         float2 region_center;
         for( auto p = node->getVertices().begin();
@@ -125,7 +126,7 @@ namespace LinksRouting
           // Only add route if at least one other node exists
           fork->outgoing.back().trail.push_back(min_vert);
 
-        fork->outgoing.back().nodes.push_back(&*node);
+        fork->outgoing.back().nodes.push_back(*node);
       }
 #endif
     }

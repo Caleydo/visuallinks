@@ -3411,7 +3411,7 @@ void calcInterBlockRouteDummy(const float* routecost,
             {
               fork->outgoing.push_back(LinkDescription::HyperEdgeDescriptionSegment());
               LinkDescription::HyperEdgeDescriptionSegment& segment(fork->outgoing.back());
-              segment.nodes.push_back(&(*childrenIt));
+              segment.nodes.push_back(*childrenIt);
               segment.trail.push_back(fork->position);
 
               auto iBRBegin = innerBlockRoutes.begin();

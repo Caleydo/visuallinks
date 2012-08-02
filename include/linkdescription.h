@@ -217,8 +217,8 @@ namespace LinkDescription
 
   struct HyperEdgeDescriptionSegment
   {
-      std::vector<const Node*> nodes;
-      std::vector<float2> trail;
+      nodes_t nodes;
+      points_t trail;
   };
 
   struct HyperEdgeDescriptionForkation

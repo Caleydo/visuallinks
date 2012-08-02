@@ -9,6 +9,9 @@
 #include "slots.hpp"
 #include "slotdata/image.hpp"
 
+#include <queue>
+#include <set>
+
 namespace LinksRouting
 {
   class GlRenderer: public Renderer, public ComponentArguments
@@ -82,7 +85,13 @@ namespace LinksRouting
       cwc::glShader*    _blur_x_shader;
       cwc::glShader*    _blur_y_shader;
 
+      typedef std::queue<const LinkDescription::HyperEdge*> HyperEdgeQueue;
+      typedef std::set<const LinkDescription::HyperEdge*> HyperEdgeSet;
+
       bool renderLinks(const LinkDescription::LinkList& links);
+      bool renderNodes( HyperEdgeQueue& hedges_open,
+                        HyperEdgeSet& hedges_done,
+                        const LinkDescription::nodes_t& nodes );
   };
 }
 
