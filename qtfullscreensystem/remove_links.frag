@@ -2,7 +2,7 @@ uniform sampler2D screenshot;
 uniform sampler2D links;
 uniform sampler2D desktop;
 
-const 
+
 
 void main()
 {

@@ -70,6 +70,14 @@ inline float2 operator +(const float2& a, const float2& b)
 /**
  *
  */
+inline float2 operator +(const float2& a, float b)
+{
+  return float2(a.x + b, a.y + b);
+}
+
+/**
+ *
+ */
 inline float2 operator -(const float2& a, const float2& b)
 {
   return float2(a.x - b.x, a.y - b.y);
