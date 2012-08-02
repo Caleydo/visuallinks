@@ -32,12 +32,22 @@ namespace LinkDescription
     friend class HyperEdge;
     public:
 
+      Node():
+        _parent(0)
+      {}
+
       explicit Node( const points_t& points,
                      const props_t& props = props_t() ):
         _points( points ),
         _props( props ),
         _parent(0)
       {}
+
+      explicit Node( HyperEdge* hedge ):
+        _parent(0)
+      {
+        _children.push_back(hedge);
+      }
 
       points_t& getVertices() { return _points; }
       const points_t& getVertices() const { return _points; }
@@ -127,6 +137,11 @@ namespace LinkDescription
     friend class Node;
     public:
 
+      HyperEdge():
+        _parent(0),
+        _revision( 0 )
+      {}
+
       explicit HyperEdge( const nodes_t& nodes,
                           const props_t& props = props_t() ):
         _parent(0),
@@ -134,7 +149,10 @@ namespace LinkDescription
         _props( props ),
         _revision( 0 ),
         _fork( 0 )
-      {}
+      {
+        for(auto it = _nodes.begin(); it != _nodes.end(); ++it)
+          it->_parent = this;
+      }
 
       nodes_t& getNodes() { return _nodes; }
       const nodes_t& getNodes() const { return _nodes; }
@@ -155,6 +173,12 @@ namespace LinkDescription
           _nodes.back()._parent = this;
         }
         ++_revision;
+      }
+
+      void addNode(const LinkDescription::Node& node)
+      {
+        _nodes.push_back(node);
+        _nodes.back()._parent = this;
       }
 
       const Node* getParent() const

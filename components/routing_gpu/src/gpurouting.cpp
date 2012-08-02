@@ -2461,21 +2461,25 @@ void calcInterBlockRouteDummy(const float* routecost,
     else
       levelHyperEdgeMap.insert(std::make_pair(&hedge, level));
     ++level;
-    for(size_t i = 0; i < hedge.getNodes().size(); ++i)
+    for( auto node = hedge.getNodes().begin();
+              node != hedge.getNodes().end();
+            ++node )
     {
-      if( hedge.getNodes()[i].get<bool>("hidden", false) )
+      if( node->get<bool>("hidden", false) )
         continue;
-      auto found = levelNodeMap.find(&hedge.getNodes()[i]);
+      auto found = levelNodeMap.find(&*node);
       if(found != levelNodeMap.end())
         found->second = std::max(found->second,level);
       else
-        levelNodeMap.insert(std::make_pair(&hedge.getNodes()[i], level));
+        levelNodeMap.insert(std::make_pair(&*node, level));
       //has child hyperedges
-      for(auto it = hedge.getNodes()[i].getChildren().begin();
-          it != hedge.getNodes()[i].getChildren().end(); ++it)
+      for( auto it = node->getChildren().begin();
+                it != node->getChildren().end();
+              ++it )
         checkLevels(levelNodeMap, levelHyperEdgeMap, *(*it), level + 1);
     }
   }
+
   template<class Vec2>
   float2 idToPos(Vec2 id, int downsample)
   {

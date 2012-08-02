@@ -75,7 +75,7 @@ namespace LinksRouting
            node != it->_link.getNodes().end();
            ++node )
       {
-        if( node->getProps().find("hidden") != node->getProps().end() )
+        if( node->get<bool>("hidden", false) )
           continue;
 
         assert( !node->getVertices().empty() );

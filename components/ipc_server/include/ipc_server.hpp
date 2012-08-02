@@ -84,8 +84,7 @@ namespace LinksRouting
       slot_t<SlotType::ComponentSelection>::type _subscribe_routing;
 
       class JSON;
-      std::vector<LinkDescription::Node>
-      parseRegions(JSON& json, WId client_wid);
+      LinkDescription::Node parseRegions(JSON& json, WId client_wid);
 
       std::string   _debug_regions;
 

@@ -362,13 +362,15 @@ namespace LinksRouting
           )
             ++color_id;
         }
+        LinkDescription::HyperEdge hedge;
+        hedge.addNode( parseRegions(msg, client_wid) );
 
         _slot_links->_data->push_back(
           LinkDescription::LinkDescription
           (
             id_str,
             stamp,
-            LinkDescription::HyperEdge( parseRegions(msg, client_wid) ), // TODO add props?
+            hedge, // TODO add props?
             color_id
           )
         );
@@ -404,7 +406,7 @@ namespace LinksRouting
 
         LOG_INFO("Received FOUND: " << id_str);
 
-        link->_link.addNodes( parseRegions(msg, client_wid) );
+        link->_link.addNode( parseRegions(msg, client_wid) );
       }
       else if( task == "ABORT" )
       {
@@ -532,8 +534,8 @@ namespace LinksRouting
   }
 
   //----------------------------------------------------------------------------
-  std::vector<LinkDescription::Node>
-  IPCServer::parseRegions(IPCServer::JSON& json, WId client_wid)
+  LinkDescription::Node IPCServer::parseRegions( IPCServer::JSON& json,
+                                                 WId client_wid )
   {
     std::cout << "Parse regions (" << client_wid << ")" << std::endl;
 
@@ -541,7 +543,7 @@ namespace LinksRouting
     std::vector<LinkDescription::Node> nodes;
 
     if( !json.isSet("regions") )
-      return nodes;
+      return LinkDescription::Node();
 
     QVariantList regions = json.getValue<QVariantList>("regions");
     for(auto region = regions.begin(); region != regions.end(); ++region)
@@ -598,7 +600,7 @@ namespace LinksRouting
         nodes.push_back( LinkDescription::Node(points, props) );
     }
 
-    return nodes;
+    return LinkDescription::Node( new LinkDescription::HyperEdge(nodes) );
   }
 
   //----------------------------------------------------------------------------
