@@ -5,8 +5,10 @@
 #include "datatypes.h"
 #include "float2.hpp"
 
+#include <sstream>
 #include <list>
 #include <vector>
+#include <memory>
 
 namespace LinksRouting
 {
@@ -16,6 +18,10 @@ namespace LinkDescription
   class HyperEdge;
   struct HyperEdgeDescriptionSegment;
   struct HyperEdgeDescriptionForkation;
+  typedef std::shared_ptr<HyperEdgeDescriptionForkation>
+          HyperEdgeDescriptionForkationPtr;
+  typedef std::shared_ptr<const HyperEdgeDescriptionForkation>
+          HyperEdgeDescriptionForkationConstPtr;
 
   typedef std::vector<float2> points_t;
   typedef std::map<std::string, std::string> props_t;
@@ -39,6 +45,22 @@ namespace LinkDescription
       props_t& getProps() { return _props; }
       const props_t& getProps() const { return _props; }
 
+      /**
+       * Get a property
+       *
+       * @param key     Property key
+       * @param def_val Default value if property doesn't exist
+       * @return
+       */
+      template<typename T>
+      T get(const std::string& key, const T& def_val = T()) const
+      {
+        props_t::const_iterator it = _props.find(key);
+        if( it == _props.end() )
+          return def_val;
+
+        return convertFromString(it->second, def_val);
+      }
 
       HyperEdge* getParent()
       {
@@ -66,6 +88,33 @@ namespace LinkDescription
 //        virtual float2 getComputedPosition() const = 0;
 
     private:
+
+      template<typename T>
+      T convertFromString(const std::string& str, const T& def_val = T()) const
+      {
+        T var;
+        std::istringstream iss;
+        iss.str(str);
+        iss >> var;
+
+        if( !iss )
+          return def_val;
+
+        return var;
+      }
+
+      // Converter specializations
+      std::string convertFromString( const std::string& str,
+                                     const std::string& ) const
+      {
+        return str;
+      }
+
+      bool convertFromString( const std::string& str,
+                              const bool& ) const
+      {
+        return str == "true" || str == "1";
+      }
 
       points_t  _points;
       props_t   _props;
@@ -117,15 +166,15 @@ namespace LinkDescription
 //      virtual const std::vector<Node*>& getConnections() const = 0;
 //
 
-      void setHyperEdgeDescription(HyperEdgeDescriptionForkation* desc)
+      void setHyperEdgeDescription(HyperEdgeDescriptionForkationPtr desc)
       {
         _fork = desc;
       }
-      HyperEdgeDescriptionForkation* getHyperEdgeDescription()
+      HyperEdgeDescriptionForkationPtr getHyperEdgeDescription()
       {
         return _fork;
       }
-      const HyperEdgeDescriptionForkation* getHyperEdgeDescription() const
+      HyperEdgeDescriptionForkationConstPtr getHyperEdgeDescription() const
       {
         return _fork;
       }
@@ -138,7 +187,7 @@ namespace LinkDescription
       nodes_t _nodes;
       props_t _props;
       uint32_t _revision; ///!< Track modifications
-      HyperEdgeDescriptionForkation *_fork;
+      HyperEdgeDescriptionForkationPtr _fork;
   };
 
 
@@ -190,8 +239,7 @@ namespace LinkDescription
 
   void HyperEdge::removeRoutingInformation()
   {
-    if(_fork) delete _fork;
-    _fork = 0;
+    _fork.reset();
   }
 
 } // namespace LinkDescription

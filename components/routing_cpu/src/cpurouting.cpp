@@ -55,7 +55,7 @@ namespace LinksRouting
     LinkDescription::LinkList& links = *_subscribe_links->_data;
     for( auto it = links.begin(); it != links.end(); ++it )
     {
-#if 0
+#if 1
 //      auto info = _link_infos.find(it->_id);
 //
 //      if(    info != _link_infos.end()
@@ -66,8 +66,8 @@ namespace LinksRouting
 //      LOG_INFO("NEW DATA to route: " << it->_id << " using cpu routing");
       // TODO move looping and updating to common router component
 
-      LinkDescription::HyperEdgeDescriptionForkation* fork =
-        new LinkDescription::HyperEdgeDescriptionForkation();
+      auto fork =
+        std::make_shared<LinkDescription::HyperEdgeDescriptionForkation>();
       it->_link.setHyperEdgeDescription(fork);
 
       size_t num_nodes = 0;
@@ -119,7 +119,7 @@ namespace LinksRouting
         }
 
         fork->outgoing.push_back(LinkDescription::HyperEdgeDescriptionSegment());
-        fork->outgoing.back().parent = fork;
+        //fork->outgoing.back().parent = fork;
 
         if( num_nodes > 1 )
           // Only add route if at least one other node exists

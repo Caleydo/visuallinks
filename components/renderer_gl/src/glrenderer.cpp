@@ -286,7 +286,7 @@ for( int i = 0; i < 1; ++i )
       if( !_colors.empty() )
         glColor3fv(_colors[ link->_color_id % _colors.size() ]);
 
-      const LinkDescription::HyperEdgeDescriptionForkation* fork =
+      LinkDescription::HyperEdgeDescriptionForkationConstPtr fork =
         link->_link.getHyperEdgeDescription();
 
       if( !fork )
@@ -295,8 +295,7 @@ for( int i = 0; i < 1; ++i )
              node != link->_link.getNodes().end();
              ++node )
         {
-          LinkDescription::props_t const& props = node->getProps();
-          if( props.find("hidden") != props.end() )
+          if( node->get<bool>("hidden", false) )
             continue;
 
           line_borders_t region = calcLineBorders(node->getVertices(), 3, true);
@@ -325,7 +324,7 @@ for( int i = 0; i < 1; ++i )
              node != segment->nodes.end();
              ++node )
         {
-          if( (*node)->getProps().find("hidden") != (*node)->getProps().end() )
+          if( (*node)->get<bool>("hidden", false) )
           {
             if( !_colors.empty() )
               glColor3fv(_colors[ link->_color_id % _colors.size() ] * 0.3);

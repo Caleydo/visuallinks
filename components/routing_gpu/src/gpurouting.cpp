@@ -542,7 +542,7 @@ namespace LinksRouting
            node != it->_link.getNodes().end();
            ++node )
       {
-        if( node->getProps().find("hidden") != node->getProps().end() )
+        if( node->get<bool>("hidden", false) )
           continue;
 
         //std::cout << "Polygon: (" << node->getVertices().size() << " points)\n";
@@ -2463,7 +2463,7 @@ void calcInterBlockRouteDummy(const float* routecost,
     ++level;
     for(size_t i = 0; i < hedge.getNodes().size(); ++i)
     {
-      if( hedge.getNodes()[i].getProps().find("hidden") != hedge.getNodes()[i].getProps().end() )
+      if( hedge.getNodes()[i].get<bool>("hidden", false) )
         continue;
       auto found = levelNodeMap.find(&hedge.getNodes()[i]);
       if(found != levelNodeMap.end())
@@ -3369,8 +3369,11 @@ void calcInterBlockRouteDummy(const float* routecost,
               ++childrenIt)
             {
               if((*childrenIt)->getHyperEdgeDescription() == 0)
-                (*childrenIt)->setHyperEdgeDescription(new LinkDescription::HyperEdgeDescriptionForkation());
-              LinkDescription::HyperEdgeDescriptionForkation *fork = (*childrenIt)->getHyperEdgeDescription();
+                (*childrenIt)->setHyperEdgeDescription
+                (
+                  std::make_shared<LinkDescription::HyperEdgeDescriptionForkation>()
+                );
+              LinkDescription::HyperEdgeDescriptionForkationPtr fork = (*childrenIt)->getHyperEdgeDescription();
               fork->incoming.trail.clear();
 
               float2 startpos = idToPos(nodePositions.find(*needRouteNodesIt)->second, downsample);
@@ -3391,8 +3394,11 @@ void calcInterBlockRouteDummy(const float* routecost,
           {
             auto &hyperedgeChildren((*needRouteEdgesIt)->getNodes());
             if((*needRouteEdgesIt)->getHyperEdgeDescription() == 0)
-                (*needRouteEdgesIt)->setHyperEdgeDescription(new LinkDescription::HyperEdgeDescriptionForkation());
-            LinkDescription::HyperEdgeDescriptionForkation *fork = (*needRouteEdgesIt)->getHyperEdgeDescription();
+                (*needRouteEdgesIt)->setHyperEdgeDescription
+                (
+                  std::make_shared<LinkDescription::HyperEdgeDescriptionForkation>()
+                );
+            LinkDescription::HyperEdgeDescriptionForkationPtr fork = (*needRouteEdgesIt)->getHyperEdgeDescription();
             fork->position = idToPos(hyperEdgeCenters.find((*needRouteEdgesIt))->second, downsample);
 
             for(auto childrenIt = hyperedgeChildren.begin();
