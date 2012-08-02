@@ -2413,14 +2413,14 @@ void calcInterBlockRouteDummy(const float* routecost,
     ////
 
 
-    //static int count = 0;
-    //std::stringstream fname;
-    //fname << "costmap" << count++;
-    //dumpBuffer<float>(_cl_command_queue, _cl_lastCostMap_buffer, _buffer_width, _buffer_height, fname.str());
-    //std::stringstream fname2;
-    //fname2 << "routemap" << count++;
-    //int boundaryElements = 2*(_blockSize[0] + _blockSize[1]-2);
-    //dumpBuffer<float>(_cl_command_queue, _cl_routeMap_buffer, _blocks[0]*boundaryElements, _blocks[1]*boundaryElements/2, fname2.str());
+    static int count = 0;
+    std::stringstream fname;
+    fname << "costmap" << count++;
+    dumpBuffer<float>(_cl_command_queue, _cl_lastCostMap_buffer, _buffer_width, _buffer_height, fname.str());
+    std::stringstream fname2;
+    fname2 << "routemap" << count;
+    int boundaryElements = 2*(_blockSize[0] + _blockSize[1]-2);
+    dumpBuffer<float>(_cl_command_queue, _cl_routeMap_buffer, _blocks[0]*boundaryElements, _blocks[1]*boundaryElements/2, fname2.str());
     
 
     cl_ulong start, end;
@@ -2667,8 +2667,13 @@ void calcInterBlockRouteDummy(const float* routecost,
               childIt != (*nodeit)->getChildren().end();
               ++childIt)
           {
-            thisSources.push_back(hyperEdgeMemMap.find(*childIt)->second);
+            auto found = hyperEdgeMemMap.find(*childIt);
+             if(found == hyperEdgeMemMap.end())
+              continue;
+            thisSources.push_back(found->second);
           }
+          if(thisSources.size() == 0)
+            continue;
           routingSources.push_back(thisSources);
           routingIds.push_back(nodeMemMap.find(*nodeit)->second);
           startBlockRange.push_back(int4(0,0, _blocks[0], _blocks[1]));
@@ -2681,8 +2686,13 @@ void calcInterBlockRouteDummy(const float* routecost,
               childIt != (*hyperedgeit)->getNodes().end();
               ++childIt)
           {
-            thisSources.push_back(nodeMemMap.find(&(*childIt))->second);
+            auto found = nodeMemMap.find(&(*childIt));
+            if(found == nodeMemMap.end())
+              continue;
+            thisSources.push_back(found->second);
           }
+          if(thisSources.size() == 0)
+            continue;
           routingSources.push_back(thisSources);
           routingIds.push_back(hyperEdgeMemMap.find(*hyperedgeit)->second);
           startBlockRange.push_back(int4(0,0, _blocks[0], _blocks[1]));
@@ -2953,7 +2963,11 @@ void calcInterBlockRouteDummy(const float* routecost,
             for(auto childIt = (*nodeit)->getChildren().begin();
               childIt != (*nodeit)->getChildren().end();
               ++childIt)
-              needMinSearchChildren.push_back(hyperEdgeMemMap.find(*childIt)->second);
+            {
+              auto found = hyperEdgeMemMap.find(*childIt);
+              if(found != hyperEdgeMemMap.end())
+                needMinSearchChildren.push_back(hyperEdgeMemMap.find(*childIt)->second);
+            }
           }
 
         //for hyperedges with no parents find the minimum
@@ -2967,7 +2981,11 @@ void calcInterBlockRouteDummy(const float* routecost,
             for(auto childIt = (*edgeit)->getNodes().begin();
               childIt != (*edgeit)->getNodes().end();
               ++childIt)
-              needMinSearchChildren.push_back(nodeMemMap.find(&(*childIt))->second);
+            {
+              auto found = nodeMemMap.find(&(*childIt));
+              if(found != nodeMemMap.end())
+                needMinSearchChildren.push_back(found->second);
+            }
           }
         needMinSearchOffsets.push_back(needMinSearchChildren.size());
               
