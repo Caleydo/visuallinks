@@ -141,13 +141,13 @@ namespace LinksRouting
     bool startup(Core* core, unsigned int type);
     void init();
     void shutdown();
-    bool supports(Type type) const;
+    bool supports(unsigned int type) const;
     const std::string& name() const
     {
       return myname;
     }
 
-    void process(Type type);
+    void process(unsigned int type);
 
     bool setFlag(const std::string& name, bool val)
     {

@@ -12,6 +12,8 @@
 #include "common/componentarguments.h"
 #include "linkdescription.h"
 #include "slotdata/polygon.hpp"
+#include "slotdata/component_selection.hpp"
+#include "window_monitor.hpp"
 
 #include "QWsServer.h"
 #include "QWsSocket.h"
@@ -38,14 +40,14 @@ namespace LinksRouting
       virtual ~IPCServer();
 
       void publishSlots(SlotCollector& slot_collector);
-//      void subscribeSlots(SlotSubscriber& slot_subscriber);
+      void subscribeSlots(SlotSubscriber& slot_subscriber);
 
       bool startup(Core* core, unsigned int type);
       void init();
       void shutdown();
-      bool supports(Type type) const
+      bool supports(unsigned int type) const
       {
-        return type == Component::DataServer;
+        return (type & Component::DataServer);
       }
       const std::string& name() const
       {
@@ -53,7 +55,7 @@ namespace LinksRouting
         return name;
       }
 
-      void process(Type type);
+      void process(unsigned int type);
 
     private slots:
 
@@ -62,25 +64,31 @@ namespace LinksRouting
       void onPong(quint64 elapsedTime);
       void onClientDisconnection();
 
+    protected:
+
+      void regionsChanged(const WindowRegions& regions);
+      bool updateHedge( const WindowRegions& regions,
+                        LinkDescription::HyperEdge* hedge );
+
     private:
 
       QWsServer          *_server;
       std::map<QWsSocket*, WId> _clients;
+      WindowMonitor       _window_monitor;
 
       QMutex             *_mutex_slot_links;
       QWaitCondition     *_cond_data_ready;
-      QWidget            *_widget;
 
       /* List of all open searches */
       slot_t<LinkDescription::LinkList>::type _slot_links;
+      
+      /* List of available routing components */
+      slot_t<SlotType::ComponentSelection>::type _subscribe_routing;
 
       class JSON;
-      std::vector<LinkDescription::Node>
-      parseRegions(JSON& json, WId client_wid);
+      LinkDescription::Node parseRegions(JSON& json, WId client_wid);
 
       std::string   _debug_regions;
-
-      WId windowAt(const QPoint& pos) const;
 
   };
 

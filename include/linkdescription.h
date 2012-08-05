@@ -5,35 +5,72 @@
 #include "datatypes.h"
 #include "float2.hpp"
 
+#include <sstream>
 #include <list>
 #include <vector>
+#include <memory>
 
 namespace LinksRouting
 {
 namespace LinkDescription
 {
+  class Node;
   class HyperEdge;
   struct HyperEdgeDescriptionSegment;
   struct HyperEdgeDescriptionForkation;
+  typedef std::shared_ptr<HyperEdgeDescriptionForkation>
+          HyperEdgeDescriptionForkationPtr;
+  typedef std::shared_ptr<const HyperEdgeDescriptionForkation>
+          HyperEdgeDescriptionForkationConstPtr;
 
+  typedef std::vector<float2> points_t;
   typedef std::map<std::string, std::string> props_t;
+  typedef std::vector<Node> nodes_t;
 
   class Node
   {
     friend class HyperEdge;
     public:
 
-      explicit Node( const std::vector<float2>& points,
+      Node():
+        _parent(0)
+      {}
+
+      explicit Node( const points_t& points,
                      const props_t& props = props_t() ):
         _points( points ),
         _props( props ),
         _parent(0)
       {}
 
-      const std::vector<float2>& getVertices() const { return _points; }
-      std::vector<float2>& getVertices() { return _points; }
+      explicit Node( HyperEdge* hedge ):
+        _parent(0)
+      {
+        _children.push_back(hedge);
+      }
+
+      points_t& getVertices() { return _points; }
+      const points_t& getVertices() const { return _points; }
+
+      props_t& getProps() { return _props; }
       const props_t& getProps() const { return _props; }
 
+      /**
+       * Get a property
+       *
+       * @param key     Property key
+       * @param def_val Default value if property doesn't exist
+       * @return
+       */
+      template<typename T>
+      T get(const std::string& key, const T& def_val = T()) const
+      {
+        props_t::const_iterator it = _props.find(key);
+        if( it == _props.end() )
+          return def_val;
+
+        return convertFromString(it->second, def_val);
+      }
 
       HyperEdge* getParent()
       {
@@ -62,8 +99,35 @@ namespace LinkDescription
 
     private:
 
-      std::vector<float2>  _points;
-      std::map<std::string, std::string> _props;
+      template<typename T>
+      T convertFromString(const std::string& str, const T& def_val = T()) const
+      {
+        T var;
+        std::istringstream iss;
+        iss.str(str);
+        iss >> var;
+
+        if( !iss )
+          return def_val;
+
+        return var;
+      }
+
+      // Converter specializations
+      std::string convertFromString( const std::string& str,
+                                     const std::string& ) const
+      {
+        return str;
+      }
+
+      bool convertFromString( const std::string& str,
+                              const bool& ) const
+      {
+        return str == "true" || str == "1";
+      }
+
+      points_t  _points;
+      props_t   _props;
       HyperEdge* _parent;
       std::vector<HyperEdge*> _children;
   };
@@ -73,28 +137,48 @@ namespace LinkDescription
     friend class Node;
     public:
 
-      explicit HyperEdge( const std::vector<Node>& nodes,
+      HyperEdge():
+        _parent(0),
+        _revision( 0 )
+      {}
+
+      explicit HyperEdge( const nodes_t& nodes,
                           const props_t& props = props_t() ):
         _parent(0),
         _nodes( nodes ),
         _props( props ),
         _revision( 0 ),
         _fork( 0 )
-      {}
+      {
+        for(auto it = _nodes.begin(); it != _nodes.end(); ++it)
+          it->_parent = this;
+      }
 
-      const std::vector<Node>& getNodes() const { return _nodes; }
-      std::vector<Node>& getNodes()  { return _nodes; }
+      nodes_t& getNodes() { return _nodes; }
+      const nodes_t& getNodes() const { return _nodes; }
+
+      props_t& getProps() { return _props; }
       const props_t& getProps() const { return _props; }
+
       uint32_t getRevision() const { return _revision; }
 
-      void addNodes( std::vector<Node>& nodes )
+      void addNodes(const nodes_t& nodes)
       {
         if( nodes.empty() )
           return;
+        _nodes.reserve( _nodes.size() + nodes.size() );
         for(auto it = nodes.begin(); it != nodes.end(); ++it)
-          it->_parent = this;
-        _nodes.insert(_nodes.end(), nodes.begin(), nodes.end());
+        {
+          _nodes.push_back(*it);
+          _nodes.back()._parent = this;
+        }
         ++_revision;
+      }
+
+      void addNode(const LinkDescription::Node& node)
+      {
+        _nodes.push_back(node);
+        _nodes.back()._parent = this;
       }
 
       const Node* getParent() const
@@ -105,49 +189,49 @@ namespace LinkDescription
 //      virtual bool hasFixedColor(Color &color) const = 0;
 //      virtual const std::vector<Node*>& getConnections() const = 0;
 //
-        void setHyperEdgeDescription(HyperEdgeDescriptionForkation* desc)
-        {
-          _fork = desc;
-        }
-        HyperEdgeDescriptionForkation* getHyperEdgeDescription()
-        {
-          return _fork;
-        }
-        const HyperEdgeDescriptionForkation* getHyperEdgeDescription() const
-        {
-          return _fork;
-        }
 
-        inline void removeRoutingInformation();
+      void setHyperEdgeDescription(HyperEdgeDescriptionForkationPtr desc)
+      {
+        _fork = desc;
+      }
+      HyperEdgeDescriptionForkationPtr getHyperEdgeDescription()
+      {
+        return _fork;
+      }
+      HyperEdgeDescriptionForkationConstPtr getHyperEdgeDescription() const
+      {
+        return _fork;
+      }
+
+      inline void removeRoutingInformation();
 
     private:
 
       Node* _parent;
-      std::vector<Node> _nodes;
+      nodes_t _nodes;
       props_t _props;
       uint32_t _revision; ///!< Track modifications
-      HyperEdgeDescriptionForkation *_fork;
+      HyperEdgeDescriptionForkationPtr _fork;
   };
 
 
   struct HyperEdgeDescriptionSegment
   {
-      std::vector<const Node*> nodes;
-      std::vector<float2> trail;
+      nodes_t nodes;
+      points_t trail;
   };
 
   struct HyperEdgeDescriptionForkation
   {
-      HyperEdgeDescriptionForkation()
-      {
-      }
+    HyperEdgeDescriptionForkation()
+    {
+    }
 
-      float2 position;
+    float2 position;
 
-      HyperEdgeDescriptionSegment incoming;
-      std::list<HyperEdgeDescriptionSegment> outgoing;
+    HyperEdgeDescriptionSegment incoming;
+    std::list<HyperEdgeDescriptionSegment> outgoing;
   };
-
 
   struct LinkDescription
   {
@@ -179,8 +263,7 @@ namespace LinkDescription
 
   void HyperEdge::removeRoutingInformation()
   {
-    if(_fork) delete _fork;
-    _fork = 0;
+    _fork.reset();
   }
 
 } // namespace LinkDescription

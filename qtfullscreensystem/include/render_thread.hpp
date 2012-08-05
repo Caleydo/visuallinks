@@ -9,7 +9,10 @@
 #ifndef _RENDER_THREAD_HPP_
 #define _RENDER_THREAD_HPP_
 
+#include <QSharedPointer>
 #include <QThread>
+
+class QGLPixelBuffer;
 
 namespace qtfullscreensystem
 {
@@ -22,7 +25,8 @@ namespace qtfullscreensystem
 
     public:
 
-      explicit RenderThread(GLWidget* gl_widget);
+      explicit RenderThread( GLWidget* gl_widget,
+                             int w, int h );
 
       void resize(int w, int h);
       void run();
@@ -31,6 +35,7 @@ namespace qtfullscreensystem
     private:
 
       GLWidget *_gl_widget;
+      QSharedPointer<QGLPixelBuffer> _pbuffer;
       int       _w, _h;
 
       bool      _do_render,

@@ -9,6 +9,9 @@
 #include "slots.hpp"
 #include "slotdata/image.hpp"
 
+#include <queue>
+#include <set>
+
 namespace LinksRouting
 {
   class GlRenderer: public Renderer, public ComponentArguments
@@ -25,18 +28,18 @@ namespace LinksRouting
 
       bool startup(Core* core, unsigned int type);
       void init();
-      void initGL();
+      bool initGL();
       void shutdown();
-      bool supports(Type type) const
+      bool supports(unsigned int type) const
       {
-        return type == Component::Renderer;
+        return (type & Component::Renderer);
       }
       const std::string& name() const
       {
         return myname;
       }
 
-      void process(Type type);
+      void process(unsigned int type);
 
       virtual bool setString(const std::string& name, const std::string& val);
 
@@ -82,7 +85,13 @@ namespace LinksRouting
       cwc::glShader*    _blur_x_shader;
       cwc::glShader*    _blur_y_shader;
 
-      void renderLinks(const LinkDescription::LinkList& links);
+      typedef std::queue<const LinkDescription::HyperEdge*> HyperEdgeQueue;
+      typedef std::set<const LinkDescription::HyperEdge*> HyperEdgeSet;
+
+      bool renderLinks(const LinkDescription::LinkList& links);
+      bool renderNodes( HyperEdgeQueue& hedges_open,
+                        HyperEdgeSet& hedges_done,
+                        const LinkDescription::nodes_t& nodes );
   };
 }
 

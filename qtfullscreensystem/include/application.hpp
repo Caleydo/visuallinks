@@ -31,10 +31,6 @@ namespace qtfullscreensystem
       QTimer    _timer;
       GLWidget  _gl_widget;
 
-    private slots:
-
-      void timeOut();
-
   };
 
 } // namespace qtfullscreensystem

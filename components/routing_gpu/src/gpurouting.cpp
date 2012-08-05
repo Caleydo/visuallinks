@@ -34,13 +34,12 @@ namespace LinksRouting
 
   //----------------------------------------------------------------------------
   GPURouting::GPURouting() :
-        myname("GPURouting"),
-        _buffer_width(0),
-        _buffer_height(0)
+    myname("GPURouting"),
+    _buffer_width(0),
+    _buffer_height(0)
   {
     registerArg("BlockSizeX", _blockSize[0] = 8);
     registerArg("BlockSizeY", _blockSize[1] = 8);
-    registerArg("enabled", _enabled = true);
     registerArg("QueueSize", _routingQueueSize = 128);
     registerArg("NumLocalWorkers", _routingNumLocalWorkers = 4);
     registerArg("WorkersWarpSize", _routingLocalWorkersWarpSize = 32);
@@ -64,6 +63,7 @@ namespace LinksRouting
       slot_subscriber.getSlot<LinkDescription::LinkList>("/links");
   }
 
+  //----------------------------------------------------------------------------
   bool GPURouting::startup(Core* core, unsigned int type)
   {
     return true;
@@ -76,194 +76,201 @@ namespace LinksRouting
   }
 
   //----------------------------------------------------------------------------
-  void GPURouting::initGL()
+  bool GPURouting::initGL()
   {
-    // -----------------------------
-    // OpenCL platform
-
-    std::vector<cl::Platform> platforms;
-    cl::Platform::get(&platforms);
-    if( platforms.empty() )
-      throw std::runtime_error("Got no OpenCL platform.");
-
-    //TODO: select devices to use
-    cl::Platform use_platform;
-    std::vector<cl::Device> use_devices;
-    //for now:
-    use_platform = platforms.front();
-
-    //for (cl::Platform &tplatform : platforms)
-    for(size_t i = 0; i < platforms.size(); ++i)
+    try
     {
-      cl::Platform &tplatform = platforms[i];
+      // -----------------------------
+      // OpenCL platform
 
-      const std::string extensions =
-        tplatform.getInfo<CL_PLATFORM_EXTENSIONS>();
+      std::vector<cl::Platform> platforms;
+      cl::Platform::get(&platforms);
+      if( platforms.empty() )
+        throw std::runtime_error("Got no OpenCL platform.");
 
-      std::cout << "OpenCL Platform Info:"
-                << "\n -- platform:\t " << tplatform.getInfo<CL_PLATFORM_NAME>()
-                << "\n -- version:\t " << tplatform.getInfo<CL_PLATFORM_VERSION>()
-                << "\n -- vendor:\t " << tplatform.getInfo<CL_PLATFORM_VENDOR>()
-                << "\n -- profile:\t " << tplatform.getInfo<CL_PLATFORM_PROFILE>()
-                << std::endl;
+      //TODO: select devices to use
+      cl::Platform use_platform;
+      std::vector<cl::Device> use_devices;
+      //for now:
+      use_platform = platforms.front();
 
-      std::vector<cl::Device> devices;
-      tplatform.getDevices(CL_DEVICE_TYPE_GPU, &devices);
-      //for (cl::Device &tdevice : devices)
-      for (size_t j = 0; j < devices.size(); ++j)
+      //for (cl::Platform &tplatform : platforms)
+      for(size_t i = 0; i < platforms.size(); ++i)
       {
-         cl::Device &tdevice = devices[j];
-         const std::string dextensions = tdevice.getInfo<CL_DEVICE_EXTENSIONS>();
-         std::cout << "\tDevice Info:"
-                   << "\n\t -- clock freq:\t " << tdevice.getInfo<CL_DEVICE_MAX_CLOCK_FREQUENCY>()
-                   << "\n\t -- mem size:\t " << tdevice.getInfo<CL_DEVICE_GLOBAL_MEM_SIZE>()
-                   << "\n\t -- extensions:\t " << dextensions
-                   << std::endl;
-         //for now (use first only)
+        cl::Platform &tplatform = platforms[i];
+
+        const std::string extensions =
+          tplatform.getInfo<CL_PLATFORM_EXTENSIONS>();
+
+        std::cout << "OpenCL Platform Info:"
+                  << "\n -- platform:\t " << tplatform.getInfo<CL_PLATFORM_NAME>()
+                  << "\n -- version:\t " << tplatform.getInfo<CL_PLATFORM_VERSION>()
+                  << "\n -- vendor:\t " << tplatform.getInfo<CL_PLATFORM_VENDOR>()
+                  << "\n -- profile:\t " << tplatform.getInfo<CL_PLATFORM_PROFILE>()
+                  << std::endl;
+
+        std::vector<cl::Device> devices;
+        tplatform.getDevices(CL_DEVICE_TYPE_GPU, &devices);
+        //for (cl::Device &tdevice : devices)
+        for (size_t j = 0; j < devices.size(); ++j)
+        {
+           cl::Device &tdevice = devices[j];
+           const std::string dextensions = tdevice.getInfo<CL_DEVICE_EXTENSIONS>();
+           std::cout << "\tDevice Info:"
+                     << "\n\t -- clock freq:\t " << tdevice.getInfo<CL_DEVICE_MAX_CLOCK_FREQUENCY>()
+                     << "\n\t -- mem size:\t " << tdevice.getInfo<CL_DEVICE_GLOBAL_MEM_SIZE>()
+                     << "\n\t -- extensions:\t " << dextensions
+                     << std::endl;
+           //for now (use first only)
 #if defined(__APPLE__) || defined(__MACOSX)
-         if( dextensions.find("cl_apple_gl_sharing") != std::string::npos )
+           if( dextensions.find("cl_apple_gl_sharing") != std::string::npos )
 #else
-         if( dextensions.find("cl_khr_gl_sharing") != std::string::npos )
+           if( dextensions.find("cl_khr_gl_sharing") != std::string::npos )
 #endif
-         {
-           use_devices.clear();
-           use_devices.push_back(tdevice);
-           break;
-         }
+           {
+             use_devices.clear();
+             use_devices.push_back(tdevice);
+             break;
+           }
+        }
+
       }
 
-    }
 
+      // -----------------------------
+      // OpenCL context
 
-    // -----------------------------
-    // OpenCL context
-
-    std::vector<cl_context_properties> properties;
+      std::vector<cl_context_properties> properties;
 
 #if defined(__APPLE__) || defined(__MACOSX)
-
 # error "Not implemented yet."
 
-    // TODO check
-    properties.push_back( CL_CONTEXT_PROPERTY_USE_CGL_SHAREGROUP_APPLE );
-    properties.push_back( (cl_context_properties)CGLGetShareGroup(CGLGetCurrentContext()) );
+      // TODO check
+      properties.push_back( CL_CONTEXT_PROPERTY_USE_CGL_SHAREGROUP_APPLE );
+      properties.push_back( (cl_context_properties)CGLGetShareGroup(CGLGetCurrentContext()) );
 #else
 
 # ifdef _WIN32
-    properties.push_back( CL_GL_CONTEXT_KHR );
-    properties.push_back( (cl_context_properties)wglGetCurrentContext() );
+      properties.push_back( CL_GL_CONTEXT_KHR );
+      properties.push_back( (cl_context_properties)wglGetCurrentContext() );
 
-    properties.push_back( CL_WGL_HDC_KHR );
-    properties.push_back( (cl_context_properties)wglGetCurrentDC() );
+      properties.push_back( CL_WGL_HDC_KHR );
+      properties.push_back( (cl_context_properties)wglGetCurrentDC() );
 # else
-    properties.push_back( CL_GLX_DISPLAY_KHR );
-    properties.push_back( (cl_context_properties)glXGetCurrentDisplay() );
+      properties.push_back( CL_GLX_DISPLAY_KHR );
+      properties.push_back( (cl_context_properties)glXGetCurrentDisplay() );
 
-    properties.push_back( CL_GL_CONTEXT_KHR );
-    properties.push_back( cl_context_properties(glXGetCurrentContext()) );
+      properties.push_back( CL_GL_CONTEXT_KHR );
+      properties.push_back( cl_context_properties(glXGetCurrentContext()) );
 # endif
 #endif
 
-    properties.push_back( CL_CONTEXT_PLATFORM );
-    properties.push_back( (cl_context_properties)use_platform() );
-    properties.push_back(0);
+      properties.push_back( CL_CONTEXT_PLATFORM );
+      properties.push_back( (cl_context_properties)use_platform() );
+      properties.push_back(0);
 
-    _cl_context = cl::Context(use_devices, &properties[0]);
+      _cl_context = cl::Context(use_devices, &properties[0]);
 
-    //_cl_context = cl::Context(CL_DEVICE_TYPE_GPU, &properties[0]);
+      //_cl_context = cl::Context(CL_DEVICE_TYPE_GPU, &properties[0]);
 
-    // -----------------------------
-    // OpenCL device
+      // -----------------------------
+      // OpenCL device
 
-    std::vector<cl::Device> devices = _cl_context.getInfo<CL_CONTEXT_DEVICES>();
+      std::vector<cl::Device> devices = _cl_context.getInfo<CL_CONTEXT_DEVICES>();
 
-    if( devices.empty() )
-      throw std::runtime_error("Got no OpenCL device.");
-    _cl_device = devices[0];
+      if( devices.empty() )
+        throw std::runtime_error("Got no OpenCL device.");
+      _cl_device = devices[0];
 
-    std::cout << "OpenCL Device Info:"
-              << "\n -- type:\t " << _cl_device.getInfo<CL_DEVICE_TYPE>()
-              << "\n -- vendor:\t " << _cl_device.getInfo<CL_DEVICE_VENDOR>()
-              << "\n -- name:\t " << _cl_device.getInfo<CL_DEVICE_NAME>()
-              << "\n -- profile:\t " << _cl_device.getInfo<CL_DEVICE_PROFILE>()
-              << "\n -- device version:\t " << _cl_device.getInfo<CL_DEVICE_VERSION>()
-              << "\n -- driver version:\t " << _cl_device.getInfo<CL_DRIVER_VERSION>()
-              << "\n -- compute units:\t " << _cl_device.getInfo<CL_DEVICE_MAX_COMPUTE_UNITS>()
-              << "\n -- workgroup size:\t " << _cl_device.getInfo<CL_DEVICE_MAX_WORK_GROUP_SIZE>()
-              << "\n -- global memory:\t " << (_cl_device.getInfo<CL_DEVICE_GLOBAL_MEM_SIZE>() >> 20) << " MiB"
-              << "\n -- local memory:\t " << (_cl_device.getInfo<CL_DEVICE_LOCAL_MEM_SIZE>() >> 10) << " KiB"
-              << "\n -- clock frequency:\t " << _cl_device.getInfo<CL_DEVICE_MAX_CLOCK_FREQUENCY>()
-              << std::endl;
-
-
-    _cl_command_queue = cl::CommandQueue(_cl_context, _cl_device, CL_QUEUE_PROFILING_ENABLE);
-
-    // -----------------------------
-    // And now the OpenCL program
-
-
-    std::ifstream source_file("routing.cl");
-    if( !source_file )
-      throw std::runtime_error("Failed to open routing.cl");
-    std::string source( std::istreambuf_iterator<char>(source_file),
-                       (std::istreambuf_iterator<char>()) );
-
-    //now handled via include
-    //std::ifstream source_file2("sorting.cl");
-    //if( !source_file2 )
-    //  throw std::runtime_error("Failed to open sorting.cl");
-    //std::string source2( std::istreambuf_iterator<char>(source_file2),
-    //                   (std::istreambuf_iterator<char>()) );
-
-    cl::Program::Sources sources;
-    sources.push_back( std::make_pair(source.c_str(), source.length()) );
-    //sources.push_back( std::make_pair(source2.c_str(), source2.length()) );
-
-    _cl_program = cl::Program(_cl_context, sources);
-
-    char c_cdir[1024];
-    if (!GetCurrentDir(c_cdir, 1024))
-      throw std::runtime_error("Failed to retrieve current working directory");
-    try
-    {
-      std::string buildargs;
-      buildargs += "-cl-fast-relaxed-math";
-      buildargs += " -I ";
-      buildargs += c_cdir;
-      //std::cout << buildargs << std::endl;
-      _cl_program.build(devices, buildargs.c_str());
-    }
-    catch(cl::Error& ex)
-    {
-      std::cerr << "Failed to build OpenCL program: "
-                << " -- Log: " << _cl_program.getBuildInfo<CL_PROGRAM_BUILD_LOG>(_cl_device)
+      std::cout << "OpenCL Device Info:"
+                << "\n -- type:\t " << _cl_device.getInfo<CL_DEVICE_TYPE>()
+                << "\n -- vendor:\t " << _cl_device.getInfo<CL_DEVICE_VENDOR>()
+                << "\n -- name:\t " << _cl_device.getInfo<CL_DEVICE_NAME>()
+                << "\n -- profile:\t " << _cl_device.getInfo<CL_DEVICE_PROFILE>()
+                << "\n -- device version:\t " << _cl_device.getInfo<CL_DEVICE_VERSION>()
+                << "\n -- driver version:\t " << _cl_device.getInfo<CL_DRIVER_VERSION>()
+                << "\n -- compute units:\t " << _cl_device.getInfo<CL_DEVICE_MAX_COMPUTE_UNITS>()
+                << "\n -- workgroup size:\t " << _cl_device.getInfo<CL_DEVICE_MAX_WORK_GROUP_SIZE>()
+                << "\n -- global memory:\t " << (_cl_device.getInfo<CL_DEVICE_GLOBAL_MEM_SIZE>() >> 20) << " MiB"
+                << "\n -- local memory:\t " << (_cl_device.getInfo<CL_DEVICE_LOCAL_MEM_SIZE>() >> 10) << " KiB"
+                << "\n -- clock frequency:\t " << _cl_device.getInfo<CL_DEVICE_MAX_CLOCK_FREQUENCY>()
                 << std::endl;
-      throw;
+
+
+      _cl_command_queue = cl::CommandQueue(_cl_context, _cl_device, CL_QUEUE_PROFILING_ENABLE);
+
+      // -----------------------------
+      // And now the OpenCL program
+
+
+      std::ifstream source_file("routing.cl");
+      if( !source_file )
+        throw std::runtime_error("Failed to open routing.cl");
+      std::string source( std::istreambuf_iterator<char>(source_file),
+                         (std::istreambuf_iterator<char>()) );
+
+      //now handled via include
+      //std::ifstream source_file2("sorting.cl");
+      //if( !source_file2 )
+      //  throw std::runtime_error("Failed to open sorting.cl");
+      //std::string source2( std::istreambuf_iterator<char>(source_file2),
+      //                   (std::istreambuf_iterator<char>()) );
+
+      cl::Program::Sources sources;
+      sources.push_back( std::make_pair(source.c_str(), source.length()) );
+      //sources.push_back( std::make_pair(source2.c_str(), source2.length()) );
+
+      _cl_program = cl::Program(_cl_context, sources);
+
+      char c_cdir[1024];
+      if (!GetCurrentDir(c_cdir, 1024))
+        throw std::runtime_error("Failed to retrieve current working directory");
+      try
+      {
+        std::string buildargs;
+        buildargs += "-cl-fast-relaxed-math";
+        buildargs += " -I ";
+        buildargs += c_cdir;
+        //std::cout << buildargs << std::endl;
+        _cl_program.build(devices, buildargs.c_str());
+      }
+      catch(cl::Error& ex)
+      {
+        std::cerr << "Failed to build OpenCL program: "
+                  << " -- Log: " << _cl_program.getBuildInfo<CL_PROGRAM_BUILD_LOG>(_cl_device)
+                  << std::endl;
+        throw;
+      }
+
+      std::cout << "OpenCL Program Build:"
+                << "\n -- Status:\t" << _cl_program.getBuildInfo<CL_PROGRAM_BUILD_STATUS>(_cl_device)
+                << "\n -- Options:\t" << _cl_program.getBuildInfo<CL_PROGRAM_BUILD_OPTIONS>(_cl_device)
+                << "\n -- Log: " << _cl_program.getBuildInfo<CL_PROGRAM_BUILD_LOG>(_cl_device)
+                << std::endl;
+
+      _cl_initMem_kernel = cl::Kernel(_cl_program, "initMem");
+
+      _cl_updateRouteMap_kernel = cl::Kernel(_cl_program, "updateRouteMap");
+      _cl_prepareBorderCosts_kernel = cl::Kernel(_cl_program, "prepareBorderCosts");
+      _cl_prepareIndividualRouting_kernel = cl::Kernel(_cl_program, "prepareIndividualRouting");
+      _cl_prepareIndividualRoutingParent_kernel = cl::Kernel(_cl_program, "prepareIndividualRoutingParent");
+      _cl_routing_kernel  = cl::Kernel(_cl_program, "routeLocal");
+
+
+      _cl_voteMinimum_kernel = cl::Kernel(_cl_program, "voteMinimum");
+      _cl_getMinimum_kernel = cl::Kernel(_cl_program, "getMinimum");
+      _cl_routeInterBlock_kernel = cl::Kernel(_cl_program, "calcInterBlockRoute");
+      _cl_routeConstruct_kernel = cl::Kernel(_cl_program, "routeConstruct");
+    }
+    catch(std::exception& ex)
+    {
+      std::cerr << "Failed to initialize GPURouting: "
+                << ex.what()
+                << std::endl;
+      return false;
     }
 
-    std::cout << "OpenCL Program Build:"
-              << "\n -- Status:\t" << _cl_program.getBuildInfo<CL_PROGRAM_BUILD_STATUS>(_cl_device)
-              << "\n -- Options:\t" << _cl_program.getBuildInfo<CL_PROGRAM_BUILD_OPTIONS>(_cl_device)
-              << "\n -- Log: " << _cl_program.getBuildInfo<CL_PROGRAM_BUILD_LOG>(_cl_device)
-              << std::endl;
-
-
-
-    _cl_initMem_kernel = cl::Kernel(_cl_program, "initMem");
-
-    _cl_updateRouteMap_kernel = cl::Kernel(_cl_program, "updateRouteMap");
-    _cl_prepareBorderCosts_kernel = cl::Kernel(_cl_program, "prepareBorderCosts");
-    _cl_prepareIndividualRouting_kernel = cl::Kernel(_cl_program, "prepareIndividualRouting");
-    _cl_prepareIndividualRoutingParent_kernel = cl::Kernel(_cl_program, "prepareIndividualRoutingParent");
-    _cl_routing_kernel  = cl::Kernel(_cl_program, "routeLocal");
-
-    
-    _cl_voteMinimum_kernel = cl::Kernel(_cl_program, "voteMinimum");
-    _cl_getMinimum_kernel = cl::Kernel(_cl_program, "getMinimum");
-    _cl_routeInterBlock_kernel = cl::Kernel(_cl_program, "calcInterBlockRoute");
-    _cl_routeConstruct_kernel = cl::Kernel(_cl_program, "routeConstruct");
-    
-
+    return true;
   }
 
   //----------------------------------------------------------------------------
@@ -273,8 +280,6 @@ namespace LinksRouting
   }
 
   //----------------------------------------------------------------------------
-
-
   template<typename T>
   void printfBuffer( cl::CommandQueue& cl_queue,
                      const cl::Buffer& buf,
@@ -355,7 +360,7 @@ namespace LinksRouting
 
     std::vector<T> mem(width * height);
     cl::size_t<3> o, r;
-    0[0] = o[1] = o[2] = 0;
+    o[0] = o[1] = o[2] = 0;
     r[0] = width; r[1] = height; r[2] = 1;
     cl_queue.enqueueReadImage(img, true, o, r, width*sizeof(T), 0, &mem[0]);
 
@@ -453,8 +458,9 @@ namespace LinksRouting
   }
 
   //----------------------------------------------------------------------------
-  void GPURouting::process(Type type)
+  void GPURouting::process(unsigned int type)
   {
+
     //----------------------
     // Many sanity checks :)
 
@@ -489,14 +495,8 @@ namespace LinksRouting
       return;
     }
 
-    if( !_enabled ) // This can be set from the config file...
-      return;
-
     try
     {
-
-
-
     updateRouteMap();
 
     // now start analyzing the links
@@ -527,7 +527,6 @@ namespace LinksRouting
                << " queue.");
 
       // --------------------------------------------------------
-
       createRoutes(it->_link);
 
 #if 0
@@ -543,7 +542,7 @@ namespace LinksRouting
            node != it->_link.getNodes().end();
            ++node )
       {
-        if( node->getProps().find("hidden") != node->getProps().end() )
+        if( node->get<bool>("hidden", false) )
           continue;
 
         //std::cout << "Polygon: (" << node->getVertices().size() << " points)\n";
@@ -735,69 +734,72 @@ namespace LinksRouting
 
         dumpBuffer<float>(_cl_command_queue, buf, width, height * numtargets, "shortestpath");
 
-        _cl_command_queue.finish();
-        _cl_command_queue.enqueueReadBuffer(queue_info, true, 0, sizeof(cl_QueueGlobal), &baseQueueInfo);
+        if( !_noQueue )
+        {
+          _cl_command_queue.finish();
+          _cl_command_queue.enqueueReadBuffer(queue_info, true, 0, sizeof(cl_QueueGlobal), &baseQueueInfo);
 
-        std::cout << "front: " << baseQueueInfo.front << " "
-                  << "back: " << baseQueueInfo.back << " "
-                  << "filllevel: " << baseQueueInfo.filllevel << " "
-                  << "activeBlocks: " << baseQueueInfo.activeBlocks << " "
-                  << "processedBlocks: " << baseQueueInfo.processedBlocks << " "
-                  << "debug: " << baseQueueInfo.debug << "\n";
+          std::cout << "front: " << baseQueueInfo.front << " "
+                    << "back: " << baseQueueInfo.back << " "
+                    << "filllevel: " << baseQueueInfo.filllevel << " "
+                    << "activeBlocks: " << baseQueueInfo.activeBlocks << " "
+                    << "processedBlocks: " << baseQueueInfo.processedBlocks << " "
+                    << "debug: " << baseQueueInfo.debug << "\n";
 
 
-        //_cl_command_queue.enqueueReadBuffer(queue_info, true, 0, sizeof(cl_QueueGlobal), &baseQueueInfo);
-        //std::cout << "front: " << baseQueueInfo.front << " "
-        //          << "back: " << baseQueueInfo.back << " "
-        //          << "filllevel: " << baseQueueInfo.filllevel << " "
-        //          << "activeBlocks: " << baseQueueInfo.activeBlocks << " "
-        //          << "processedBlocks: " << baseQueueInfo.processedBlocks << " "
-        //          << "debug: " << baseQueueInfo.debug << "\n";
-        std::cout << "overAllBlocks=" << overAllBlocks << std::endl;
+          //_cl_command_queue.enqueueReadBuffer(queue_info, true, 0, sizeof(cl_QueueGlobal), &baseQueueInfo);
+          //std::cout << "front: " << baseQueueInfo.front << " "
+          //          << "back: " << baseQueueInfo.back << " "
+          //          << "filllevel: " << baseQueueInfo.filllevel << " "
+          //          << "activeBlocks: " << baseQueueInfo.activeBlocks << " "
+          //          << "processedBlocks: " << baseQueueInfo.processedBlocks << " "
+          //          << "debug: " << baseQueueInfo.debug << "\n";
+          std::cout << "overAllBlocks=" << overAllBlocks << std::endl;
 
-        std::vector<cl_QueueElement> queue_data =
-          dumpRingBuffer<cl_QueueElement>
+          std::vector<cl_QueueElement> queue_data =
+            dumpRingBuffer<cl_QueueElement>
+            (
+              _cl_command_queue,
+              queue,
+              baseQueueInfo.front,
+              baseQueueInfo.back,
+              overAllBlocks,
+              "queue.txt"
+            );
+          dumpRingBuffer<cl_float>
           (
             _cl_command_queue,
-            queue,
+            queue_priority,
             baseQueueInfo.front,
             baseQueueInfo.back,
             overAllBlocks,
-            "queue.txt"
+            "queue_priorities.txt"
           );
-        dumpRingBuffer<cl_float>
-        (
-          _cl_command_queue,
-          queue_priority,
-          baseQueueInfo.front,
-          baseQueueInfo.back,
-          overAllBlocks,
-          "queue_priorities.txt"
-        );
-        dumpRingBuffer<cl_float>
-        (
-          _cl_command_queue,
-          queue_priority,
-          0,
-          overAllBlocks - 1,
-          overAllBlocks,
-          "queue_priorities_all.txt"
-        );
+          dumpRingBuffer<cl_float>
+          (
+            _cl_command_queue,
+            queue_priority,
+            0,
+            overAllBlocks - 1,
+            overAllBlocks,
+            "queue_priorities_all.txt"
+          );
 
-        for(size_t i = 0; i < h_targets.size(); ++i)
-          std::cout << h_targets[i].x/_blockSize[0] << "->" <<  h_targets[i].z/_blockSize[0]
-                    << " " << h_targets[i].y/_blockSize[1] << "->" <<  h_targets[i].w/_blockSize[1]
-                    << std::endl;
+          for(size_t i = 0; i < h_targets.size(); ++i)
+            std::cout << h_targets[i].x/_blockSize[0] << "->" <<  h_targets[i].z/_blockSize[0]
+                      << " " << h_targets[i].y/_blockSize[1] << "->" <<  h_targets[i].w/_blockSize[1]
+                      << std::endl;
 
-        std::set<int4> cleanup;
-        for(unsigned int i = 0; i < queue_data.size(); ++i)
-          if(!cleanup.insert(int4(queue_data[i].s[0],queue_data[i].s[1],queue_data[i].s[2],0)).second)
-          {
-            std::cout << "duplicated queue entry: ";
-            for(int j = 0; j < 4; ++j)
-            std::cout << queue_data[i].s[j] << " ";
-            std::cout << "\n";
-          }
+          std::set<int4> cleanup;
+          for(unsigned int i = 0; i < queue_data.size(); ++i)
+            if(!cleanup.insert(int4(queue_data[i].s[0],queue_data[i].s[1],queue_data[i].s[2],0)).second)
+            {
+              std::cout << "duplicated queue entry: ";
+              for(int j = 0; j < 4; ++j)
+              std::cout << queue_data[i].s[j] << " ";
+              std::cout << "\n";
+            }
+        }
 
         //search for minimum
         _cl_command_queue.finish();
@@ -939,8 +941,8 @@ namespace LinksRouting
         _cl_command_queue.enqueueReadBuffer(routes, true, 0, maxpoints*sizeof(cl_int2)*numtargets, &outroutes[0]);
 
         //copy routes to hyperedge
-        fork->position.x = startingpoint[0] * downsample;
-        fork->position.y = startingpoint[1] * downsample;
+        fork->position.x = (startingpoint[0] + 0.5) * downsample;
+        fork->position.y = (startingpoint[1] + 0.5) * downsample;
         for(int i = 0; i < numtargets; ++i)
         {
           fork->outgoing.push_back(LinkDescription::HyperEdgeDescriptionSegment());
@@ -950,8 +952,8 @@ namespace LinksRouting
           {
             fork->outgoing.back().trail.push_back
             (
-              float2( outroutes[i*maxpoints +j].s[0] * downsample,
-                      outroutes[i*maxpoints +j].s[1] * downsample )
+              float2( (outroutes[i*maxpoints +j].s[0] + 0.5) * downsample,
+                      (outroutes[i*maxpoints +j].s[1] + 0.5) * downsample )
             );
           }
           fork->outgoing.back().nodes.push_back(h_targets[i].aug);
@@ -1004,35 +1006,6 @@ namespace LinksRouting
       throw;
     }
   }
-
-  void GPURouting::connect(CostAnalysis* costanalysis,
-                           LinksRouting::Renderer *renderer)
-  {
-
-  }
-
-  bool GPURouting::addLinkHierarchy(LinkDescription::Node* node,
-                                    double priority)
-  {
-    return true;
-  }
-  bool GPURouting::addLinkHierarchy(LinkDescription::HyperEdge* hyperedge,
-                                    double priority)
-  {
-    return true;
-  }
-  bool GPURouting::removeLinkHierarchy(LinkDescription::Node* node)
-  {
-    return true;
-  }
-  bool GPURouting::removeLinkHierarchy(LinkDescription::HyperEdge* hyperedge)
-  {
-    return true;
-  }
-
-
-
-
   //kernel test
 
 struct int2
@@ -2376,8 +2349,10 @@ void calcInterBlockRouteDummy(const float* routecost,
 
     _cl_command_queue.enqueueAcquireGLObjects(&memory_gl);
 
-    cl_int bufferDim[2] = { _buffer_width, _buffer_height };
-
+    cl_int bufferDim[2] = {
+      static_cast<cl_int>(_buffer_width),
+      static_cast<cl_int>(_buffer_height)
+    };
 
     //update route map
     //_cl_updateRouteMap_kernel
@@ -2438,14 +2413,14 @@ void calcInterBlockRouteDummy(const float* routecost,
     ////
 
 
-    //static int count = 0;
-    //std::stringstream fname;
-    //fname << "costmap" << count++;
-    //dumpBuffer<float>(_cl_command_queue, _cl_lastCostMap_buffer, _buffer_width, _buffer_height, fname.str());
-    //std::stringstream fname2;
-    //fname2 << "routemap" << count++;
-    //int boundaryElements = 2*(_blockSize[0] + _blockSize[1]-2);
-    //dumpBuffer<float>(_cl_command_queue, _cl_routeMap_buffer, _blocks[0]*boundaryElements, _blocks[1]*boundaryElements/2, fname2.str());
+    static int count = 0;
+    std::stringstream fname;
+    fname << "costmap" << count++;
+    dumpBuffer<float>(_cl_command_queue, _cl_lastCostMap_buffer, _buffer_width, _buffer_height, fname.str());
+    std::stringstream fname2;
+    fname2 << "routemap" << count;
+    int boundaryElements = 2*(_blockSize[0] + _blockSize[1]-2);
+    dumpBuffer<float>(_cl_command_queue, _cl_routeMap_buffer, _blocks[0]*boundaryElements, _blocks[1]*boundaryElements/2, fname2.str());
     
 
     cl_ulong start, end;
@@ -2474,33 +2449,7 @@ void calcInterBlockRouteDummy(const float* routecost,
     target.w = std::min(target.w, buffer_height-1);
     return (target.z - target.x > 0 && target.w - target.y > 0);
   }
-            
 
-          
-
-  void checkLevels(std::map<LinkDescription::Node*, size_t>& levelNodeMap, std::map<LinkDescription::HyperEdge*, size_t>& levelHyperEdgeMap, LinkDescription::HyperEdge& hedge, size_t level = 0)
-  {
-    auto found = levelHyperEdgeMap.find(&hedge);
-    if(found != levelHyperEdgeMap.end())
-      found->second = std::max(found->second,level);
-    else
-      levelHyperEdgeMap.insert(std::make_pair(&hedge, level));
-    ++level;
-    for(size_t i = 0; i < hedge.getNodes().size(); ++i)
-    {
-      if( hedge.getNodes()[i].getProps().find("hidden") != hedge.getNodes()[i].getProps().end() )
-        continue;
-      auto found = levelNodeMap.find(&hedge.getNodes()[i]);
-      if(found != levelNodeMap.end())
-        found->second = std::max(found->second,level);
-      else
-        levelNodeMap.insert(std::make_pair(&hedge.getNodes()[i], level));
-      //has child hyperedges
-      for(auto it = hedge.getNodes()[i].getChildren().begin();
-          it != hedge.getNodes()[i].getChildren().end(); ++it)
-        checkLevels(levelNodeMap, levelHyperEdgeMap, *(*it), level + 1);
-    }
-  }
   template<class Vec2>
   float2 idToPos(Vec2 id, int downsample)
   {
@@ -2549,8 +2498,8 @@ void calcInterBlockRouteDummy(const float* routecost,
     //  std::cout << '\n';
     //}
 
-    std::map< LinkDescription::Node*, size_t > levelNodeMap;
-    std::map< LinkDescription::HyperEdge*, size_t > levelHyperEdgeMap;
+    LevelNodeMap levelNodeMap;
+    LevelHyperEdgeMap levelHyperEdgeMap;
 
     std::map< LinkDescription::Node*, size_t > nodeMemMap;
     std::map< LinkDescription::HyperEdge*, size_t > hyperEdgeMemMap;
@@ -2594,7 +2543,10 @@ void calcInterBlockRouteDummy(const float* routecost,
 
 
     //alloc Memory
-    cl_int bufferDim[2] = { _buffer_width, _buffer_height };
+    cl_int bufferDim[2] = {
+      static_cast<cl_int>(_buffer_width),
+      static_cast<cl_int>(_buffer_height)
+    };
     int rowelements = _blocks[0]*(_blockSize[0]-1)+1;
     int colelements = (_blocks[0]+1)*(_blockSize[1]-2);
 
@@ -2689,8 +2641,13 @@ void calcInterBlockRouteDummy(const float* routecost,
               childIt != (*nodeit)->getChildren().end();
               ++childIt)
           {
-            thisSources.push_back(hyperEdgeMemMap.find(*childIt)->second);
+            auto found = hyperEdgeMemMap.find(*childIt);
+             if(found == hyperEdgeMemMap.end())
+              continue;
+            thisSources.push_back(found->second);
           }
+          if(thisSources.size() == 0)
+            continue;
           routingSources.push_back(thisSources);
           routingIds.push_back(nodeMemMap.find(*nodeit)->second);
           startBlockRange.push_back(int4(0,0, _blocks[0], _blocks[1]));
@@ -2703,8 +2660,13 @@ void calcInterBlockRouteDummy(const float* routecost,
               childIt != (*hyperedgeit)->getNodes().end();
               ++childIt)
           {
-            thisSources.push_back(nodeMemMap.find(&(*childIt))->second);
+            auto found = nodeMemMap.find(&(*childIt));
+            if(found == nodeMemMap.end())
+              continue;
+            thisSources.push_back(found->second);
           }
+          if(thisSources.size() == 0)
+            continue;
           routingSources.push_back(thisSources);
           routingIds.push_back(hyperEdgeMemMap.find(*hyperedgeit)->second);
           startBlockRange.push_back(int4(0,0, _blocks[0], _blocks[1]));
@@ -2920,7 +2882,7 @@ void calcInterBlockRouteDummy(const float* routecost,
           _cl_routing_kernel.setArg(10, d_routeActive);
           _cl_routing_kernel.setArg(11, 2 * sizeof(cl_int), activeBufferSize);
           _cl_routing_kernel.setArg(12, boundaryElements * sizeof(cl_uint), NULL);
-          
+
           int localWorkerSize = divup(boundaryElements,_routingLocalWorkersWarpSize)*_routingLocalWorkersWarpSize;
 
           cl::Event routingRoutingEvent;
@@ -2975,7 +2937,11 @@ void calcInterBlockRouteDummy(const float* routecost,
             for(auto childIt = (*nodeit)->getChildren().begin();
               childIt != (*nodeit)->getChildren().end();
               ++childIt)
-              needMinSearchChildren.push_back(hyperEdgeMemMap.find(*childIt)->second);
+            {
+              auto found = hyperEdgeMemMap.find(*childIt);
+              if(found != hyperEdgeMemMap.end())
+                needMinSearchChildren.push_back(hyperEdgeMemMap.find(*childIt)->second);
+            }
           }
 
         //for hyperedges with no parents find the minimum
@@ -2989,7 +2955,11 @@ void calcInterBlockRouteDummy(const float* routecost,
             for(auto childIt = (*edgeit)->getNodes().begin();
               childIt != (*edgeit)->getNodes().end();
               ++childIt)
-              needMinSearchChildren.push_back(nodeMemMap.find(&(*childIt))->second);
+            {
+              auto found = nodeMemMap.find(&(*childIt));
+              if(found != nodeMemMap.end())
+                needMinSearchChildren.push_back(found->second);
+            }
           }
         needMinSearchOffsets.push_back(needMinSearchChildren.size());
               
@@ -3373,8 +3343,11 @@ void calcInterBlockRouteDummy(const float* routecost,
               ++childrenIt)
             {
               if((*childrenIt)->getHyperEdgeDescription() == 0)
-                (*childrenIt)->setHyperEdgeDescription(new LinkDescription::HyperEdgeDescriptionForkation());
-              LinkDescription::HyperEdgeDescriptionForkation *fork = (*childrenIt)->getHyperEdgeDescription();
+                (*childrenIt)->setHyperEdgeDescription
+                (
+                  std::make_shared<LinkDescription::HyperEdgeDescriptionForkation>()
+                );
+              LinkDescription::HyperEdgeDescriptionForkationPtr fork = (*childrenIt)->getHyperEdgeDescription();
               fork->incoming.trail.clear();
 
               float2 startpos = idToPos(nodePositions.find(*needRouteNodesIt)->second, downsample);
@@ -3395,8 +3368,11 @@ void calcInterBlockRouteDummy(const float* routecost,
           {
             auto &hyperedgeChildren((*needRouteEdgesIt)->getNodes());
             if((*needRouteEdgesIt)->getHyperEdgeDescription() == 0)
-                (*needRouteEdgesIt)->setHyperEdgeDescription(new LinkDescription::HyperEdgeDescriptionForkation());
-            LinkDescription::HyperEdgeDescriptionForkation *fork = (*needRouteEdgesIt)->getHyperEdgeDescription();
+                (*needRouteEdgesIt)->setHyperEdgeDescription
+                (
+                  std::make_shared<LinkDescription::HyperEdgeDescriptionForkation>()
+                );
+            LinkDescription::HyperEdgeDescriptionForkationPtr fork = (*needRouteEdgesIt)->getHyperEdgeDescription();
             fork->position = idToPos(hyperEdgeCenters.find((*needRouteEdgesIt))->second, downsample);
 
             for(auto childrenIt = hyperedgeChildren.begin();
@@ -3405,7 +3381,7 @@ void calcInterBlockRouteDummy(const float* routecost,
             {
               fork->outgoing.push_back(LinkDescription::HyperEdgeDescriptionSegment());
               LinkDescription::HyperEdgeDescriptionSegment& segment(fork->outgoing.back());
-              segment.nodes.push_back(&(*childrenIt));
+              segment.nodes.push_back(*childrenIt);
               segment.trail.push_back(fork->position);
 
               auto iBRBegin = innerBlockRoutes.begin();

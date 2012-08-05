@@ -15,11 +15,11 @@ void main()
 
   if( link_color.a >= 0.001 )
   {
-    float fac = min(2 * link_color.a, 1);
-    color = fac * link_color + (1 - fac) * desktop_color;
+    float fac = min(2.0 * link_color.a, 1.0);
+    color = fac * link_color + (1.0 - fac) * desktop_color;
   }
   
-  color.a = 1;
+  color.a = 1.0;
   gl_FragColor = color;
 }
 /*

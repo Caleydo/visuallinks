@@ -172,11 +172,11 @@ namespace LinksRouting
   }
 
   //----------------------------------------------------------------------------
-  void GlRenderer::initGL()
+  bool GlRenderer::initGL()
   {
     static bool init = false;
     if( init )
-      return;
+      return true;
 
     GLint vp[4];
     glGetIntegerv(GL_VIEWPORT, vp);
@@ -188,6 +188,7 @@ namespace LinksRouting
     _blur_y_shader = _shader_manager.loadfromFile(0, "blurY.glsl");
 
     init = true;
+    return true;
   }
 
   //----------------------------------------------------------------------------
@@ -197,7 +198,7 @@ namespace LinksRouting
   }
 
   //----------------------------------------------------------------------------
-  void GlRenderer::process(Type type)
+  void GlRenderer::process(unsigned int type)
   {
     if( !_enabled )
       return;
@@ -214,8 +215,11 @@ namespace LinksRouting
     if( _subscribe_links->_data->empty() )
       return _links_fbo.unbind();
 
-    renderLinks(*_subscribe_links->_data);
+    bool rendered_anything = renderLinks(*_subscribe_links->_data);
     _links_fbo.unbind();
+
+    if( !rendered_anything )
+      return;
 
     glDisable(GL_BLEND);
     glColor4f(1,1,1,1);
@@ -272,55 +276,54 @@ for( int i = 0; i < 1; ++i )
   }
 
   //----------------------------------------------------------------------------
-  void GlRenderer::renderLinks(const LinkDescription::LinkList& links)
+  bool GlRenderer::renderLinks(const LinkDescription::LinkList& links)
   {
+    bool rendered_anything = false;
     glColor3f(1.0, 0.2, 0.2);
 
     for(auto link = links.begin(); link != links.end(); ++link)
     {
-      const LinkDescription::HyperEdgeDescriptionForkation* fork =
-        link->_link.getHyperEdgeDescription();
-
-      if( !fork )
-      {
-        for( auto node = link->_link.getNodes().begin();
-             node != link->_link.getNodes().end();
-             ++node )
-        {
-          line_borders_t region = calcLineBorders(node->getVertices(), 3, true);
-          glBegin(GL_TRIANGLE_STRIP);
-          for( auto first = std::begin(region.first),
-                    second = std::begin(region.second);
-               first != std::end(region.first);
-               ++first,
-               ++second )
-          {
-            glVertex2f(first->x, first->y);
-            glVertex2f(second->x, second->y);
-          }
-          glEnd();
-        }
-        continue;
-      }
-
       if( !_colors.empty() )
         glColor3fv(_colors[ link->_color_id % _colors.size() ]);
 
-      for( auto segment = fork->outgoing.begin();
-           segment != fork->outgoing.end();
-           ++segment )
+      HyperEdgeQueue hedges_open;
+      HyperEdgeSet   hedges_done;
+
+      hedges_open.push(&link->_link);
+      do
       {
-        // Draw region
-        for( auto node = segment->nodes.begin();
-             node != segment->nodes.end();
-             ++node )
+        const LinkDescription::HyperEdge* hedge = hedges_open.front();
+        hedges_open.pop();
+
+        if( hedges_done.find(hedge) != hedges_done.end() )
+          continue;
+
+        auto fork = hedge->getHyperEdgeDescription();
+        if( !fork )
         {
-          if( (*node)->getProps().find("hidden") != (*node)->getProps().end() )
-          {
-            if( !_colors.empty() )
-              glColor3fv(_colors[ link->_color_id % _colors.size() ] * 0.3);
-          }
-          line_borders_t region = calcLineBorders((*node)->getVertices(), 3, true);
+          if( renderNodes(hedges_open, hedges_done, hedge->getNodes()) )
+            rendered_anything = true;
+
+          continue;
+        }
+
+        for( auto segment = fork->outgoing.begin();
+             segment != fork->outgoing.end();
+             ++segment )
+        {
+          if( renderNodes(hedges_open, hedges_done, segment->nodes) )
+            rendered_anything = true;
+
+          if( segment->trail.empty() )
+            continue;
+
+          // Draw path
+          std::vector<float2> points;
+          points.reserve(segment->trail.size() + 1);
+          points.push_back(fork->position);
+          points.insert(points.end(), segment->trail.begin(), segment->trail.end());
+          points = smooth(points, 0.4, 10);
+          line_borders_t region = calcLineBorders(points, 3);
           glBegin(GL_TRIANGLE_STRIP);
           for( auto first = std::begin(region.first),
                     second = std::begin(region.second);
@@ -332,33 +335,51 @@ for( int i = 0; i < 1; ++i )
             glVertex2f(second->x, second->y);
           }
           glEnd();
-
-          if( !_colors.empty() )
-            glColor3fv(_colors[ link->_color_id % _colors.size() ]);
         }
 
-        if( segment->trail.empty() )
-          continue;
-
-        // Draw path
-        std::vector<float2> points;
-        points.reserve(segment->trail.size() + 1);
-        points.push_back(fork->position);
-        points.insert(points.end(), segment->trail.begin(), segment->trail.end());
-        points = smooth(points, 0.4, 10);
-        line_borders_t region = calcLineBorders(points, 3);
-        glBegin(GL_TRIANGLE_STRIP);
-        for( auto first = std::begin(region.first),
-                  second = std::begin(region.second);
-             first != std::end(region.first);
-             ++first,
-             ++second )
-        {
-          glVertex2f(first->x, first->y);
-          glVertex2f(second->x, second->y);
-        }
-        glEnd();
-      }
+        hedges_done.insert(hedge);
+      } while( !hedges_open.empty() );
     }
+
+    return rendered_anything;
   }
+
+  //----------------------------------------------------------------------------
+  bool GlRenderer::renderNodes( HyperEdgeQueue& hedges_open,
+                                HyperEdgeSet& hedges_done,
+                                const LinkDescription::nodes_t& nodes )
+  {
+    bool rendered_anything = false;
+
+    for( auto node = nodes.begin(); node != nodes.end(); ++node )
+    {
+      if( node->get<bool>("hidden", false) )
+        continue;
+
+      for(auto child = node->getChildren().begin();
+               child != node->getChildren().end();
+             ++child )
+        hedges_open.push( *child );
+
+      if( node->getVertices().empty() )
+        continue;
+
+      line_borders_t region = calcLineBorders(node->getVertices(), 3, true);
+      glBegin(GL_TRIANGLE_STRIP);
+      for( auto first = std::begin(region.first),
+                second = std::begin(region.second);
+           first != std::end(region.first);
+           ++first,
+           ++second )
+      {
+        glVertex2f(first->x, first->y);
+        glVertex2f(second->x, second->y);
+      }
+      glEnd();
+      rendered_anything = true;
+    }
+
+    return rendered_anything;
+  }
+
 };

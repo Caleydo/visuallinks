@@ -7,7 +7,8 @@ var last_stamp = null;
 var offset = [0,0];
 var scale = 1;
 var win = null;
-var menu = document.getElementById("vislink_menu");
+var menu = null;
+var items_routing = null;
 var active_routes = new Object();
 var timeout = null;
 
@@ -39,10 +40,17 @@ function send(data)
   }
 }
 
+function removeAllChildren(el)
+{
+  while( el.hasChildNodes() )
+    el.removeChild(el.firstChild);
+}
+
 //------------------------------------------------------------------------------
 function onVisLinkButton()
 {
   menu = document.getElementById("vislink_menu");
+  items_routing = document.getElementById("routing-selector");
 
   if( status == 'active')
     selectVisLink();
@@ -113,6 +121,17 @@ function onAbort(id, stamp)
 }
 
 //------------------------------------------------------------------------------
+function removeAllRouteData()
+{
+  last_id = null;
+  last_stamp = null;
+  
+  // menu
+  for(var route_id in active_routes)
+    removeRouteData(route_id);
+}
+
+//------------------------------------------------------------------------------
 function reportVisLinks(id, found)
 {
   var doc = content.document;
@@ -128,8 +147,6 @@ function reportVisLinks(id, found)
 //  alert(offset[0] + "|" + offset[1]);
 
   var bbs = searchDocument(doc, id);
-  if( !bbs.length )
-    return;
   
   last_id = id;
   if( !found )
@@ -165,6 +182,16 @@ function reportVisLinks(id, found)
 }
 
 //------------------------------------------------------------------------------
+function reportSelectRouting(routing)
+{
+  send({
+    'task': 'SET',
+    'id': '/routing',
+    'val': routing
+  });
+}
+
+//------------------------------------------------------------------------------
 function windowChanged()
 {
   if( timeout )
@@ -189,7 +216,6 @@ function stopVisLinks()
 	window.removeEventListener('unload', stopVisLinks, false);
 	window.removeEventListener('scroll', windowChanged, false);
 	window.removeEventListener("DOMAttrModified", attrModified, false);
-	unregister();
 }
 
 //------------------------------------------------------------------------------
@@ -218,14 +244,20 @@ function register()
           'name': "Firefox",
           'pos': [box.screenX + box.width / 2, box.screenY + box.height / 2]
         });
+        send({
+          'task': 'GET',
+          'id': '/routing'
+        });
       };
       socket.onclose = function(event)
       {
         setStatus(event.wasClean ? '' : 'error');
+        removeAllRouteData();
       };
       socket.onerror = function(event)
       {
         setStatus('error');
+        removeAllRouteData();
       };
       socket.onmessage = function(event)
       {
@@ -242,6 +274,38 @@ function register()
   
           setTimeout('reportVisLinks("'+msg.id+'", true)',0);
         }
+        else if( msg.task == 'GET-FOUND')
+        {
+          if( msg.id == '/routing' )
+          {
+            removeAllChildren(items_routing);
+            for(var router in msg.val.available)
+            {
+              var name = msg.val.available[router][0];
+              var valid = msg.val.available[router][1];
+
+              var item = document.createElement("menuitem");
+              item.setAttribute("label", name);
+              item.setAttribute("type", "radio");
+              item.setAttribute("name", "routing-algorithm");
+              item.setAttribute("tooltiptext", "Use '" + name + "' for routing.");
+
+              // Mark available (Routers not able to route are disabled)
+              if( !valid )
+                item.setAttribute("disabled", true);
+              else
+                item.setAttribute("oncommand", "reportSelectRouting('"+name+"')");
+
+              // Mark current router
+              if( msg.val.active == name )
+                item.setAttribute("checked", true);
+
+              items_routing.appendChild(item);
+            }
+          }
+        }
+        else
+          alert(event.data);
       }
 	}
 	catch (err)
@@ -254,19 +318,6 @@ function register()
 }
 
 //------------------------------------------------------------------------------
-function unregister()
-{
-	try
-	{
-	  // send({'task': 'unregister', 'name': window.visLinkAppName});
-	}
-	catch (err)
-	{
-		// vis link server no reachable, nothing to do
-	}
-}
-
-//------------------------------------------------------------------------------
 function attrModified(e)
 {
   if( e.attrName == "screenX" || e.attrName == "screenY" )
@@ -274,62 +325,10 @@ function attrModified(e)
 }
 
 //------------------------------------------------------------------------------
-function validateWindowPosition()
-{
-	var oldPos = window.oldPos;
-	if (oldPos != null)
-	{
-		if (window.screenX != oldPos.x || window.screenY != oldPos.y)
-		{
-			register();
-			oldPos.x = window.screenX;
-			oldPos.y = window.screenY;
-			windowChanged();
-		}
-	}
-	else
-	{
-		window.oldPos = new Object();
-		window.oldPos.x = window.screenX;
-		window.oldPos.y = window.screenY;
-	}
-}
-
-//------------------------------------------------------------------------------
 function resize()
 {
 	register();
 	windowChanged();
-}
-
-//------------------------------------------------------------------------------
-function getId()
-{
-	try
-	{
-		//send({'task': 'propagation',
-        //  'name': window.visLinkAppName});
-	}
-	catch (err)
-	{
-		alert("Connection to visdaemon lost, stopping");
-		stopVisLinks();
-		return null;
-	}
-/* TODO evaluate response
-	var pointers = xmlDoc.getElementsByTagName("pointer"); 
-	var	ids	= xmlDoc.getElementsByTagName("id");
-	if(pointers.length > 0){
-		if(pointers[0].childNodes[0] != null){
-			window.lastPointerID = pointers[0].childNodes[0].nodeValue; 
-		}
-	}
-	if (ids.length > 0)	{
-		if (ids[0].childNodes[0] !=	null) {
-			return ids[0].childNodes[0].nodeValue;
-		}
-	}*/
-	return null;
 }
 
 //------------------------------------------------------------------------------
@@ -574,24 +573,4 @@ function findBoundingBox(doc, obj)
            [x + w, y],
            [x + w, y + h],
            [x,     y + h] ];
-}
-
-//------------------------------------------------------------------------------
-function generateBoundingBoxesXML(bbs, source) {
-	var	xml	= "<boundingBoxList>";
-	for	(var i = 0;	i<bbs.length; i++) {
-		xml	+= "<boundingBox";
-		xml	+= " x=\""+bbs[i].x+"\"";
-		xml	+= " y=\""+bbs[i].y+"\"";
-		xml	+= " width=\""+bbs[i].width+"\"";
-		xml	+= " height=\""+bbs[i].height+"\"";
-		xml	+= " source=\""+source+"\"";
-		xml	+= " />\n";
-		source = false;
-	}
-	xml	+= "</boundingBoxList>\n";
-
-	xml	= escape(xml);
-	
-	return xml;
 }

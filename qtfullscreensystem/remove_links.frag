@@ -17,16 +17,16 @@ void main()
   if( link_color.a >= 0.001 )
   {
 #if !USE_DESKTOP_BLEND
-    float fac = min(2 * link_color.a, 1);
+    float fac = min(2 * link_color.a, 1.0);
     link_color = fac * link_color + (1 - fac) * desktop_color;
 #else
     blend_alpha = link_color.a;
 #endif               
-    color = (screenshot_color - blend_alpha * link_color) / (1 - blend_alpha);
+    color = (screenshot_color - blend_alpha * link_color) / (1.0 - blend_alpha);
   }
   else
     color = screenshot_color;
 
-  color.a = 1;
+  color.a = 1.0;
   gl_FragColor = color;
 }

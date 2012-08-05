@@ -1,44 +1,48 @@
 #ifndef LR_CPUROUTING
 #define LR_CPUROUTING
 
-#include <string>
+#include "routing.h"
+#include "common/componentarguments.h"
 
-#include <routing.h>
-#include <common/componentarguments.h>
+#include "slots.hpp"
+#include "slotdata/image.hpp"
+#include "slotdata/polygon.hpp"
 
 namespace LinksRouting
 {
-  class CPURouting : public Routing, public ComponentArguments
+  class CPURouting: public Routing, public ComponentArguments
   {
-  protected:
-    std::string myname;
-  public:
-    CPURouting();
+    protected:
 
-    bool startup(Core* core, unsigned int type);
-    void init();
-    void shutdown();
-    bool supports(Type type) const
-    {
-      return type == Component::Routing;
-    }
-    const std::string& name() const
-    {
-      return myname;
-    }
+      std::string myname;
 
-    void process(Type type);
+    public:
 
-//    bool setCostInput(const Component::MapData& inputmap);
-//    bool setColorCostInput(const Component::MapData& inputmap);
-    void connect(CostAnalysis* costanalysis, LinksRouting::Renderer *renderer);
+      CPURouting();
 
-    bool addLinkHierarchy(LinkDescription::Node* node, double priority);
-    bool addLinkHierarchy(LinkDescription::HyperEdge* hyperedge, double priority);
-    bool removeLinkHierarchy(LinkDescription::Node* node);
-    bool removeLinkHierarchy(LinkDescription::HyperEdge* hyperedge);
+      void publishSlots(SlotCollector& slots);
+      void subscribeSlots(SlotSubscriber& slot_subscriber);
 
+      bool startup(Core* core, unsigned int type);
+      void init();
+      void shutdown();
+      bool supports(unsigned int type) const
+      {
+        return (type & Component::Routing);
+      }
+      const std::string& name() const
+      {
+        return myname;
+      }
+
+      void process(unsigned int type);
+
+    private:
+
+      slot_t<LinkDescription::LinkList>::type _subscribe_links;
+      float2 route(LinkDescription::HyperEdge* hedge);
 
   };
-};
+}
+;
 #endif //LR_CPUROUTING

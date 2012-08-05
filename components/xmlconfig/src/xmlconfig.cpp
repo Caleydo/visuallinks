@@ -46,12 +46,12 @@ namespace LinksRouting
     if(isInit)
       delete config;
   }
-  bool XmlConfig::supports(Type type) const
+  bool XmlConfig::supports(unsigned int type) const
   {
-    return type == Component::Config;
+    return (type & Component::Config);
   }
 
-  void XmlConfig::process(Type type)
+  void XmlConfig::process(unsigned int type)
   {
     if(!isInit)
       return;
