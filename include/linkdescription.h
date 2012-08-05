@@ -103,8 +103,7 @@ namespace LinkDescription
       T convertFromString(const std::string& str, const T& def_val = T()) const
       {
         T var;
-        std::istringstream iss;
-        iss.str(str);
+        std::stringstream iss(str);
         iss >> var;
 
         if( !iss )
