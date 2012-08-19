@@ -46,6 +46,18 @@ function removeAllChildren(el)
     el.removeChild(el.firstChild);
 }
 
+/**
+ * Update scale factor (CSS pixels to hardware pixels)
+ */
+function updateScale()
+{
+  win = content.document.defaultView;
+  var domWindowUtils =
+    win.QueryInterface(Components.interfaces.nsIInterfaceRequestor)
+       .getInterface(Components.interfaces.nsIDOMWindowUtils);
+  scale = domWindowUtils.screenPixelsPerCSSPixel;
+}
+
 //------------------------------------------------------------------------------
 function onVisLinkButton()
 {
@@ -134,19 +146,14 @@ function removeAllRouteData()
 //------------------------------------------------------------------------------
 function reportVisLinks(id, found)
 {
-  var doc = content.document;
-  win = doc.defaultView;
-  var domWindowUtils =
-    win.QueryInterface(Components.interfaces.nsIInterfaceRequestor)
-       .getInterface(Components.interfaces.nsIDOMWindowUtils);
-  scale = domWindowUtils.screenPixelsPerCSSPixel;
+  updateScale();
   
   offset[0] = win.mozInnerScreenX * scale;
   offset[1] = win.mozInnerScreenY * scale;
   
 //  alert(offset[0] + "|" + offset[1]);
 
-  var bbs = searchDocument(doc, id);
+  var bbs = searchDocument(content.document, id);
   
   last_id = id;
   if( !found )
@@ -223,12 +230,17 @@ function register()
 {
 //	window.lastPointerID = null; 
 //
-//	var win = content.document.defaultView;
-//	var x = win.screenX + (win.outerWidth - win.innerWidth) / 2;
-//	var y = win.screenY + (win.outerHeight - win.innerHeight);
-//	var w = win.innerWidth;
-//	var h = win.innerHeight;
-	
+  updateScale();
+  var win = content.document.defaultView;
+
+  // Document region relative to window
+  var region = [
+    Math.round((win.mozInnerScreenX - win.screenX) * scale),
+    Math.round((win.mozInnerScreenY - win.screenY) * scale),
+    Math.round(win.innerWidth * scale),
+    Math.round(win.innerHeight * scale)
+  ];
+  
 	// Get the box object for the link button to get window handler from the
 	// window at the position of the box
 	var box = document.getElementById("vislink").boxObject;
@@ -240,13 +252,14 @@ function register()
       {
         setStatus('active');
         send({
-          'task': 'REGISTER',
-          'name': "Firefox",
-          'pos': [box.screenX + box.width / 2, box.screenY + box.height / 2]
+          task: 'REGISTER',
+          name: "Firefox",
+          pos: [box.screenX + box.width / 2, box.screenY + box.height / 2],
+          region: region
         });
         send({
-          'task': 'GET',
-          'id': '/routing'
+          task: 'GET',
+          id: '/routing'
         });
       };
       socket.onclose = function(event)
@@ -539,10 +552,16 @@ function findAreaBoundingBox(doc, img, areaCoords){
 //------------------------------------------------------------------------------
 function findBoundingBox(doc, obj)
 {
-  var w = obj.offsetWidth + 3;
-  var h = obj.offsetHeight + 2;
+  var w = obj.offsetWidth;
+  var h = obj.offsetHeight;
   var curleft = -1;
-  var curtop = -2;
+  var curtop = -1;
+  
+  if( w == 0 || h == 0 )
+    return null;
+  
+  w += 2;
+  h += 1;
   
   if( obj.offsetParent )
   {
@@ -556,10 +575,12 @@ function findBoundingBox(doc, obj)
   x = curleft - win.pageXOffset;     
   y = curtop - win.pageYOffset;
   
+  var outside = false;
+
   // check if	visible
-  if(    (x + w / 2 < 0) || (x + w / 2 > win.innerWidth)
-      || (y + h / 2 < 0) || (y + h / 2 > win.innerHeight) )
-    return null;
+  if(    (x + 0.5 * w < 0) || (x + 0.5 * w > win.innerWidth)
+      || (y + 0.5 * h < 0) || (y + 0.5 * h > win.innerHeight) )
+    outside = true;
   
   x *= scale;
   y *= scale;
@@ -572,5 +593,6 @@ function findBoundingBox(doc, obj)
   return [ [x,     y],
            [x + w, y],
            [x + w, y + h],
-           [x,     y + h] ];
+           [x,     y + h],
+           {outside: outside} ];
 }

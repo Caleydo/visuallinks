@@ -25,35 +25,35 @@ namespace LinkDescription
 
   typedef std::vector<float2> points_t;
   typedef std::map<std::string, std::string> props_t;
-  typedef std::vector<Node> nodes_t;
+  typedef std::list<Node> nodes_t;
 
-  class Node
+  class PropertyElement
   {
-    friend class HyperEdge;
     public:
-
-      Node():
-        _parent(0)
-      {}
-
-      explicit Node( const points_t& points,
-                     const props_t& props = props_t() ):
-        _points( points ),
-        _props( props ),
-        _parent(0)
-      {}
-
-      explicit Node( HyperEdge* hedge ):
-        _parent(0)
-      {
-        _children.push_back(hedge);
-      }
-
-      points_t& getVertices() { return _points; }
-      const points_t& getVertices() const { return _points; }
-
       props_t& getProps() { return _props; }
       const props_t& getProps() const { return _props; }
+
+      /**
+       * Set a property
+       *
+       * @param key     Property key
+       * @param val     New value
+       */
+      template<typename T>
+      void set(const std::string& key, const T val)
+      {
+        _props[ key ] = std::to_string(val);
+      }
+
+      void set(const std::string& key, const std::string& val)
+      {
+        _props[ key ] = val;
+      }
+
+      void set(const std::string& key, const char* val)
+      {
+        _props[ key ] = val;
+      }
 
       /**
        * Get a property
@@ -70,6 +70,89 @@ namespace LinkDescription
           return def_val;
 
         return convertFromString(it->second, def_val);
+      }
+
+    protected:
+      props_t   _props;
+
+      PropertyElement( const props_t& props = props_t() ):
+        _props( props )
+      {}
+
+      template<typename T>
+      T convertFromString(const std::string& str, const T& def_val = T()) const
+      {
+        T var;
+        std::stringstream iss(str, std::ios_base::in);
+        iss >> var;
+
+        if( !iss )
+          return def_val;
+
+        return var;
+      }
+
+      // Converter specializations
+      std::string convertFromString( const std::string& str,
+                                     const std::string& ) const
+      {
+        return str;
+      }
+
+      bool convertFromString( const std::string& str,
+                              const bool& ) const
+      {
+        return str == "true" || str == "1";
+      }
+
+      template<typename T>
+      std::string convertToString(const T val) const
+      {
+        std::stringstream oss(std::ios_base::out);
+        oss << val;
+
+        if( !oss )
+          return std::string();
+
+        return oss.str();
+      }
+  };
+
+  class Node:
+    public PropertyElement
+  {
+    friend class HyperEdge;
+    public:
+
+      Node():
+        _parent(0)
+      {}
+
+      explicit Node( const points_t& points,
+                     const props_t& props = props_t() ):
+        PropertyElement( props ),
+        _points( points ),
+        _parent(0)
+      {}
+
+      explicit Node( HyperEdge* hedge ):
+        _parent(0)
+      {
+        _children.push_back(hedge);
+      }
+
+      points_t& getVertices() { return _points; }
+      const points_t& getVertices() const { return _points; }
+      float2 getCenter()
+      {
+        float2 center;
+        for( auto p = _points.begin(); p != _points.end(); ++p )
+          center += *p;
+
+        if( !_points.empty() )
+          center /= _points.size();
+
+        return center;
       }
 
       HyperEdge* getParent()
@@ -99,39 +182,13 @@ namespace LinkDescription
 
     private:
 
-      template<typename T>
-      T convertFromString(const std::string& str, const T& def_val = T()) const
-      {
-        T var;
-        std::stringstream iss(str);
-        iss >> var;
-
-        if( !iss )
-          return def_val;
-
-        return var;
-      }
-
-      // Converter specializations
-      std::string convertFromString( const std::string& str,
-                                     const std::string& ) const
-      {
-        return str;
-      }
-
-      bool convertFromString( const std::string& str,
-                              const bool& ) const
-      {
-        return str == "true" || str == "1";
-      }
-
       points_t  _points;
-      props_t   _props;
       HyperEdge* _parent;
       std::vector<HyperEdge*> _children;
   };
 
-  class HyperEdge
+  class HyperEdge:
+    public PropertyElement
   {
     friend class Node;
     public:
@@ -143,9 +200,9 @@ namespace LinkDescription
 
       explicit HyperEdge( const nodes_t& nodes,
                           const props_t& props = props_t() ):
+        PropertyElement( props ),
         _parent(0),
         _nodes( nodes ),
-        _props( props ),
         _revision( 0 ),
         _fork( 0 )
       {
@@ -156,16 +213,13 @@ namespace LinkDescription
       nodes_t& getNodes() { return _nodes; }
       const nodes_t& getNodes() const { return _nodes; }
 
-      props_t& getProps() { return _props; }
-      const props_t& getProps() const { return _props; }
-
       uint32_t getRevision() const { return _revision; }
 
       void addNodes(const nodes_t& nodes)
       {
         if( nodes.empty() )
           return;
-        _nodes.reserve( _nodes.size() + nodes.size() );
+        //_nodes.reserve( _nodes.size() + nodes.size() );
         for(auto it = nodes.begin(); it != nodes.end(); ++it)
         {
           _nodes.push_back(*it);
@@ -208,7 +262,6 @@ namespace LinkDescription
 
       Node* _parent;
       nodes_t _nodes;
-      props_t _props;
       uint32_t _revision; ///!< Track modifications
       HyperEdgeDescriptionForkationPtr _fork;
   };

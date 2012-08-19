@@ -105,15 +105,7 @@ namespace LinksRouting
       if( node->getVertices().empty() )
         continue;
 
-      float2 region_center;
-      for( auto p = node->getVertices().begin();
-           p != node->getVertices().end();
-           ++p )
-      {
-        region_center += *p;
-      }
-
-      fork->position += region_center / node->getVertices().size();
+      fork->position += node->getCenter();
       regions.push_back(node->getVertices());
       nodes.push_back(&*node);
     }

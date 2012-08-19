@@ -72,8 +72,15 @@ namespace LinksRouting
 
     private:
 
+      struct ClientInfo
+      {
+        WId     wid;
+        QRect   region;
+      };
+      typedef std::map<QWsSocket*, ClientInfo> ClientInfos;
+
       QWsServer          *_server;
-      std::map<QWsSocket*, WId> _clients;
+      ClientInfos         _clients;
       WindowMonitor       _window_monitor;
 
       QMutex             *_mutex_slot_links;
@@ -81,7 +88,7 @@ namespace LinksRouting
 
       /* List of all open searches */
       slot_t<LinkDescription::LinkList>::type _slot_links;
-      
+
       /* List of available routing components */
       slot_t<SlotType::ComponentSelection>::type _subscribe_routing;
 

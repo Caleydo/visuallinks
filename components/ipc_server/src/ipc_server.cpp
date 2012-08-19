@@ -163,7 +163,7 @@ namespace LinksRouting
   {
     _slot_links = slot_collector.create<LinkDescription::LinkList>("/links");
   }
-  
+
   //----------------------------------------------------------------------------
   void IPCServer::subscribeSlots(SlotSubscriber& slot_subscriber)
   {
@@ -220,7 +220,7 @@ namespace LinksRouting
     connect(client_object, SIGNAL(disconnected()), this, SLOT(onClientDisconnection()));
     connect(client_object, SIGNAL(pong(quint64)), this, SLOT(onPong(quint64)));
 
-    _clients[ client_socket ] = 0;
+    _clients[ client_socket ] = ClientInfo();
 
     LOG_INFO(   "Client connected: "
              << client_socket->peerAddress().toString().toStdString()
@@ -237,7 +237,8 @@ namespace LinksRouting
       return;
     }
 
-    WId& client_wid = client->second;
+    ClientInfo& client_info = client->second;
+    WId& client_wid = client_info.wid;
 
     std::cout << "Received (" << client_wid << "): "
               << data.toStdString()
@@ -259,6 +260,22 @@ namespace LinksRouting
 
         QPoint pos(pos_list.at(0).toInt(), pos_list.at(1).toInt());
         client_wid = windowAt(_window_monitor.getWindows(), pos);
+
+        QVariantList region_list = msg.getValue<QVariantList>("region");
+        if( region_list.length() != 4 )
+        {
+          LOG_WARN("Received invalid region (REGISTER)");
+          return;
+        }
+
+        client_info.region.setRect
+        (
+          region_list.at(0).toInt(),
+          region_list.at(1).toInt(),
+          region_list.at(2).toInt(),
+          region_list.at(3).toInt()
+        );
+
         return;
       }
 
@@ -489,22 +506,97 @@ namespace LinksRouting
   bool IPCServer::updateHedge( const WindowRegions& regions,
                                LinkDescription::HyperEdge* hedge )
   {
+    WId client_wid =
+#ifdef _WIN32
+      reinterpret_cast<WId>
+      (
+#endif
+        hedge->get<WId>("client_wid", 0)
+#ifdef _WIN32
+      )
+#endif
+    ;
+
+    auto client_info = std::find_if
+    (
+      _clients.begin(),
+      _clients.end(),
+      [&client_wid](const ClientInfos::value_type& it)
+      {
+        return it.second.wid == client_wid;
+      }
+    );
+    QRect region;
+    if( client_info != _clients.end() )
+    {
+      region = client_info->second.region;
+
+      if( client_wid )
+      {
+        auto window_info = std::find_if
+        (
+          regions.begin(),
+          regions.end(),
+          [&client_wid](const WindowInfo& winfo)
+          {
+            return winfo.id == client_wid;
+          }
+        );
+        region.translate( window_info->region.topLeft() );
+      }
+    }
+
     bool modified = false;
+
+    struct OutsideScroll
+    {
+      float2 pos;
+      float2 normal;
+      size_t num_outside;
+    } outside_scroll[] = {
+      {float2(0, region.top()),    float2( 0, 1), 0},
+      {float2(0, region.bottom()), float2( 0,-1), 0},
+      {float2(region.left(),  0),  float2( 1, 0), 0},
+      {float2(region.right(), 0),  float2(-1, 0), 0}
+    };
+    const size_t num_outside_scroll = sizeof(outside_scroll)
+                                    / sizeof(outside_scroll[0]);
+
+    std::vector<LinkDescription::nodes_t::iterator> old_outside_nodes;
 
     for( auto node = hedge->getNodes().begin();
               node != hedge->getNodes().end();
             ++node )
     {
-      WId client_wid =
-#ifdef _WIN32
-        reinterpret_cast<WId>
-        (
-#endif
-          node->get<WId>("client_wid", 0)
-#ifdef _WIN32
-        )
-#endif
-      ;
+      if( !node->get<std::string>("virtual-outside").empty() )
+      {
+        //old_outside_nodes.push_back(node);
+        node = hedge->getNodes().erase(node);
+        continue;
+      }
+
+      if( node->get<bool>("outside", false) )
+      {
+        node->set("hidden", true);
+
+        float2 center = node->getCenter();
+        if( center != float2(0,0) )
+        {
+          for( size_t i = 0; i < num_outside_scroll; ++i )
+          {
+            OutsideScroll& out = outside_scroll[i];
+            if( (center - out.pos) * out.normal > 0 )
+              continue;
+
+            if( out.normal.x == 0 )
+              out.pos.x += center.x;
+            else
+              out.pos.y += center.y;
+            out.num_outside += 1;
+          }
+        }
+        continue;
+      }
 
       for(auto child = node->getChildren().begin();
                child != node->getChildren().end();
@@ -547,6 +639,30 @@ namespace LinksRouting
       }
     }
 
+    for( size_t i = 0; i < num_outside_scroll; ++i )
+    {
+      OutsideScroll& out = outside_scroll[i];
+      if( !out.num_outside )
+        continue;
+
+      std::cout << i << ": " << out.num_outside << std::endl;
+
+      if( out.normal.x == 0 )
+        out.pos.x /= out.num_outside;
+      else
+        out.pos.y /= out.num_outside;
+
+      LinkDescription::points_t points;
+      points.push_back(out.pos -=  6 * out.normal.normal());
+      points.push_back(out.pos +=  2 * out.normal);
+      points.push_back(out.pos += 12 * out.normal.normal());
+      points.push_back(out.pos -=  2 * out.normal);
+
+      LinkDescription::Node node(points);
+      node.set("virtual-outside", "side[]");
+      hedge->getNodes().push_back( node );
+    }
+
     return modified;
   }
 
@@ -557,7 +673,7 @@ namespace LinksRouting
     std::cout << "Parse regions (" << client_wid << ")" << std::endl;
 
     const WindowRegions windows = _window_monitor.getWindows();
-    std::vector<LinkDescription::Node> nodes;
+    LinkDescription::nodes_t nodes;
 
     if( !json.isSet("regions") )
       return LinkDescription::Node();
@@ -565,9 +681,8 @@ namespace LinksRouting
     QVariantList regions = json.getValue<QVariantList>("regions");
     for(auto region = regions.begin(); region != regions.end(); ++region)
     {
-      std::vector<float2> points;
+      LinkDescription::points_t points;
       LinkDescription::props_t props;
-      int hidden_count = 0;
 
       //for(QVariant point: region.toList())
       auto regionlist = region->toList();
@@ -582,14 +697,10 @@ namespace LinksRouting
             continue;
           }
 
-          float2 point(
+          points.push_back(float2(
             coords.at(0).toInt(),
             coords.at(1).toInt()
-          );
-          points.push_back(point);
-
-          if( client_wid != windowAt(windows, QPoint(point.x, point.y)) )
-            ++hidden_count;
+          ));
         }
         else if( point->type() == QVariant::Map )
         {
@@ -601,23 +712,23 @@ namespace LinksRouting
           LOG_WARN("Wrong data type: " << point->typeName());
       }
 
-      props["client_wid"] = std::to_string(
+      if( points.empty() )
+        continue;
+
+      nodes.push_back( LinkDescription::Node(points, props) );
+    }
+
+    LinkDescription::HyperEdge *hedge = new LinkDescription::HyperEdge(nodes);
+    hedge->set("client_wid", std::to_string(
 #ifdef _WIN32
         reinterpret_cast<unsigned long long>(client_wid)
 #else
         client_wid
 #endif
-      );
+    ));
+    updateHedge(windows, hedge);
 
-      if( hidden_count >= 2 )
-        // if at least 2 points are in another window don't show region
-        props["hidden"] = "true";
-
-      if( !points.empty() )
-        nodes.push_back( LinkDescription::Node(points, props) );
-    }
-
-    return LinkDescription::Node( new LinkDescription::HyperEdge(nodes) );
+    return LinkDescription::Node(hedge);
   }
 
   //----------------------------------------------------------------------------

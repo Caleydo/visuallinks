@@ -51,6 +51,14 @@ struct float2
   }
 
   /**
+   * Get a normal to this vector
+   */
+  float2 normal() const
+  {
+    return float2(y, -x);
+  }
+
+  /**
    *
    */
   float dot(const float2& rhs) const
@@ -65,6 +73,13 @@ struct float2
     return *this;
   }
 
+  float2& operator-=(const float2& rhs)
+  {
+    x -= rhs.x;
+    y -= rhs.y;
+    return *this;
+  }
+
   float2& operator/=(float rhs)
   {
     x /= rhs;
@@ -75,6 +90,11 @@ struct float2
   bool operator==(const float2& rhs)
   {
     return x == rhs.x && y == rhs.y;
+  }
+
+  bool operator!=(const float2& rhs)
+  {
+    return !(*this == rhs);
   }
 };
 
@@ -124,6 +144,14 @@ inline const float2 operator *(float a, const float2& v)
 inline const float2 operator *(const float2& v, float a)
 {
   return a * v;
+}
+
+/**
+ *
+ */
+inline const float operator *(const float2& a, const float2& b)
+{
+  return a.dot(b);
 }
 
 /**

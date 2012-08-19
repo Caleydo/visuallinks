@@ -34,8 +34,8 @@
 3.1 Message types
 
    INITIATE   Initiates a new routing and linking process by sending the
-              identifier to search to the server. Optionally locations inside
-              the clients region can be added in an optional 'regions' filled.
+              identifier to search to the server. Locations inside
+              the clients region can be added in the optional 'regions' field.
               
               The following example shows a message to initiate a search for the
               string 'test' with two occurrences bounded by one rectangular and
