@@ -48,17 +48,14 @@ namespace LinksRouting
           std::cout << "LinksSystem XmlConfig Warning: no type specified for \"" << identifier << "\"" << std::endl;
           return 1;
         }
-        else if(typestr->compare(getTypeString<Type>()) != 0)
+        else if(typestr->compare(getDataTypeString<Type>()) != 0)
         {
           std::cout << "LinksSystem XmlConfig Warning: types do not match for \"" << identifier << "\":" << std::endl;
-          std::cout << "  " << typestr << " != " << getTypeString<Type>() << std::endl;
+          std::cout << "  " << typestr << " != " << getDataTypeString<Type>() << std::endl;
           return 0;
         }
         return 2;
     }
-
-    template<class Type>
-    inline static std::string getTypeString();
 
     template<class Type>
     bool setParameter(const std::string& identifier, Type val)
@@ -79,7 +76,7 @@ namespace LinksRouting
         //check if it matches
         int res = checkTypeMatch<Type>(identifier, arg);
         if(res == 1)
-          arg->SetAttribute("type", getTypeString<Type>());
+          arg->SetAttribute("type", getDataTypeString<Type>());
         else if(res == 0)
           return false;
         arg->SetAttribute("val", argstr.str());
@@ -89,7 +86,7 @@ namespace LinksRouting
         //create new one
         arg = new TiXmlElement( valname );
         container->LinkEndChild(arg);
-        arg->SetAttribute("type", getTypeString<Type>());
+        arg->SetAttribute("type", getDataTypeString<Type>());
         arg->SetAttribute("val", argstr.str());
       }
       return true;
@@ -182,28 +179,6 @@ namespace LinksRouting
       return getParameter(name, val);
     }
   };
-
-  template<>
-  inline std::string XmlConfig::getTypeString<bool>()
-  {
-    return "Bool";
-  }
-  template<>
-  inline std::string XmlConfig::getTypeString<int>()
-  {
-    return "Integer";
-  }
-  template<>
-  inline std::string XmlConfig::getTypeString<double>()
-  {
-    return "Float";
-  }
-  template<>
-  inline std::string XmlConfig::getTypeString<std::string>()
-  {
-    return "String";
-  }
-
 
 }
 

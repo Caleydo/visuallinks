@@ -58,6 +58,22 @@ function updateScale()
   scale = domWindowUtils.screenPixelsPerCSSPixel;
 }
 
+/**
+ * Get the document region relative to the application window
+ */
+function getRegion()
+{
+  updateScale();
+  var win = content.document.defaultView;
+
+  return [
+    Math.round((win.mozInnerScreenX - win.screenX) * scale),
+    Math.round((win.mozInnerScreenY - win.screenY) * scale),
+    Math.round(win.innerWidth * scale),
+    Math.round(win.innerHeight * scale)
+  ];
+}
+
 //------------------------------------------------------------------------------
 function onVisLinkButton()
 {
@@ -75,7 +91,7 @@ function onVisLinkButton()
       window.addEventListener('unload', stopVisLinks, false);
       window.addEventListener('scroll', windowChanged, false);
       window.addEventListener("DOMAttrModified", attrModified, false);
-  //    window.addEventListener('resize', resize, false);
+      window.addEventListener('resize', resize, false);
 //      window.addEventListener("DOMContentLoaded", windowChanged, false);
     }
   }
@@ -223,6 +239,7 @@ function stopVisLinks()
 	window.removeEventListener('unload', stopVisLinks, false);
 	window.removeEventListener('scroll', windowChanged, false);
 	window.removeEventListener("DOMAttrModified", attrModified, false);
+  window.removeEventListener('resize', resize, false);
 }
 
 //------------------------------------------------------------------------------
@@ -230,17 +247,7 @@ function register()
 {
 //	window.lastPointerID = null; 
 //
-  updateScale();
-  var win = content.document.defaultView;
 
-  // Document region relative to window
-  var region = [
-    Math.round((win.mozInnerScreenX - win.screenX) * scale),
-    Math.round((win.mozInnerScreenY - win.screenY) * scale),
-    Math.round(win.innerWidth * scale),
-    Math.round(win.innerHeight * scale)
-  ];
-  
 	// Get the box object for the link button to get window handler from the
 	// window at the position of the box
 	var box = document.getElementById("vislink").boxObject;
@@ -255,7 +262,7 @@ function register()
           task: 'REGISTER',
           name: "Firefox",
           pos: [box.screenX + box.width / 2, box.screenY + box.height / 2],
-          region: region
+          region: getRegion()
         });
         send({
           task: 'GET',
@@ -340,8 +347,9 @@ function attrModified(e)
 //------------------------------------------------------------------------------
 function resize()
 {
-	register();
-	windowChanged();
+  send({task: 'RESIZE', region: getRegion()});
+	//register();
+	//windowChanged();
 }
 
 //------------------------------------------------------------------------------

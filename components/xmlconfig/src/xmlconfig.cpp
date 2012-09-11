@@ -86,45 +86,17 @@ namespace LinksRouting
           if( !argel )
             continue;
 
-          std::string valname = argel->ValueStr();
           const char* argtype = argel->Attribute("type");
           const char* valstr = argel->Attribute("val");
           if(!argtype || !valstr)
           {
-            std::cout << "LinksSystem XmlConfig Warning: incomplete Argument: "  << child->ValueStr() << ":" << valname << std::endl;
+            std::cout << "LinksSystem XmlConfig Warning: incomplete Argument: "  << child->ValueStr() << ":" << argel->ValueStr() << std::endl;
             continue;
           }
           std::stringstream valstrstr(valstr);
 
-          if(getTypeString<bool>().compare(argtype) == 0)
-          {
-            bool val;
-            valstrstr >> std::boolalpha >> val;
-            if(!comp->setFlag(valname, val))
-              std::cout << "LinksSystem XmlConfig Warning: could not set Bool Argument "  << child->ValueStr() << ":" << valname << " for Component " << comp->name() << std::endl;
-          }
-          else if(getTypeString<int>().compare(argtype) == 0)
-          {
-            int val;
-            valstrstr >> val;
-            if(!comp->setInteger(valname, val))
-              std::cout << "LinksSystem XmlConfig Warning: could not set Int Argument "  << child->ValueStr() << ":" << valname << " for Component " << comp->name() << std::endl;
-          }
-          else if(getTypeString<double>().compare(argtype) == 0)
-          {
-            double val;
-            valstrstr >> val;
-            if(!comp->setFloat(valname, val))
-              std::cout << "LinksSystem XmlConfig Warning: could not set Double Argument "  << child->ValueStr() << ":" << valname << " for Component " << comp->name() << std::endl;
-          }
-          else if(getTypeString<std::string>().compare(argtype) == 0)
-          {
-            std::string val(valstr);
-            if(!comp->setString(valname, val))
-              std::cout << "LinksSystem XmlConfig Warning: could not set Double Argument "  << child->ValueStr() << ":" << valname << " for Component " << comp->name() << std::endl;
-          }
-          else
-            std::cout << "LinksSystem XmlConfig Warning: unknown type \"" << argtype << "\" of argument " << child->ValueStr() << ":" << valname << std::endl;
+          if( !comp->set(argel->ValueStr(), valstr, argtype) )
+            LOG_WARN("Failed to set value of type '" << argtype << "' to '" << valstr << "' on component " << comp->name());
         }
       }
     }

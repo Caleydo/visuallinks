@@ -123,6 +123,8 @@ ShaderPtr loadShader( QString vert, QString frag )
     setMask(QRegion(-1, -1, 1, 1));
 #endif
 
+    setMouseTracking(true);
+
     //--------------------------------
     // Setup component system
     //--------------------------------
@@ -187,6 +189,9 @@ ShaderPtr loadShader( QString vert, QString frag )
     _slot_desktop =
       slot_collector.create<LinksRouting::SlotType::Image>("/desktop");
     _slot_desktop->_data->type = LinksRouting::SlotType::Image::OpenGLTexture;
+    
+    _slot_mouse =
+      slot_collector.create<LinksRouting::SlotType::MouseEvent>("/mouse");
   }
 
   //----------------------------------------------------------------------------
@@ -455,6 +460,18 @@ ShaderPtr loadShader( QString vert, QString frag )
       // being created.
       move( QPoint(0,0) );
     }
+  }
+  
+  //----------------------------------------------------------------------------
+  void GLWidget::mouseMoveEvent(QMouseEvent *event)
+  {
+    _slot_mouse->_data->triggerMove(event->x(), event->y());
+  }
+  
+  //----------------------------------------------------------------------------
+  void GLWidget::leaveEvent(QEvent *event)
+  {
+    _slot_mouse->_data->triggerLeave();
   }
 
   //----------------------------------------------------------------------------

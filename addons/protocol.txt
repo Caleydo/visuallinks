@@ -33,6 +33,22 @@
 
 3.1 Message types
 
+   REGISTER
+
+              {
+                'task': 'REGISTER',
+                'name': 'Optional Name',
+                'pos': [px, py],
+                'region': [x, y, width, height]
+              }
+
+   RESIZE
+
+              {
+                'task': 'RESIZE',
+                'region': [x, y, width, height]
+              }
+
    INITIATE   Initiates a new routing and linking process by sending the
               identifier to search to the server. Locations inside
               the clients region can be added in the optional 'regions' field.

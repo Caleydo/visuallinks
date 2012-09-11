@@ -69,6 +69,9 @@ namespace LinksRouting
       void regionsChanged(const WindowRegions& regions);
       bool updateHedge( const WindowRegions& regions,
                         LinkDescription::HyperEdge* hedge );
+      bool updateRegion( const WindowRegions& regions,
+                         LinkDescription::Node* node,
+                         WId client_wid );
 
     private:
 

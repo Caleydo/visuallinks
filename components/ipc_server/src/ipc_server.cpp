@@ -249,22 +249,25 @@ namespace LinksRouting
       JSON msg(data);
 
       QString task = msg.getValue<QString>("task");
-      if( task == "REGISTER" )
+      if( task == "REGISTER" || task == "RESIZE" )
       {
-        QVariantList pos_list = msg.getValue<QVariantList>("pos");
-        if( pos_list.length() != 2 )
+        if( task == "REGISTER" )
         {
-          LOG_WARN("Received invalid position (REGISTER)");
-          return;
-        }
+          QVariantList pos_list = msg.getValue<QVariantList>("pos");
+          if( pos_list.length() != 2 )
+          {
+            LOG_WARN("Received invalid position (REGISTER)");
+            return;
+          }
 
-        QPoint pos(pos_list.at(0).toInt(), pos_list.at(1).toInt());
-        client_wid = windowAt(_window_monitor.getWindows(), pos);
+          QPoint pos(pos_list.at(0).toInt(), pos_list.at(1).toInt());
+          client_wid = windowAt(_window_monitor.getWindows(), pos);
+        }
 
         QVariantList region_list = msg.getValue<QVariantList>("region");
         if( region_list.length() != 4 )
         {
-          LOG_WARN("Received invalid region (REGISTER)");
+          LOG_WARN("Received invalid region");
           return;
         }
 
@@ -609,34 +612,8 @@ namespace LinksRouting
       if( !client_wid )
         continue;
 
-      int hidden_count = 0;
-      for( auto vert = node->getVertices().begin();
-           vert != node->getVertices().end();
-           ++vert )
-      {
-        if( client_wid != windowAt(regions, QPoint(vert->x, vert->y)) )
-          ++hidden_count;
-      }
-
-      LinkDescription::props_t& props = node->getProps();
-      LinkDescription::props_t::iterator hidden = props.find("hidden");
-      if( hidden_count >= 2 )
-      {
-        if( hidden == props.end() )
-        {
-          // if at least 2 points are in another window don't show region
-          props["hidden"] = "true";
-          modified = true;
-        }
-      }
-      else
-      {
-        if( hidden != props.end() )
-        {
-          props.erase(hidden);
-          modified = true;
-        }
-      }
+      if( updateRegion(regions, &*node, client_wid) )
+        modified = true;
     }
 
     for( size_t i = 0; i < num_outside_scroll; ++i )
@@ -652,18 +629,61 @@ namespace LinksRouting
       else
         out.pos.y /= out.num_outside;
 
-      LinkDescription::points_t points;
-      points.push_back(out.pos -=  6 * out.normal.normal());
-      points.push_back(out.pos +=  2 * out.normal);
-      points.push_back(out.pos += 12 * out.normal.normal());
-      points.push_back(out.pos -=  2 * out.normal);
+      LinkDescription::points_t link_points;
+      link_points.push_back(out.pos += 5 * out.normal);
 
-      LinkDescription::Node node(points);
-      node.set("virtual-outside", "side[]");
+      LinkDescription::points_t points;
+      points.push_back(out.pos +=  8 * out.normal.normal());
+      points.push_back(out.pos -=  5 * out.normal);
+      points.push_back(out.pos -= 16 * out.normal.normal());
+      points.push_back(out.pos +=  5 * out.normal);
+
+      LinkDescription::Node node(points, link_points);
+      node.set("virtual-outside", "side[" + std::to_string(i) + "]");
+      node.set("filled", true);
+      updateRegion(regions, &node, client_wid);
+
       hedge->getNodes().push_back( node );
     }
 
     return modified;
+  }
+
+  //----------------------------------------------------------------------------
+  bool IPCServer::updateRegion( const WindowRegions& regions,
+                                LinkDescription::Node* node,
+                                WId client_wid )
+  {
+    size_t hidden_count = 0;
+    for( auto vert = node->getVertices().begin();
+              vert != node->getVertices().end();
+            ++vert )
+    {
+      if( client_wid != windowAt(regions, QPoint(vert->x, vert->y)) )
+        ++hidden_count;
+    }
+
+    LinkDescription::props_t& props = node->getProps();
+    LinkDescription::props_t::iterator hidden = props.find("hidden");
+    if( hidden_count > node->getVertices().size() / 2 )
+    {
+      if( hidden == props.end() )
+      {
+        // if more than half of the points are in another window don't show
+        // region
+        props["hidden"] = "true";
+        return true;
+      }
+    }
+    else
+    {
+      if( hidden != props.end() )
+      {
+        props.erase(hidden);
+        return true;
+      }
+    }
+    return false;
   }
 
   //----------------------------------------------------------------------------

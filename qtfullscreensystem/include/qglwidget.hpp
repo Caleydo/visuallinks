@@ -5,6 +5,7 @@
 
 #include "slots.hpp"
 #include "slotdata/image.hpp"
+#include "slotdata/mouse_event.hpp"
 
 #include "staticcore.h"
 #include "xmlconfig.h"
@@ -70,9 +71,12 @@ namespace qtfullscreensystem
 
     protected:
 
-      void paintEvent(QPaintEvent *event);
-      void resizeEvent(QResizeEvent * event);
-      void moveEvent(QMoveEvent *event);
+      virtual void paintEvent(QPaintEvent *event);
+      virtual void resizeEvent(QResizeEvent *event);
+      virtual void moveEvent(QMoveEvent *event);
+
+      virtual void mouseMoveEvent(QMouseEvent *event);
+      virtual void leaveEvent(QEvent *event);
 
       void updateScreenShot( QPoint window_offset,
                              QPoint window_end,
@@ -89,6 +93,7 @@ namespace qtfullscreensystem
       QPoint _window_end;
 
       LinksRouting::slot_t<LinksRouting::SlotType::Image>::type _slot_desktop;
+      LinksRouting::slot_t<LinksRouting::SlotType::MouseEvent>::type _slot_mouse;
       QPixmap _screenshot;
 
       // TODO make readonly

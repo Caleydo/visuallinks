@@ -106,7 +106,7 @@ namespace LinksRouting
         continue;
 
       fork->position += node->getCenter();
-      regions.push_back(node->getVertices());
+      regions.push_back(node->getLinkPoints());
       nodes.push_back(&*node);
     }
 

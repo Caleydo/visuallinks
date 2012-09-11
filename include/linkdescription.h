@@ -4,8 +4,8 @@
 #include "color.h"
 #include "datatypes.h"
 #include "float2.hpp"
+#include "string_utils.h"
 
-#include <sstream>
 #include <list>
 #include <vector>
 #include <memory>
@@ -78,44 +78,6 @@ namespace LinkDescription
       PropertyElement( const props_t& props = props_t() ):
         _props( props )
       {}
-
-      template<typename T>
-      T convertFromString(const std::string& str, const T& def_val = T()) const
-      {
-        T var;
-        std::stringstream iss(str, std::ios_base::in);
-        iss >> var;
-
-        if( !iss )
-          return def_val;
-
-        return var;
-      }
-
-      // Converter specializations
-      std::string convertFromString( const std::string& str,
-                                     const std::string& ) const
-      {
-        return str;
-      }
-
-      bool convertFromString( const std::string& str,
-                              const bool& ) const
-      {
-        return str == "true" || str == "1";
-      }
-
-      template<typename T>
-      std::string convertToString(const T val) const
-      {
-        std::stringstream oss(std::ios_base::out);
-        oss << val;
-
-        if( !oss )
-          return std::string();
-
-        return oss.str();
-      }
   };
 
   class Node:
@@ -135,6 +97,15 @@ namespace LinkDescription
         _parent(0)
       {}
 
+      explicit Node( const points_t& points,
+                     const points_t& link_points,
+                     const props_t& props = props_t() ):
+        PropertyElement( props ),
+        _points( points ),
+        _link_points( link_points ),
+        _parent(0)
+      {}
+
       explicit Node( HyperEdge* hedge ):
         _parent(0)
       {
@@ -143,14 +114,20 @@ namespace LinkDescription
 
       points_t& getVertices() { return _points; }
       const points_t& getVertices() const { return _points; }
+
+      points_t& getLinkPoints() { return _link_points.empty() ? _points
+                                                              : _link_points; }
+      const points_t& getLinkPoints() const { return getLinkPoints(); }
+
       float2 getCenter()
       {
+        const points_t& points = getLinkPoints();
         float2 center;
-        for( auto p = _points.begin(); p != _points.end(); ++p )
+        for( auto p = points.begin(); p != points.end(); ++p )
           center += *p;
 
-        if( !_points.empty() )
-          center /= _points.size();
+        if( !points.empty() )
+          center /= points.size();
 
         return center;
       }
@@ -182,7 +159,8 @@ namespace LinkDescription
 
     private:
 
-      points_t  _points;
+      points_t _points;
+      points_t _link_points;
       HyperEdge* _parent;
       std::vector<HyperEdge*> _children;
   };

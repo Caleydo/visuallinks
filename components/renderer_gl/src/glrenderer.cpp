@@ -75,8 +75,8 @@ namespace LinksRouting
    */
   template<typename Collection>
   line_borders_t calcLineBorders( const Collection& points,
-                                    float width,
-                                    bool closed = false )
+                                  float width,
+                                  bool closed = false )
   {
     auto begin = std::begin(points),
          end = std::end(points);
@@ -364,15 +364,17 @@ for( int i = 0; i < 1; ++i )
       if( node->getVertices().empty() )
         continue;
 
+      bool filled = node->get<bool>("filled", false);
       line_borders_t region = calcLineBorders(node->getVertices(), 3, true);
-      glBegin(GL_TRIANGLE_STRIP);
+      glBegin(filled ? GL_POLYGON : GL_TRIANGLE_STRIP);
       for( auto first = std::begin(region.first),
                 second = std::begin(region.second);
            first != std::end(region.first);
            ++first,
            ++second )
       {
-        glVertex2f(first->x, first->y);
+        if( !filled )
+          glVertex2f(first->x, first->y);
         glVertex2f(second->x, second->y);
       }
       glEnd();

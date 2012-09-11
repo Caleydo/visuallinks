@@ -1,7 +1,9 @@
 #ifndef LR_COMPONENT
 #define LR_COMPONENT
 
+#include "log.hpp"
 #include "slots.hpp"
+#include "string_utils.h"
 #include <string>
 
 namespace LinksRouting
@@ -65,6 +67,16 @@ namespace LinksRouting
         return None;
       }
 
+
+      template<class Type>
+      inline static std::string getDataTypeString();
+
+      template<class Type>
+      inline static bool isDataType(const std::string& type)
+      {
+        return getDataTypeString<Type>() == type;
+      }
+
       /**
        * Override to publish data to slots
        */
@@ -91,10 +103,97 @@ namespace LinksRouting
       virtual bool getString(const std::string& name,
                              std::string& val) const = 0;
 
+      template<class Type>
+      inline
+      bool set(const std::string& key, const std::string& val)
+      {
+        return setImpl<Type>(this, key, val);
+      }
+
+      bool set( const std::string& key,
+                const std::string& val,
+                const std::string& type )
+      {
+        if( isDataType<bool>(type) )
+          return set<bool>(key, val);
+        else if( isDataType<int>(type) )
+          return set<int>(key, val);
+        else if( isDataType<double>(type) )
+          return set<double>(key, val);
+        else if( isDataType<std::string>(type) )
+          return set<std::string>(key, val);
+        else
+          LOG_WARN(name() << ": unknown data type: " << type);
+
+        return false;
+      }
+
       virtual ~Component()
       {
       }
+
+    private:
+
+      template<class Type>
+      static inline
+      bool setImpl( Component* comp,
+                    const std::string& key,
+                    const std::string& val );
   };
+
+  template<>
+  inline std::string Component::getDataTypeString<bool>()
+  {
+    return "Bool";
+  }
+  template<>
+  inline std::string Component::getDataTypeString<int>()
+  {
+    return "Integer";
+  }
+  template<>
+  inline std::string Component::getDataTypeString<double>()
+  {
+    return "Float";
+  }
+  template<>
+  inline std::string Component::getDataTypeString<std::string>()
+  {
+    return "String";
+  }
+
+  template<>
+  inline
+  bool Component::setImpl<bool>( Component* comp,
+                                 const std::string& name,
+                                 const std::string& val )
+  {
+    return comp->setFlag(name, convertFromString<bool>(val));
+  }
+  template<>
+  inline
+  bool Component::setImpl<int>( Component* comp,
+                                const std::string& name,
+                                const std::string& val )
+  {
+    return comp->setInteger(name, convertFromString<int>(val));
+  }
+  template<>
+  inline
+  bool Component::setImpl<double>( Component* comp,
+                                   const std::string& name,
+                                   const std::string& val )
+  {
+    return comp->setFloat(name, convertFromString<double>(val));
+  }
+  template<>
+  inline
+  bool Component::setImpl<std::string>( Component* comp,
+                                        const std::string& name,
+                                        const std::string& val )
+  {
+    return comp->setString(name, convertFromString<std::string>(val));
+  }
 }
 
 #endif //LR_COMPONENT
