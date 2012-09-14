@@ -134,7 +134,7 @@ namespace LinksRouting
 
   //----------------------------------------------------------------------------
   GlRenderer::GlRenderer():
-    myname("GLRenderer")
+    Configurable("GLRenderer")
   {
     registerArg("enabled", _enabled = true);
   }

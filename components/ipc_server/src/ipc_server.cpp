@@ -140,6 +140,7 @@ namespace LinksRouting
   IPCServer::IPCServer( QMutex* mutex,
                         QWaitCondition* cond_data,
                         QWidget* widget ):
+    Configurable("QtWebsocketServer"),
     _window_monitor(widget, std::bind(&IPCServer::regionsChanged, this, _1)),
     _mutex_slot_links(mutex),
     _cond_data_ready(cond_data)
@@ -331,6 +332,10 @@ namespace LinksRouting
             link->_stamp += 1;
           LOG_INFO("Trigger reroute -> routing algorithm changed");
           _cond_data_ready->wakeAll();
+        }
+        else if( id == "/config" )
+        {
+          //msg.getValue<QString>("var").toStdString();
         }
         else
           LOG_WARN("Request setting unknown value: " << id_str);

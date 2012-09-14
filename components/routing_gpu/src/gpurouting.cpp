@@ -34,7 +34,7 @@ namespace LinksRouting
 
   //----------------------------------------------------------------------------
   GPURouting::GPURouting() :
-    myname("GPURouting"),
+    Configurable("GPURouting"),
     _buffer_width(0),
     _buffer_height(0)
   {

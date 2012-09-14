@@ -26,6 +26,7 @@ namespace qtfullscreensystem
 {
   class GLWidget:
     public QWidget,
+    public LinksRouting::Component,
     public LinksRouting::ComponentArguments
   {
     public:
@@ -40,12 +41,6 @@ namespace qtfullscreensystem
 
       void publishSlots(LinksRouting::SlotCollector slots);
       void subscribeSlots(LinksRouting::SlotSubscriber& slot_subscriber);
-
-      const std::string& name() const
-      {
-        static const std::string name("QGLWidget");
-        return name;
-      }
 
       /**
        *
@@ -103,7 +98,8 @@ namespace qtfullscreensystem
 
       /** And now the components */
       LinksRouting::StaticCore      _core;
-      LinksRouting::XmlConfig       _config;
+      LinksRouting::XmlConfig       _config,
+                                    _user_config;
       LinksRouting::IPCServer       _server;
       LinksRouting::GlCostAnalysis  _cost_analysis;
       LinksRouting::CPURouting      _routing_cpu;

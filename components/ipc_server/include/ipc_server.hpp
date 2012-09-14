@@ -29,6 +29,7 @@ namespace LinksRouting
 {
   class IPCServer:
     public QObject,
+    public Component,
     public ComponentArguments
 
   {
@@ -48,11 +49,6 @@ namespace LinksRouting
       bool supports(unsigned int type) const
       {
         return (type & Component::DataServer);
-      }
-      const std::string& name() const
-      {
-        static const std::string name("QtWebsocketServer");
-        return name;
       }
 
       void process(unsigned int type);

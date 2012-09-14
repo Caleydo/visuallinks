@@ -4,8 +4,10 @@
 namespace LinksRouting
 {
   StaticCore::StaticCore():
+    Configurable("StaticCore"),
     _runningComponents(0),
-    _config(0)
+    _config(0),
+    _user_config(0)
   {
 #ifdef _DEBUG
     _requiredComponents = 0;
@@ -42,22 +44,34 @@ namespace LinksRouting
   {
     LOG_INFO("Adding component (" << comp->name() << ")...");
 
-    if(!_config && (type&Component::Config) && comp->supports(Component::Config))
+    if( (type & Component::Config) && comp->supports(Component::Config) )
     {
-      _config = dynamic_cast<Config*>(comp);
+      Config* config = dynamic_cast<Config*>(comp);
+      assert(config);
 
-      if( !_config->initFrom(_startupstr) )
+      if( !_config )
       {
-        LOG_ERROR("could not load config file \"" << _startupstr << "\"");
-        _config = nullptr;
+        _config = config;
+        LOG_INFO("Attach config.");
       }
+      else if( !_user_config )
+      {
+        _user_config = config;
+        LOG_INFO("Attach user config.");
+      }
+
+//      if( !_config->initFrom(_startupstr) )
+//      {
+//        LOG_ERROR("could not load config file \"" << _startupstr << "\"");
+//        _config = nullptr;
+//      }
     }
 
     unsigned int supportedTypes = getTypes(comp, type);
     unsigned int isRunningAs = supportedTypes & ~_runningComponents;
 
-    if(!comp->startup(this, isRunningAs))
-          isRunningAs = 0;
+    if( !comp->startup(this, isRunningAs) )
+      isRunningAs = 0;
 
     //update running components
     _runningComponents |= isRunningAs;
@@ -92,28 +106,26 @@ namespace LinksRouting
 //      return false;
 //    }
 
-    if(_config)
-    {
-      for( auto c = _components.begin(); c != _components.end(); ++c )
-          _config->attach(*c, c->is);
-      _config->process(Component::Config);
-    }
-    else
+    if( _config )
+      initConfig(_config);
+    if( _user_config )
+      initConfig(_user_config);
+
+    if( !_config && !_user_config )
       std::cout << "LinksRouting StaticCore Warning: no config provided." << std::endl;
 
     _slot_select_routing =
       getSlotCollector().create<SlotType::ComponentSelection>("/routing");
 
     for( auto c = _components.begin(); c != _components.end(); ++c )
-      if(c->comp != static_cast<Component*>(_config))
+    {
+      c->comp->init();
+      if( c->comp->supports(Component::Routing) )
       {
-        c->comp->init();
-        if( c->comp->supports(Component::Routing) )
-        {
-          _slot_select_routing->_data->available[ c->comp->name() ] = true;
-          c->is = 0;
-        }
+        _slot_select_routing->_data->available[ c->comp->name() ] = true;
+        c->is = 0;
       }
+    }
 
     std::cout << "Available routing components: " << std::endl;
     for( auto comp = _slot_select_routing->_data->available.begin();
@@ -128,7 +140,6 @@ namespace LinksRouting
     SlotSubscriber slot_subscriber(_slots);
     for( auto c = _components.begin(); c != _components.end(); ++c )
       c->comp->subscribeSlots(slot_subscriber);
-
 
     return true;
   }
@@ -219,6 +230,14 @@ namespace LinksRouting
       if((i & mask) && component->supports(static_cast<Component::Type>(i)))
         type |= i;
     return type;
+  }
+
+  //----------------------------------------------------------------------------
+  void StaticCore::initConfig(Config* config)
+  {
+    for( auto c = _components.begin(); c != _components.end(); ++c )
+      config->attach(*c, c->is);
+    config->process(Component::Config);
   }
 
 }

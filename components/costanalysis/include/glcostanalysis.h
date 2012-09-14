@@ -13,15 +13,18 @@
 
 namespace LinksRouting
 {
-  class GlCostAnalysis: public CostAnalysis, public ComponentArguments
+  class GlCostAnalysis:
+    public CostAnalysis,
+    public ComponentArguments
   {
     protected:
-      std::string myname;
+
       int _downsampleSaliency;
       int _downsampleCost;
       int _downsampleSaliencyToCost;
 
     public:
+
       GlCostAnalysis();
       virtual ~GlCostAnalysis();
 
@@ -35,10 +38,6 @@ namespace LinksRouting
       bool supports(unsigned int type) const
       {
         return (type & Component::Costanalysis);
-      }
-      const std::string& name() const
-      {
-        return myname;
       }
 
       void process(unsigned int type);

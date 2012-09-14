@@ -19,6 +19,7 @@
 
 #include <QApplication>
 #include <QBitmap>
+#include <QDesktopServices>
 #include <QDesktopWidget>
 #include <QMoveEvent>
 
@@ -92,9 +93,34 @@ ShaderPtr loadShader( QString vert, QString frag )
 
   //----------------------------------------------------------------------------
   GLWidget::GLWidget(int& argc, char *argv[]):
+    Configurable("QGLWidget"),
     _cur_fbo(0),
     _server(&_mutex_slot_links, &_cond_render, this)
   {
+    QApplication::setOrganizationDomain("icg.tugraz.at");
+    QApplication::setOrganizationName("icg.tugraz.at");
+    QApplication::setApplicationName("VisLinks");
+
+    const QString config_dir =
+      QDesktopServices::storageLocation(QDesktopServices::DataLocation);
+    const std::string user_config = config_dir.toStdString() + "/config.xml";
+
+    {
+      // Ensure config path and user config file exist
+      QDir().mkpath(config_dir);
+      QFile file( QString::fromStdString(user_config) );
+      if( !file.open(QIODevice::ReadWrite | QIODevice::Text) )
+        LOG_ERROR("Failed to open user config!");
+      else if( !file.size() )
+      {
+        LOG_INFO("Creating empty user config in '" << user_config << "'");
+        file.write(
+          "<!-- VisLinks user config (overrides config file) -->\n"
+          "<config/>"
+        );
+      }
+    }
+
     //--------------------------------
     // Setup opengl and window
     //--------------------------------
@@ -136,8 +162,12 @@ ShaderPtr loadShader( QString vert, QString frag )
 
     publishSlots(_core.getSlotCollector());
 
-    _core.startup(argv[1]);
+    _config.initFrom(argv[1]);
+    _user_config.initFrom(user_config);
+
+    _core.startup();
     _core.attachComponent(&_config);
+    _core.attachComponent(&_user_config);
     _core.attachComponent(&_server);
     _core.attachComponent(&_cost_analysis);
     _core.attachComponent(&_routing_cpu);

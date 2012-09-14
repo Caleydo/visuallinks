@@ -16,7 +16,8 @@
 
 namespace LinksRouting
 {
-  class StaticCore: public Core
+  class StaticCore:
+    public Core
   {
       struct ComponentInfo
       {
@@ -44,7 +45,7 @@ namespace LinksRouting
       SlotCollector getSlotCollector();
       SlotSubscriber getSlotSubscriber();
 
-      virtual bool startup(const std::string& startup);
+      virtual bool startup(const std::string& startup = std::string());
       virtual bool attachComponent(Component* comp, unsigned int type =
                                      Component::Any);
       virtual Component* getComponent(Component::Type type);
@@ -67,7 +68,8 @@ namespace LinksRouting
       slots_t _slots;
 
       /** Config to be used */
-      Config* _config;
+      Config *_config,      ///< From specified file
+             *_user_config; ///< Read/Write config from user directory
 
       /** Requrired components */
       unsigned int _requiredComponents;
@@ -77,6 +79,8 @@ namespace LinksRouting
 
       /** For selecting routing component to be used */
       slot_t<SlotType::ComponentSelection>::type _slot_select_routing;
+
+      void initConfig(Config* config);
 
   };
 } // namespace LinksRouting

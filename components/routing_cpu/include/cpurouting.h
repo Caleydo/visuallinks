@@ -12,10 +12,6 @@ namespace LinksRouting
 {
   class CPURouting: public Routing, public ComponentArguments
   {
-    protected:
-
-      std::string myname;
-
     public:
 
       CPURouting();
@@ -29,10 +25,6 @@ namespace LinksRouting
       bool supports(unsigned int type) const
       {
         return (type & Component::Routing);
-      }
-      const std::string& name() const
-      {
-        return myname;
       }
 
       void process(unsigned int type);

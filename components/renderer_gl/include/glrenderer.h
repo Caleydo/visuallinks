@@ -14,10 +14,10 @@
 
 namespace LinksRouting
 {
-  class GlRenderer: public Renderer, public ComponentArguments
+  class GlRenderer:
+    public Renderer,
+    public ComponentArguments
   {
-    protected:
-      std::string myname;
     public:
 
       GlRenderer();
@@ -33,10 +33,6 @@ namespace LinksRouting
       bool supports(unsigned int type) const
       {
         return (type & Component::Renderer);
-      }
-      const std::string& name() const
-      {
-        return myname;
       }
 
       void process(unsigned int type);

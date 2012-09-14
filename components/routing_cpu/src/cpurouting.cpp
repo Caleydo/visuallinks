@@ -7,7 +7,7 @@ namespace LinksRouting
 {
   //----------------------------------------------------------------------------
   CPURouting::CPURouting() :
-    myname("CPURouting")
+    Configurable("CPURouting")
   {
 
   }

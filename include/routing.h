@@ -8,9 +8,14 @@ namespace LinksRouting
 {
   class CostAnalysis;
   class Renderer;
-  class Routing : public virtual Component
+  class Routing:
+    public virtual Component
   {
     protected:
+
+      Routing():
+        Configurable("Routing")
+      {}
 
       typedef std::map<LinkDescription::Node*, size_t> LevelNodeMap;
       typedef std::map<LinkDescription::HyperEdge*, size_t> LevelHyperEdgeMap;

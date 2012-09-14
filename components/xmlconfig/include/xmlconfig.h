@@ -2,6 +2,7 @@
 #define LR_XMLCONFIG
 
 #include <list>
+#include <memory>
 #include <string>
 #include <sstream>
 #include <iomanip>
@@ -13,32 +14,9 @@
 
 namespace LinksRouting
 {
-  class XmlConfig : public Config
+  class XmlConfig:
+    public Config
   {
-    TiXmlNode* parseIdentifier(const std::string& identifier, size_t pos, TiXmlNode* container, std::string& valname, bool create)
-    {
-      size_t p = identifier.find_first_of(':', pos);
-      if(p == std::string::npos)
-      {
-        valname = identifier.substr(pos);
-        return container;
-      }
-      std::string containername = identifier.substr(pos, p-pos);
-      TiXmlElement * child = container->FirstChild(containername)->ToElement();
-      if(!child && !create)
-        return 0;
-      else if(!child)
-      {
-        child = new TiXmlElement( containername );
-        container->LinkEndChild(child);
-      }
-      return parseIdentifier(identifier, p+1, child, valname, create);
-    }
-    TiXmlNode* parseIdentifier(const std::string& identifier, std::string& valname, bool create = false)
-    {
-      return parseIdentifier(identifier, 0, config, valname, create);
-    }
-
     template<class Type>
     static int checkTypeMatch(const std::string& identifier, TiXmlElement* arg)
     {
@@ -60,8 +38,9 @@ namespace LinksRouting
     template<class Type>
     bool setParameter(const std::string& identifier, Type val)
     {
-      if(!isInit)
+      if( !_config )
         return false;
+
       //resolve parts of identifier (Renderer:FeatureX) and find in config
       std::string valname;
       TiXmlNode* container = parseIdentifier(identifier, valname, true);
@@ -89,12 +68,13 @@ namespace LinksRouting
         arg->SetAttribute("type", getDataTypeString<Type>());
         arg->SetAttribute("val", argstr.str());
       }
+      _dirty_write = true;
       return true;
     }
     template<class Type>
     bool getParameter(const std::string& identifier, Type& val) const
     {
-      if(!isInit)
+      if( !_config )
         return false;
 
       //resolve parts of identifier (Renderer:FeatureX) and find in config
@@ -117,32 +97,48 @@ namespace LinksRouting
 
     struct CompInfo
     {
-      Component* comp;
+      Configurable* comp;
       unsigned int is;
-      CompInfo(Component* c, unsigned int types) : comp(c), is(types) { }
+      CompInfo(Configurable* c, unsigned int types):
+        comp(c),
+        is(types)
+      {}
     };
     typedef std::list<CompInfo> CompInfoList;
 
-    bool isInit;
-    TiXmlDocument *doc;
-    TiXmlNode *config;
+    typedef std::unique_ptr<TiXmlDocument> DocumentPtr;
+    typedef TiXmlNode* NodePtr;
+
+    DocumentPtr _doc;
+    NodePtr     _config;
+
+    bool _dirty_read,
+         _dirty_write;
+
     CompInfoList compInfoList;
-    const std::string myname;
     
+    bool saveFile() const;
+    bool loadFile();
+
+    NodePtr parseIdentifier( const std::string& identifier,
+                             size_t pos,
+                             NodePtr container,
+                             std::string& valname,
+                             bool create );
+    NodePtr parseIdentifier( const std::string& identifier,
+                             std::string& valname,
+                             bool create = false );
+
   public:
     XmlConfig();
 
-    bool initFrom(const std::string& config);
-    void attach(Component* component, unsigned int type);
+    virtual bool initFrom(const std::string& config);
+    virtual void attach(Configurable* component, unsigned int type);
 
     bool startup(Core* core, unsigned int type);
     void init();
     void shutdown();
     bool supports(unsigned int type) const;
-    const std::string& name() const
-    {
-      return myname;
-    }
 
     void process(unsigned int type);
 
@@ -182,4 +178,4 @@ namespace LinksRouting
 
 }
 
-#endif
+#endif /* LR_XMLCONFIG */
