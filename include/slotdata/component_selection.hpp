@@ -19,14 +19,37 @@ namespace SlotType
 
   struct ComponentSelection
   {
-    /** name -> available */
-    std::map<std::string, bool> available;
+    public:
 
-    /** Name of active component */
-    std::string active;
+      ComponentSelection():
+        _default(0)
+      {}
 
-    /** Name of request component (should get active) */
-    std::string request;
+      /** name -> available */
+      std::map<std::string, bool> available;
+
+      /** Name of active component */
+      std::string active;
+
+      /** Name of request component (should get active) */
+      std::string request;
+
+      const std::string getDefault() const
+      {
+        if( _default )
+          return *_default;
+        return std::string();
+      }
+
+      void linkDefault(const std::string* def)
+      {
+        _default = def;
+      }
+
+    private:
+
+      /** Name of default component */
+      const std::string *_default;
   };
 
 } // namespace SlotType

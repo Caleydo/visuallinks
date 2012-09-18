@@ -14,8 +14,33 @@
 
     <groupbox id="server-settings">
       <caption label="Server Settings"/>
+
+      <p id="connection-status" style="margin-bottom:0.5em;">Unknow status</p>
+
+      <grid id="server-settings-box">
+				<columns>
+					<column/>
+					<column flex="1"/>
+				</columns>
+
+        <rows>
+
+          <row>
+            <hbox align="center">
+							<label value="Default routing algorithm" control="default-routing"/>
+						</hbox>
+            <menulist id="default-routing" align="center">
+              <menupopup id="default-routing-popup">
+                <menuitem label="Automatic" value=""/>
+              </menupopup>
+            </menulist>
+          </row>
+
+				</rows>
+			</grid>
       
-      <checkbox label="Automatically Save Backups"/>
     </groupbox>
   </prefpane>
+  
+  <script type="application/x-javascript" src="chrome://mypl/content/preferences.js" />
 </prefwindow>

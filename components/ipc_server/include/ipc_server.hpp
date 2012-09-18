@@ -10,6 +10,7 @@
 #define _IPC_SERVER_HPP_
 
 #include "common/componentarguments.h"
+#include "config.h"
 #include "linkdescription.h"
 #include "slotdata/polygon.hpp"
 #include "slotdata/component_selection.hpp"
@@ -90,6 +91,9 @@ namespace LinksRouting
 
       /* List of available routing components */
       slot_t<SlotType::ComponentSelection>::type _subscribe_routing;
+
+      /* Permanenet configuration changeable at runtime */
+      slot_t<LinksRouting::Config*>::type _subscribe_user_config;
 
       class JSON;
       LinkDescription::Node parseRegions(JSON& json, WId client_wid);

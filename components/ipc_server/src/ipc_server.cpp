@@ -170,6 +170,10 @@ namespace LinksRouting
   {
     _subscribe_routing =
       slot_subscriber.getSlot<SlotType::ComponentSelection>("/routing");
+    _subscribe_user_config =
+      slot_subscriber.getSlot<LinksRouting::Config*>("/user-config");
+
+    assert(_subscribe_user_config->_data.get());
   }
 
   //----------------------------------------------------------------------------
@@ -293,6 +297,8 @@ namespace LinksRouting
         {
           QString routers = "{\"active\": \""
                           + QString::fromStdString(_subscribe_routing->_data->active)
+                          + "\", \"default\": \""
+                          + QString::fromStdString(_subscribe_routing->_data->getDefault())
                           + "\", \"available\":[";
           if( !_subscribe_routing->_data->available.empty() )
           {
@@ -335,7 +341,12 @@ namespace LinksRouting
         }
         else if( id == "/config" )
         {
-          //msg.getValue<QString>("var").toStdString();
+          (*_subscribe_user_config->_data)->setParameter
+          (
+            msg.getValue<QString>("var").toStdString(),
+            msg.getValue<QString>("val").toStdString(),
+            msg.getValue<QString>("type").toStdString()
+          );
         }
         else
           LOG_WARN("Request setting unknown value: " << id_str);

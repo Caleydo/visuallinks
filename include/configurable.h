@@ -20,13 +20,13 @@ namespace LinksRouting
 
       const std::string& name() const { return _name; }
 
-      template<class Type>
+      template<class T>
       inline static std::string getDataTypeString();
 
-      template<class Type>
+      template<class T>
       inline static bool isDataType(const std::string& type)
       {
-        return getDataTypeString<Type>() == type;
+        return getDataTypeString<T>() == type;
       }
 
       virtual bool setFlag(const std::string& name, bool val) = 0;
@@ -40,16 +40,16 @@ namespace LinksRouting
       virtual bool getString(const std::string& name,
                              std::string& val) const = 0;
 
-      template<class Type>
+      template<class T>
       inline
       bool set(const std::string& key, const std::string& val)
       {
-        return setImpl<Type>(this, key, val);
+        return setImpl<T>(this, key, val);
       }
 
-      bool set( const std::string& key,
-                const std::string& val,
-                const std::string& type )
+      virtual bool setParameter( const std::string& key,
+                                 const std::string& val,
+                                 const std::string& type )
       {
         if( isDataType<bool>(type) )
           return set<bool>(key, val);
@@ -77,7 +77,7 @@ namespace LinksRouting
 
       std::string _name;
 
-      template<class Type>
+      template<class T>
       static inline
       bool setImpl( Configurable* comp,
                     const std::string& key,

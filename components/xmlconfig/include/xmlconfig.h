@@ -17,62 +17,29 @@ namespace LinksRouting
   class XmlConfig:
     public Config
   {
-    template<class Type>
+    static int checkTypeMatch( const std::string& identifier,
+                               TiXmlElement* arg,
+                               const std::string& type );
+
+    template<class T>
     static int checkTypeMatch(const std::string& identifier, TiXmlElement* arg)
     {
-        const std::string * typestr;
-        if(!(typestr = arg->Attribute(std::string("type"))))
-        {
-          std::cout << "LinksSystem XmlConfig Warning: no type specified for \"" << identifier << "\"" << std::endl;
-          return 1;
-        }
-        else if(typestr->compare(getDataTypeString<Type>()) != 0)
-        {
-          std::cout << "LinksSystem XmlConfig Warning: types do not match for \"" << identifier << "\":" << std::endl;
-          std::cout << "  " << typestr << " != " << getDataTypeString<Type>() << std::endl;
-          return 0;
-        }
-        return 2;
+        return checkTypeMatch(identifier, arg, getDataTypeString<T>());
     }
 
-    template<class Type>
-    bool setParameter(const std::string& identifier, Type val)
-    {
-      if( !_config )
-        return false;
 
-      //resolve parts of identifier (Renderer:FeatureX) and find in config
-      std::string valname;
-      TiXmlNode* container = parseIdentifier(identifier, valname, true);
-      
-      //check if exists
-      TiXmlElement* arg = container->FirstChild(valname)->ToElement();
+    template<class Type>
+    bool setParameterHelper(const std::string& identifier, const Type val)
+    {
       std::stringstream argstr;
       argstr.precision(64);
       argstr << val;
-      if(arg)
-      {
-        //check if it matches
-        int res = checkTypeMatch<Type>(identifier, arg);
-        if(res == 1)
-          arg->SetAttribute("type", getDataTypeString<Type>());
-        else if(res == 0)
-          return false;
-        arg->SetAttribute("val", argstr.str());
-      }
-      else
-      {
-        //create new one
-        arg = new TiXmlElement( valname );
-        container->LinkEndChild(arg);
-        arg->SetAttribute("type", getDataTypeString<Type>());
-        arg->SetAttribute("val", argstr.str());
-      }
-      _dirty_write = true;
-      return true;
+
+      return setParameter(identifier, argstr.str(), getDataTypeString<Type>());
     }
-    template<class Type>
-    bool getParameter(const std::string& identifier, Type& val) const
+
+    template<class T>
+    bool getParameter(const std::string& identifier, T& val) const
     {
       if( !_config )
         return false;
@@ -80,13 +47,13 @@ namespace LinksRouting
       //resolve parts of identifier (Renderer:FeatureX) and find in config
       std::string valname;
       TiXmlNode* container = const_cast<XmlConfig*>(this)->parseIdentifier(identifier, valname, false);
-      
+
       //check if exists
       TiXmlElement* arg = container->FirstChild(valname)->ToElement();
       if(!arg)
         return false;
       //check if types match
-      if(checkTypeMatch<Type>(identifier, arg) < 2)
+      if(checkTypeMatch<T>(identifier, arg) < 2)
         return false;
       const std::string* valstr = arg->Attribute(valname);
       std::stringstream argvalstr(*valstr);
@@ -103,6 +70,18 @@ namespace LinksRouting
         comp(c),
         is(types)
       {}
+
+      bool match(const std::string& name, Type type)
+      {
+        if(type != None && (is & type) != 0)
+          //type based
+          return true;
+        else if( comp->name() == name )
+          //string based
+          return true;
+
+        return false;
+      }
     };
     typedef std::list<CompInfo> CompInfoList;
 
@@ -116,7 +95,7 @@ namespace LinksRouting
          _dirty_write;
 
     CompInfoList compInfoList;
-    
+
     bool saveFile() const;
     bool loadFile();
 
@@ -128,6 +107,10 @@ namespace LinksRouting
     NodePtr parseIdentifier( const std::string& identifier,
                              std::string& valname,
                              bool create = false );
+    /**
+     * @param identifier    Type or name of component
+     */
+    Configurable* findComponent(const std::string& identifier);
 
   public:
     XmlConfig();
@@ -142,9 +125,13 @@ namespace LinksRouting
 
     void process(unsigned int type);
 
+    virtual bool setParameter( const std::string& key,
+                               const std::string& val,
+                               const std::string& type );
+
     bool setFlag(const std::string& name, bool val)
     {
-      return setParameter(name, val);
+      return setParameterHelper(name, val);
     }
     bool getFlag(const std::string& name, bool& val) const
     {
@@ -152,7 +139,7 @@ namespace LinksRouting
     }
     bool setInteger(const std::string& name, int val)
     {
-      return setParameter(name, val);
+      return setParameterHelper(name, val);
     }
     bool getInteger(const std::string& name, int& val) const
     {
@@ -160,7 +147,7 @@ namespace LinksRouting
     }
     bool setFloat(const std::string& name, double val)
     {
-      return setParameter(name, val);
+      return setParameterHelper(name, val);
     }
     bool getFloat(const std::string& name, double& val) const
     {
@@ -168,7 +155,7 @@ namespace LinksRouting
     }
     bool setString(const std::string& name, const std::string& val)
     {
-      return setParameter(name, val);
+      return setParameterHelper(name, val);
     }
     bool getString(const std::string& name, std::string& val) const
     {

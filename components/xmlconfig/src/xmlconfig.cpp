@@ -90,6 +90,68 @@ namespace LinksRouting
   }
 
   //----------------------------------------------------------------------------
+  bool XmlConfig::setParameter( const std::string& key,
+                                const std::string& val,
+                                const std::string& type )
+  {
+    if( !_config )
+      return false;
+
+    std::cout << "setParameter(key = " << key
+                         << ", val = " << val
+                         << ", type = " << type
+                         << ")"
+                         << std::endl;
+
+    //resolve parts of identifier (Renderer:FeatureX) and find in config
+    std::string valname;
+    TiXmlNode* container = parseIdentifier(key, valname, true);
+
+    if( valname.length() + 1 > key.length() )
+    {
+      std::string component_name =
+        key.substr(0, key.length() - valname.length() - 1);
+      Configurable* comp = findComponent(component_name);
+      if( !comp )
+        LOG_ERROR("No such component: " << component_name);
+      else
+        comp->setParameter(valname, val, type);
+    }
+
+    //check if exists
+    TiXmlNode* node = container->FirstChild(valname);
+    TiXmlElement* arg = 0;
+    if( node )
+    {
+      arg = node->ToElement();
+
+      //check if it matches
+      int res = checkTypeMatch(key, arg, type);
+      if(res == 1)
+        arg->SetAttribute("type", type);
+      else if(res == 0)
+        return false;
+
+    }
+    else
+    {
+      //create new one
+      arg = new TiXmlElement( valname );
+      container->LinkEndChild(arg);
+      arg->SetAttribute("type", type);
+    }
+
+    arg->SetAttribute("val", val);
+
+    _dirty_write = true;
+
+    saveFile(); // TODO check if multiple variables changed within small
+                //      time window
+
+    return true;
+  }
+
+  //----------------------------------------------------------------------------
   bool XmlConfig::saveFile() const
   {
     if( !_doc )
@@ -123,23 +185,22 @@ namespace LinksRouting
          child;
          child = child->NextSibling() )
     {
+      if( child->Type() != TiXmlNode::TINYXML_ELEMENT )
+        continue;
+
       const std::string& comp_name = child->ValueStr();
       Type type = StringToType(comp_name);
+
+      bool match = false;
 
       for( CompInfoList::iterator it = compInfoList.begin();
            it != compInfoList.end();
            ++it )
       {
-        Configurable* comp = 0;
-        if(type != None && (it->is & type) != 0)
-          //type based
-          comp = it->comp;
-        else if( it->comp->name() == comp_name )
-          //string based
-          comp = it->comp;
-
-        if( !comp )
+        if( !it->match(comp_name, type) )
           continue;
+
+        match = true;
 
         for( TiXmlNode* arg = child->FirstChild();
              arg;
@@ -158,16 +219,39 @@ namespace LinksRouting
             continue;
           }
 
-          if( !comp->set(argel->ValueStr(), valstr, argtype) )
-            LOG_WARN( "Failed to set value of type '"
+          if( !it->comp->setParameter(argel->ValueStr(), valstr, argtype) )
+            LOG_WARN( "Failed to set value '"
+                      << argel->ValueStr() << "' of type '"
                       << argtype << "' to '"
                       << valstr << "' on component "
-                      << comp->name() );
+                      << it->comp->name() );
         }
       }
+
+      if( !match )
+        LOG_WARN("Failed to find matching component for '" << comp_name << "'");
     }
 
     return true;
+  }
+
+  int XmlConfig::checkTypeMatch( const std::string& identifier,
+                                 TiXmlElement* arg,
+                                 const std::string& type )
+  {
+    const std::string * typestr;
+    if(!(typestr = arg->Attribute(std::string("type"))))
+    {
+      std::cout << "LinksSystem XmlConfig Warning: no type specified for \"" << identifier << "\"" << std::endl;
+      return 1;
+    }
+    else if(typestr->compare(type) != 0)
+    {
+      std::cout << "LinksSystem XmlConfig Warning: types do not match for \"" << identifier << "\":" << std::endl;
+      std::cout << "  " << typestr << " != " << type << std::endl;
+      return 0;
+    }
+    return 2;
   }
 
   //----------------------------------------------------------------------------
@@ -184,15 +268,22 @@ namespace LinksRouting
       return container;
     }
 
+    assert(container);
+
     std::string containername = identifier.substr(pos, p-pos);
-    TiXmlElement * child = container->FirstChild(containername)->ToElement();
-    if(!child && !create)
-      return 0;
-    else if(!child)
+    TiXmlElement* child = 0;
+    TiXmlNode* node = container->FirstChild(containername);
+    if( !node )
     {
+      if( !create )
+        return 0;
+
       child = new TiXmlElement( containername );
       container->LinkEndChild(child);
     }
+    else
+      child = node->ToElement();
+
     return parseIdentifier(identifier, p+1, child, valname, create);
   }
 
@@ -202,5 +293,21 @@ namespace LinksRouting
                                                  bool create )
   {
     return parseIdentifier(identifier, 0, _config, valname, create);
+  }
+
+  //----------------------------------------------------------------------------
+  Configurable* XmlConfig::findComponent(const std::string& identifier)
+  {
+    Type type = StringToType(identifier);
+
+    for( CompInfoList::iterator it = compInfoList.begin();
+         it != compInfoList.end();
+         ++it )
+    {
+      if( it->match(identifier, type) )
+        return it->comp;
+    }
+
+    return 0;
   }
 }

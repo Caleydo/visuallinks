@@ -13,8 +13,8 @@ namespace LinksRouting
     public:
 
       virtual bool startup(const std::string& startup = std::string()) = 0;
-      virtual bool attachComponent(Component* comp, unsigned int type =
-                                     Component::Any) = 0;
+      virtual bool attachComponent( Component* comp, unsigned int type =
+                                    Component::Any ) = 0;
       virtual Component* getComponent(Component::Type type) = 0;
       virtual bool init() = 0;
       virtual void shutdown() = 0;

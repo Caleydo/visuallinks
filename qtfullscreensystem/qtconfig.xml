@@ -20,7 +20,6 @@
   </CPURouting>
 
   <GPURouting>
-    <NoQueue type="Bool" val="true" />
     <BlockSizeX type="Integer" val="8" />
     <BlockSizeY type="Integer" val="8" />
   </GPURouting>

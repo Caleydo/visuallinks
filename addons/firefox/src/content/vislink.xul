@@ -18,7 +18,7 @@
       </div>
       <menuseparator />
       <menuitem label="Abort all" oncommand="onAbort('', -1)"/>
-      <menuitem label="Settings" oncommand="window.open('chrome://mypl/content/preferences.xul', 'VisLinks - Settings', 'chrome,width=600,height=300');"/>
+      <menuitem label="Settings" oncommand="window.open('chrome://mypl/content/preferences.xul', 'VisLinks - Settings', 'chrome');"/>
       <menuseparator />
     </menupopup>
   </toolbarbutton>

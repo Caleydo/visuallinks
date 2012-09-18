@@ -80,6 +80,10 @@ namespace LinksRouting
       /** For selecting routing component to be used */
       slot_t<SlotType::ComponentSelection>::type _slot_select_routing;
 
+      slot_t<Config*>::type _slot_user_config;
+
+      std::string _default_routing;
+
       void initConfig(Config* config);
 
   };

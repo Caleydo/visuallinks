@@ -11,6 +11,19 @@ var menu = null;
 var items_routing = null;
 var active_routes = new Object();
 var timeout = null;
+var routing = null;
+
+var prefs = Components.classes["@mozilla.org/fuel/application;1"]
+                      .getService(Components.interfaces.fuelIApplication)
+                      .prefs;
+
+/**
+ * Get value of a preference
+ */
+function getPref(key)
+{
+  return prefs.get("extensions.vislinks." + key).value;
+}
 
 /**
  * Set status icon
@@ -149,6 +162,12 @@ function onAbort(id, stamp)
 }
 
 //------------------------------------------------------------------------------
+function abortAll()
+{
+  onAbort('', -1);
+}
+
+//------------------------------------------------------------------------------
 function removeAllRouteData()
 {
   last_id = null;
@@ -162,6 +181,9 @@ function removeAllRouteData()
 //------------------------------------------------------------------------------
 function reportVisLinks(id, found)
 {
+  if( getPref("replace-route") )
+    abortAll();
+
   updateScale();
   
   offset[0] = win.mozInnerScreenX * scale;
@@ -299,6 +321,7 @@ function register()
           if( msg.id == '/routing' )
           {
             removeAllChildren(items_routing);
+            routing = msg.val;
             for(var router in msg.val.available)
             {
               var name = msg.val.available[router][0];

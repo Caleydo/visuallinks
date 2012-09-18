@@ -12,8 +12,12 @@ namespace LinksRouting
 #ifdef _DEBUG
     _requiredComponents = 0;
 #else
-    _requiredComponents = Component::Costanalysis | Component::Routing | Component::Renderer;
+    _requiredComponents = Component::Costanalysis
+                        | Component::Routing
+                        | Component::Renderer;
 #endif
+
+    registerArg("default-routing", _default_routing);
   }
 
   StaticCore::~StaticCore()
@@ -52,12 +56,12 @@ namespace LinksRouting
       if( !_config )
       {
         _config = config;
-        LOG_INFO("Attach config.");
+        LOG_INFO("Attach config (" << config << ")");
       }
       else if( !_user_config )
       {
         _user_config = config;
-        LOG_INFO("Attach user config.");
+        LOG_INFO("Attach user config (" << config << ")");
       }
 
 //      if( !_config->initFrom(_startupstr) )
@@ -116,6 +120,10 @@ namespace LinksRouting
 
     _slot_select_routing =
       getSlotCollector().create<SlotType::ComponentSelection>("/routing");
+    _slot_select_routing->_data->linkDefault(&_default_routing);
+
+    _slot_user_config = getSlotCollector().create<Config*>("/user-config");
+    *_slot_user_config->_data = _user_config;
 
     for( auto c = _components.begin(); c != _components.end(); ++c )
     {
@@ -173,15 +181,18 @@ namespace LinksRouting
         c->is = 0;
       }
   }
-  
+
   //----------------------------------------------------------------------------
   void StaticCore::process(unsigned int type)
   {
     // Check if we need to select a new routing algorithm
-    const std::string request = _slot_select_routing->_data->request,
-                      active = _slot_select_routing->_data->active;
+    std::string request = _slot_select_routing->_data->request,
+                active = _slot_select_routing->_data->active;
     if( !request.empty() || active.empty() )
     {
+      if( request.empty() )
+        request = _slot_select_routing->_data->getDefault();
+
       for( auto c = _components.rbegin(); c != _components.rend(); ++c )
         if(    c->comp->supports(Component::Routing)
             && _slot_select_routing->_data->available[ c->comp->name() ] )
@@ -237,6 +248,7 @@ namespace LinksRouting
   {
     for( auto c = _components.begin(); c != _components.end(); ++c )
       config->attach(*c, c->is);
+    config->attach(this, 0);
     config->process(Component::Config);
   }
 
