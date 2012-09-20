@@ -8,6 +8,7 @@
 #include "glsl/glsl.h"
 #include "slots.hpp"
 #include "slotdata/image.hpp"
+#include "slotdata/text_popup.hpp"
 
 #include <queue>
 #include <set>
@@ -70,6 +71,7 @@ namespace LinksRouting
 
       /** Subscribe to the routed links */
       slot_t<LinkDescription::LinkList>::type _subscribe_links;
+      slot_t<LinksRouting::SlotType::TextPopup>::type _subscribe_popups;
 
       /** Publish the links rendered to fbo */
       slot_t<SlotType::Image>::type _slot_links;

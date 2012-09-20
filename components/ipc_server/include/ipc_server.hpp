@@ -14,6 +14,8 @@
 #include "linkdescription.h"
 #include "slotdata/polygon.hpp"
 #include "slotdata/component_selection.hpp"
+#include "slotdata/mouse_event.hpp"
+#include "slotdata/text_popup.hpp"
 #include "window_monitor.hpp"
 
 #include "QWsServer.h"
@@ -94,6 +96,10 @@ namespace LinksRouting
 
       /* Permanenet configuration changeable at runtime */
       slot_t<LinksRouting::Config*>::type _subscribe_user_config;
+
+      /* Slot for registering mouse callback */
+      slot_t<SlotType::MouseEvent>::type _subscribe_mouse;
+      slot_t<LinksRouting::SlotType::TextPopup>::type _subscribe_popups;
 
       class JSON;
       LinkDescription::Node parseRegions(JSON& json, WId client_wid);

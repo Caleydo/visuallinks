@@ -40,6 +40,12 @@ namespace SlotType
               ++cb )
         (*cb)();
     }
+
+    void clear()
+    {
+      _move_callbacks.clear();
+      _leave_callbacks.clear();
+    }
   };
 
 } // namespace SlotType

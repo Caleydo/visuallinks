@@ -157,6 +157,8 @@ namespace LinksRouting
   {
     _subscribe_links =
       slot_subscriber.getSlot<LinkDescription::LinkList>("/links");
+    _subscribe_popups =
+      slot_subscriber.getSlot<SlotType::TextPopup>("/popups");
   }
 
   //----------------------------------------------------------------------------
@@ -216,6 +218,44 @@ namespace LinksRouting
       return _links_fbo.unbind();
 
     bool rendered_anything = renderLinks(*_subscribe_links->_data);
+    if( !_subscribe_popups->_data->popups.empty() )
+    {
+      rendered_anything = true;
+
+      glColor3f(0.3, 0.3, 0.3);
+      glBegin(GL_QUADS);
+      for( auto popup = _subscribe_popups->_data->popups.begin();
+                  popup != _subscribe_popups->_data->popups.end();
+                ++popup )
+      {
+        if( !popup->visible )
+          continue;
+
+        glVertex2f(popup->pos.x, popup->pos.y);
+        glVertex2f(popup->pos.x + popup->size.x, popup->pos.y);
+        glVertex2f(popup->pos.x + popup->size.x, popup->pos.y + popup->size.y);
+        glVertex2f(popup->pos.x, popup->pos.y + popup->size.y);
+
+        rendered_anything = true;
+      }
+      glEnd();
+
+      glColor3f(1, 1, 1);
+      glBegin(GL_QUADS);
+      for( auto popup = _subscribe_popups->_data->popups.begin();
+                  popup != _subscribe_popups->_data->popups.end();
+                ++popup )
+      {
+        if( !popup->visible )
+          continue;
+
+        glVertex2f(popup->pos.x + 2,                 popup->pos.y + 2);
+        glVertex2f(popup->pos.x + popup->size.x - 2, popup->pos.y + 2);
+        glVertex2f(popup->pos.x + popup->size.x - 2, popup->pos.y + popup->size.y - 2);
+        glVertex2f(popup->pos.x + 2,                 popup->pos.y + popup->size.y - 2);
+      }
+      glEnd();
+    }
     _links_fbo.unbind();
 
     if( !rendered_anything )

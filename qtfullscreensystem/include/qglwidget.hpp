@@ -6,6 +6,7 @@
 #include "slots.hpp"
 #include "slotdata/image.hpp"
 #include "slotdata/mouse_event.hpp"
+#include "slotdata/text_popup.hpp"
 
 #include "staticcore.h"
 #include "xmlconfig.h"
@@ -89,6 +90,7 @@ namespace qtfullscreensystem
 
       LinksRouting::slot_t<LinksRouting::SlotType::Image>::type _slot_desktop;
       LinksRouting::slot_t<LinksRouting::SlotType::MouseEvent>::type _slot_mouse;
+      LinksRouting::slot_t<LinksRouting::SlotType::TextPopup>::type _slot_popups;
       QPixmap _screenshot;
 
       // TODO make readonly

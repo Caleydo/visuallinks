@@ -74,6 +74,8 @@ namespace LinksRouting
 
   };
 
+  std::ostream& operator<<(std::ostream& strm, const QRect& r);
+
 } // namespace LinksRouting
 
 #endif /* WINDOW_MONITOR_HPP_ */

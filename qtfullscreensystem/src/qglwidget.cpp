@@ -22,6 +22,7 @@
 #include <QDesktopServices>
 #include <QDesktopWidget>
 #include <QMoveEvent>
+#include <QStaticText>
 
 #include <QGLShader>
 #include <QGLPixelBuffer>
@@ -222,6 +223,8 @@ ShaderPtr loadShader( QString vert, QString frag )
     
     _slot_mouse =
       slot_collector.create<LinksRouting::SlotType::MouseEvent>("/mouse");
+    _slot_popups =
+      slot_collector.create<LinksRouting::SlotType::TextPopup>("/popups");
   }
 
   //----------------------------------------------------------------------------
@@ -450,7 +453,22 @@ ShaderPtr loadShader( QString vert, QString frag )
   {
     std::cout << "paint" << std::endl;
     QPainter painter(this);
+
     painter.drawImage(QPoint(0,0), _image);
+
+    for( auto popup = _slot_popups->_data->popups.begin();
+              popup != _slot_popups->_data->popups.end();
+            ++popup )
+      if( popup->visible )
+        painter.drawText
+        (
+          popup->pos.x,
+          popup->pos.y - popup->size.y - 3,
+          popup->size.x,
+          popup->size.y - 4,
+          Qt::AlignCenter,
+          QString::fromStdString(popup->text)
+        );
   }
 
   //----------------------------------------------------------------------------
@@ -495,13 +513,28 @@ ShaderPtr loadShader( QString vert, QString frag )
   //----------------------------------------------------------------------------
   void GLWidget::mouseMoveEvent(QMouseEvent *event)
   {
-    _slot_mouse->_data->triggerMove(event->x(), event->y());
+    _slot_mouse->_data->triggerMove(event->globalX(), event->globalY());
   }
   
   //----------------------------------------------------------------------------
   void GLWidget::leaveEvent(QEvent *event)
   {
     _slot_mouse->_data->triggerLeave();
+
+    bool change = false;
+    for( auto popup = _slot_popups->_data->popups.begin();
+                  popup != _slot_popups->_data->popups.end();
+                ++popup )
+    {
+      if( popup->visible )
+      {
+        popup->visible = false;
+        change = true;
+      }
+    }
+
+    if( change )
+      _cond_render.wakeAll();
   }
 
   //----------------------------------------------------------------------------

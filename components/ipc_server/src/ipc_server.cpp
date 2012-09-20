@@ -172,8 +172,11 @@ namespace LinksRouting
       slot_subscriber.getSlot<SlotType::ComponentSelection>("/routing");
     _subscribe_user_config =
       slot_subscriber.getSlot<LinksRouting::Config*>("/user-config");
-
     assert(_subscribe_user_config->_data.get());
+    _subscribe_mouse =
+      slot_subscriber.getSlot<LinksRouting::SlotType::MouseEvent>("/mouse");
+    _subscribe_popups =
+      slot_subscriber.getSlot<SlotType::TextPopup>("/popups");
   }
 
   //----------------------------------------------------------------------------
@@ -522,6 +525,103 @@ namespace LinksRouting
   }
 
   //----------------------------------------------------------------------------
+  class CoverWindows
+  {
+    public:
+      CoverWindows( const WindowRegions::const_iterator& begin,
+                    const WindowRegions::const_iterator& end ):
+        _begin(begin),
+        _end(end)
+      {}
+
+      bool hit(const QPoint& point)
+      {
+        for(auto it = _begin; it != _end; ++it)
+          if( it->region.contains(point) )
+            return true;
+        return false;
+      }
+
+      LinkDescription::Node getNearestVisible( const float2& point,
+                                               bool triangle = false )
+      {
+        const QRect& reg = _begin->region;
+
+        float dist[4] = {
+          point.x - reg.left(),
+          reg.right() - point.x,
+          point.y - reg.top(),
+          reg.bottom() - point.y
+        };
+
+        float min_dist = dist[0];
+        int min_index = 0;
+
+        for( size_t i = 1; i < 4; ++i )
+          if( dist[i] < min_dist )
+          {
+            min_dist = dist[i];
+            min_index = i;
+          }
+
+        float2 new_center = point,
+               normal(0,0);
+        int sign = (min_index & 1) ? 1 : -1;
+        min_dist *= sign;
+
+        if( min_index < 2 )
+        {
+          new_center.x += min_dist;
+          normal.x = sign;
+        }
+        else
+        {
+          new_center.y += min_dist;
+          normal.y = sign;
+        }
+
+        LinkDescription::points_t link_points;
+        link_points.push_back(new_center += 12 * normal);
+
+        LinkDescription::points_t points;
+
+        if( triangle )
+        {
+          points.push_back(new_center += 6 * normal.normal());
+          points.push_back(new_center -= 6 * normal.normal() + 12 * normal);
+          points.push_back(new_center -= 6 * normal.normal() - 12 * normal);
+        }
+        else
+        {
+          points.push_back(new_center += 0.5 * normal.normal());
+          points.push_back(new_center -= 9 * normal);
+
+          points.push_back(new_center += 2.5 * normal.normal());
+          points.push_back(new_center += 6   * normal.normal() + 3 * normal);
+          points.push_back(new_center += 1.5 * normal.normal() - 3 * normal);
+          points.push_back(new_center -= 6   * normal.normal() + 3 * normal);
+          points.push_back(new_center -= 9   * normal.normal());
+          points.push_back(new_center -= 6   * normal.normal() - 3 * normal);
+          points.push_back(new_center += 1.5 * normal.normal() + 3 * normal);
+          points.push_back(new_center += 6   * normal.normal() - 3 * normal);
+          points.push_back(new_center += 2.5 * normal.normal());
+
+          points.push_back(new_center += 9 * normal);
+        }
+
+        LinkDescription::Node node(points, link_points);
+        node.set("virtual-covered", true);
+        //node.set("filled", true);
+
+        return node;
+      }
+
+    private:
+      const WindowRegions::const_iterator& _begin,
+                                           _end;
+  };
+
+  //----------------------------------------------------------------------------
   bool IPCServer::updateHedge( const WindowRegions& regions,
                                LinkDescription::HyperEdge* hedge )
   {
@@ -546,6 +646,7 @@ namespace LinksRouting
       }
     );
     QRect region;
+    WindowRegions::const_iterator first_above = regions.end();
     if( client_info != _clients.end() )
     {
       region = client_info->second.region;
@@ -562,6 +663,7 @@ namespace LinksRouting
           }
         );
         region.translate( window_info->region.topLeft() );
+        first_above = window_info + 1;
       }
     }
 
@@ -581,16 +683,27 @@ namespace LinksRouting
     const size_t num_outside_scroll = sizeof(outside_scroll)
                                     / sizeof(outside_scroll[0]);
 
-    std::vector<LinkDescription::nodes_t::iterator> old_outside_nodes;
+//    std::vector<LinkDescription::nodes_t::iterator> old_outside_nodes;
+    _subscribe_mouse->_data->clear();
+    _subscribe_popups->_data->popups.clear();
+
+    for( auto node = hedge->getNodes().begin();
+              node != hedge->getNodes().end();
+            ++node )
+      if( node->get<bool>("virtual-covered", false) )
+        node = hedge->getNodes().erase(node);
+    // TODO check why still sometimes regions don't get removed immediately
 
     for( auto node = hedge->getNodes().begin();
               node != hedge->getNodes().end();
             ++node )
     {
-      if( !node->get<std::string>("virtual-outside").empty() )
+      if(    !node->get<std::string>("virtual-outside").empty()
+          || node->get<bool>("virtual-covered", false) )
       {
         //old_outside_nodes.push_back(node);
         node = hedge->getNodes().erase(node);
+        modified = true;
         continue;
       }
 
@@ -659,7 +772,84 @@ namespace LinksRouting
       node.set("filled", true);
       updateRegion(regions, &node, client_wid);
 
+      QRect reg(points[0].x, points[0].y, 0, 0);
+      const int border = 4;
+      for(size_t j = 1; j < points.size(); ++j)
+      {
+        int x = points[j].x,
+            y = points[j].y;
+
+        if( x - border < reg.left() )
+          reg.setLeft(x - border);
+        if( x + border > reg.right() )
+          reg.setRight(x + border);
+
+        if( y - border < reg.top() )
+          reg.setTop(y - border);
+        else if( y + border > reg.bottom() )
+          reg.setBottom(y + border);
+      }
+
+      {
+        std::string text = std::to_string(out.num_outside);
+        int width = text.length() * 10 + 10;
+
+        SlotType::TextPopup::Popup popup = {
+          text,
+          float2(reg.center().x() - width/2, reg.top() - 20),
+          float2(width, 20),
+          false
+        };
+        size_t index = _subscribe_popups->_data->popups.size();
+        _subscribe_popups->_data->popups.push_back(popup);
+
+        _subscribe_mouse->_data->_move_callbacks.push_back(
+          [&,index,reg](int x, int y)
+          {
+            auto& popup = _subscribe_popups->_data->popups[index];
+            if( reg.contains(x, y) )
+            {
+              if( popup.visible )
+                return;
+
+              popup.visible = true;
+            }
+            else if( !popup.visible )
+              return;
+            else
+              popup.visible = false;
+
+            _cond_data_ready->wakeAll();
+          }
+        );
+      }
+
       hedge->getNodes().push_back( node );
+    }
+
+    for( auto node = hedge->getNodes().begin();
+              node != hedge->getNodes().end();
+            ++node )
+      if( node->get<bool>("virtual-covered", false) )
+        node = hedge->getNodes().erase(node);
+
+    CoverWindows cover_windows(first_above, regions.end());
+
+    // Show regions covered by other windows
+    for( auto node = hedge->getNodes().begin();
+              node != hedge->getNodes().end();
+            ++node )
+    {
+      bool covered = !node->get<bool>("outside", false)
+                  &&  node->get<bool>("hidden", false);
+      node->set("covered", covered);
+
+      if( !covered )
+        continue;
+
+      hedge->getNodes().push_back(
+        cover_windows.getNearestVisible(node->getCenter())
+      );
     }
 
     return modified;
