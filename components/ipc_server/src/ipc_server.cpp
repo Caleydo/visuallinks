@@ -375,6 +375,10 @@ namespace LinksRouting
         LOG_INFO("Received INITIATE: " << id_str);
         uint32_t color_id = 0;
 
+        // TODO keep working for multiple links at the same time
+        _subscribe_mouse->_data->clear();
+        _subscribe_popups->_data->popups.clear();
+
         // Remove eventually existing search for same id
         if( link != _slot_links->_data->end() )
         {
@@ -504,6 +508,9 @@ namespace LinksRouting
   void IPCServer::regionsChanged(const WindowRegions& regions)
   {
     _mutex_slot_links->lock();
+    _subscribe_mouse->_data->clear();
+    _subscribe_popups->_data->popups.clear();
+
     bool need_update = false;
     for( auto link = _slot_links->_data->begin();
          link != _slot_links->_data->end();
@@ -684,8 +691,6 @@ namespace LinksRouting
                                     / sizeof(outside_scroll[0]);
 
 //    std::vector<LinkDescription::nodes_t::iterator> old_outside_nodes;
-    _subscribe_mouse->_data->clear();
-    _subscribe_popups->_data->popups.clear();
 
     for( auto node = hedge->getNodes().begin();
               node != hedge->getNodes().end();
