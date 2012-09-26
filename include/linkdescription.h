@@ -42,10 +42,15 @@ namespace LinkDescription
       template<typename T>
       void set(const std::string& key, const T val)
       {
-        //_props[ key ] = std::to_string(val);
+#if defined(WIN32) || defined(_WIN32)
+        // Use stringstream because visual studio seems do not have the proper
+        // std::to_string overloads.
 		std::stringstream strm;
 		strm << val;
 		_props[ key ] = strm.str();
+#else
+		_props[ key ] = std::to_string(val);
+#endif
       }
 
       void set(const std::string& key, const std::string& val)
