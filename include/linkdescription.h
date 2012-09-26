@@ -42,7 +42,10 @@ namespace LinkDescription
       template<typename T>
       void set(const std::string& key, const T val)
       {
-        _props[ key ] = std::to_string(val);
+        //_props[ key ] = std::to_string(val);
+		std::stringstream strm;
+		strm << val;
+		_props[ key ] = strm.str();
       }
 
       void set(const std::string& key, const std::string& val)

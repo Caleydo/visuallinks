@@ -637,7 +637,7 @@ namespace LinksRouting
       reinterpret_cast<WId>
       (
 #endif
-        hedge->get<WId>("client_wid", 0)
+        hedge->get<unsigned long>("client_wid", 0)
 #ifdef _WIN32
       )
 #endif
@@ -773,7 +773,7 @@ namespace LinksRouting
       points.push_back(out.pos +=  5 * out.normal);
 
       LinkDescription::Node node(points, link_points);
-      node.set("virtual-outside", "side[" + std::to_string(i) + "]");
+      node.set("virtual-outside", "side[" + std::to_string(static_cast<unsigned long long>(i)) + "]");
       node.set("filled", true);
       updateRegion(regions, &node, client_wid);
 
@@ -796,7 +796,7 @@ namespace LinksRouting
       }
 
       {
-        std::string text = std::to_string(out.num_outside);
+        std::string text = std::to_string(static_cast<unsigned long long>(out.num_outside));
         int width = text.length() * 10 + 10;
 
         SlotType::TextPopup::Popup popup = {
