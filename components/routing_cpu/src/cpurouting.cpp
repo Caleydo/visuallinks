@@ -55,7 +55,7 @@ namespace LinksRouting
     LinkDescription::LinkList& links = *_subscribe_links->_data;
     for( auto it = links.begin(); it != links.end(); ++it )
     {
-      route(&it->_link);
+      route(it->_link.get());
 
 //      auto info = _link_infos.find(it->_id);
 //
@@ -77,41 +77,50 @@ namespace LinksRouting
     hedge->setHyperEdgeDescription(fork);
 
     std::vector<LinkDescription::points_t> regions;
-    std::vector<LinkDescription::Node*> nodes;
+    std::vector<LinkDescription::NodePtr> nodes;
 
     // add regions
     for( auto node = hedge->getNodes().begin();
               node != hedge->getNodes().end();
             ++node )
     {
-      if( node->get<bool>("hidden", false) )
+      if( (*node)->get<bool>("hidden", false) )
         continue;
 
       // add children (hyperedges)
-      for( auto child = node->getChildren().begin();
-                child != node->getChildren().end();
+      for( auto child = (*node)->getChildren().begin();
+                child != (*node)->getChildren().end();
               ++child )
       {
         LinkDescription::points_t center(1);
-        center[0] = route(*child);
+        center[0] = route(child->get());
         if( center[0] == float2(0,0) )
           continue;
 
         fork->position += center[0];
         regions.push_back(center);
-        nodes.push_back(&*node);
+        nodes.push_back(*node);
       }
 
-      if( node->getVertices().empty() )
+      if( (*node)->getVertices().empty() )
         continue;
 
-      fork->position += node->getCenter();
-      regions.push_back(node->getLinkPoints());
-      nodes.push_back(&*node);
+      fork->position += (*node)->getCenter();
+      regions.push_back((*node)->getLinkPoints());
+      nodes.push_back(*node);
     }
 
     if( !regions.empty() )
       fork->position /= regions.size();
+
+    fork->position = hedge->getCenter();
+
+    if( hedge->getParent() )
+    {
+      auto p = hedge->getParent()->getParent();
+      if( p )
+        fork->position = 0.5 * (fork->position + p->getCenter());
+    }
 
     //copy routes to hyperedge
     for(size_t i = 0; i < regions.size(); ++i )
@@ -137,7 +146,7 @@ namespace LinksRouting
         // Only add route if at least one other node exists
         fork->outgoing.back().trail.push_back(min_vert);
 
-      fork->outgoing.back().nodes.push_back(*nodes[i]);
+      fork->outgoing.back().nodes.push_back(nodes[i]);
     }
 
     return fork->position;

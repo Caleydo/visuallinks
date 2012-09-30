@@ -329,7 +329,7 @@ for( int i = 0; i < 1; ++i )
       HyperEdgeQueue hedges_open;
       HyperEdgeSet   hedges_done;
 
-      hedges_open.push(&link->_link);
+      hedges_open.push(link->_link.get());
       do
       {
         const LinkDescription::HyperEdge* hedge = hedges_open.front();
@@ -393,19 +393,19 @@ for( int i = 0; i < 1; ++i )
 
     for( auto node = nodes.begin(); node != nodes.end(); ++node )
     {
-      if( node->get<bool>("hidden", false) )
+      if( (*node)->get<bool>("hidden", false) )
         continue;
 
-      for(auto child = node->getChildren().begin();
-               child != node->getChildren().end();
+      for(auto child = (*node)->getChildren().begin();
+               child != (*node)->getChildren().end();
              ++child )
-        hedges_open.push( *child );
+        hedges_open.push( child->get() );
 
-      if( node->getVertices().empty() )
+      if( (*node)->getVertices().empty() )
         continue;
 
-      bool filled = node->get<bool>("filled", false);
-      line_borders_t region = calcLineBorders(node->getVertices(), 3, true);
+      bool filled = (*node)->get<bool>("filled", false);
+      line_borders_t region = calcLineBorders((*node)->getVertices(), 3, true);
       glBegin(filled ? GL_POLYGON : GL_TRIANGLE_STRIP);
       for( auto first = std::begin(region.first),
                 second = std::begin(region.second);

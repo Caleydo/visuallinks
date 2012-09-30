@@ -40,16 +40,16 @@ namespace LinksRouting
                   node != hedge.getNodes().end();
                 ++node )
         {
-          if( node->get<bool>("hidden", false) )
+          if( (*node)->get<bool>("hidden", false) )
             continue;
-          auto found = levelNodeMap.find(&*node);
+          auto found = levelNodeMap.find(node->get());
           if(found != levelNodeMap.end())
             found->second = std::max(found->second,level);
           else
-            levelNodeMap.insert(std::make_pair(&*node, level));
+            levelNodeMap.insert(std::make_pair(node->get(), level));
           //has child hyperedges
-          for( auto it = node->getChildren().begin();
-                    it != node->getChildren().end();
+          for( auto it = (*node)->getChildren().begin();
+                    it != (*node)->getChildren().end();
                   ++it )
             checkLevels(levelNodeMap, levelHyperEdgeMap, *(*it), level + 1);
         }

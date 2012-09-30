@@ -181,7 +181,7 @@ function removeAllRouteData()
 //------------------------------------------------------------------------------
 function reportVisLinks(id, found)
 {
-  if( getPref("replace-route") )
+  if( !found && getPref("replace-route") )
     abortAll();
 
   updateScale();

@@ -517,7 +517,7 @@ namespace LinksRouting
 
       if(    info != _link_infos.end()
           && info->second._stamp == it->_stamp
-          && info->second._revision == it->_link.getRevision() )
+          && info->second._revision == it->_link->getRevision() )
         //TODO: check if screen has changed -> update
         continue;
 
@@ -527,7 +527,7 @@ namespace LinksRouting
                << " queue.");
 
       // --------------------------------------------------------
-      createRoutes(it->_link);
+      createRoutes(*it->_link.get());
 
 #if 0
       {
@@ -988,11 +988,11 @@ namespace LinksRouting
 
       // set as handled
       if( info == _link_infos.end() )
-        _link_infos[it->_id] = LinkInfo(it->_stamp, it->_link.getRevision());
+        _link_infos[it->_id] = LinkInfo(it->_stamp, it->_link->getRevision());
       else
       {
         info->second._stamp = it->_stamp;
-        info->second._revision = it->_link.getRevision();
+        info->second._revision = it->_link->getRevision();
       }
 
       //throw std::runtime_error("Done routing!");
@@ -2643,7 +2643,7 @@ void calcInterBlockRouteDummy(const float* routecost,
               childIt != (*nodeit)->getChildren().end();
               ++childIt)
           {
-            auto found = hyperEdgeMemMap.find(*childIt);
+            auto found = hyperEdgeMemMap.find(childIt->get());
              if(found == hyperEdgeMemMap.end())
               continue;
             thisSources.push_back(found->second);
@@ -2662,7 +2662,7 @@ void calcInterBlockRouteDummy(const float* routecost,
               childIt != (*hyperedgeit)->getNodes().end();
               ++childIt)
           {
-            auto found = nodeMemMap.find(&(*childIt));
+            auto found = nodeMemMap.find(childIt->get());
             if(found == nodeMemMap.end())
               continue;
             thisSources.push_back(found->second);
@@ -2940,9 +2940,9 @@ void calcInterBlockRouteDummy(const float* routecost,
               childIt != (*nodeit)->getChildren().end();
               ++childIt)
             {
-              auto found = hyperEdgeMemMap.find(*childIt);
+              auto found = hyperEdgeMemMap.find(childIt->get());
               if(found != hyperEdgeMemMap.end())
-                needMinSearchChildren.push_back(hyperEdgeMemMap.find(*childIt)->second);
+                needMinSearchChildren.push_back(hyperEdgeMemMap.find(childIt->get())->second);
             }
           }
 
@@ -2958,7 +2958,7 @@ void calcInterBlockRouteDummy(const float* routecost,
               childIt != (*edgeit)->getNodes().end();
               ++childIt)
             {
-              auto found = nodeMemMap.find(&(*childIt));
+              auto found = nodeMemMap.find(childIt->get());
               if(found != nodeMemMap.end())
                 needMinSearchChildren.push_back(found->second);
             }
@@ -3108,7 +3108,7 @@ void calcInterBlockRouteDummy(const float* routecost,
             {
               //TODO: remove this for implementing bundling
               needRouteConstructionInfo.push_back(uint4(found->second[0], found->second[1], 0,0));
-              needRouteConstructionElements.push_back(hyperEdgeMemMap.find(*childIt)->second);
+              needRouteConstructionElements.push_back(hyperEdgeMemMap.find(childIt->get())->second);
               needRouteConstructionEndElements.push_back(int4(-1,-1,-1,-1));
             }
           }
@@ -3128,12 +3128,12 @@ void calcInterBlockRouteDummy(const float* routecost,
             {
               //pushback startnodes
               int4 target;
-              if(!getTargetRect(childIt->getVertices(), target, downsample, _buffer_width, _buffer_height))
+              if(!getTargetRect((*childIt)->getVertices(), target, downsample, _buffer_width, _buffer_height))
                 continue;
               //TODO: remove this for implementing bundling
               needRouteConstructionInfo.push_back(uint4(found->second[0], found->second[1], 0,0));
               needRouteConstructionEndElements.push_back(target);
-              needRouteConstructionElements.push_back(nodeMemMap.find(&(*childIt))->second);
+              needRouteConstructionElements.push_back(nodeMemMap.find(childIt->get())->second);
             }
           }
 
@@ -3361,7 +3361,7 @@ void calcInterBlockRouteDummy(const float* routecost,
                 addTrailFor(fork->incoming.trail, iBRBegin + edgesegmentit->second, downsample, _blockSize);
               ++edge;
               fork->position = fork->incoming.trail.back();
-              hyperEdgeCenters.insert(std::make_pair(*childrenIt, posToId(fork->incoming.trail.back(), downsample)));
+              hyperEdgeCenters.insert(std::make_pair(childrenIt->get(), posToId(fork->incoming.trail.back(), downsample)));
             }
           }
           for( auto needRouteEdgesIt = needRouteConstructionEdges.begin();
@@ -3392,7 +3392,7 @@ void calcInterBlockRouteDummy(const float* routecost,
                 ++edgesegmentit)
                 addTrailFor(segment.trail, iBRBegin + edgesegmentit->second, downsample, _blockSize);
               ++edge;
-              nodePositions.insert(std::make_pair(&(*childrenIt), posToId(segment.trail.back(), downsample)));
+              nodePositions.insert(std::make_pair(childrenIt->get(), posToId(segment.trail.back(), downsample)));
             }
           }
         }

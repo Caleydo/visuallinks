@@ -68,6 +68,7 @@ namespace LinksRouting
       void regionsChanged(const WindowRegions& regions);
       bool updateHedge( const WindowRegions& regions,
                         LinkDescription::HyperEdge* hedge );
+      bool updateCenter(LinkDescription::HyperEdge* hedge);
       bool updateRegion( const WindowRegions& regions,
                          LinkDescription::Node* node,
                          WId client_wid );
@@ -102,7 +103,7 @@ namespace LinksRouting
       slot_t<LinksRouting::SlotType::TextPopup>::type _subscribe_popups;
 
       class JSON;
-      LinkDescription::Node parseRegions(JSON& json, WId client_wid);
+      LinkDescription::NodePtr parseRegions(JSON& json, WId client_wid);
 
       std::string   _debug_regions;
 

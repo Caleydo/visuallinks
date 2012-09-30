@@ -405,8 +405,9 @@ namespace LinksRouting
           )
             ++color_id;
         }
-        LinkDescription::HyperEdge hedge;
-        hedge.addNode( parseRegions(msg, client_wid) );
+        auto hedge = std::make_shared<LinkDescription::HyperEdge>();
+        hedge->addNode( parseRegions(msg, client_wid) );
+        updateCenter(hedge.get());
 
         _slot_links->_data->push_back(
           LinkDescription::LinkDescription
@@ -449,7 +450,8 @@ namespace LinksRouting
 
         LOG_INFO("Received FOUND: " << id_str);
 
-        link->_link.addNode( parseRegions(msg, client_wid) );
+        link->_link->addNode( parseRegions(msg, client_wid) );
+        updateCenter(link->_link.get());
       }
       else if( task == "ABORT" )
       {
@@ -516,7 +518,7 @@ namespace LinksRouting
          link != _slot_links->_data->end();
          ++link )
     {
-      if( updateHedge(regions, &link->_link) )
+      if( updateHedge(regions, link->_link.get()) )
       {
         link->_stamp += 1;
         need_update = true;
@@ -549,8 +551,8 @@ namespace LinksRouting
         return false;
       }
 
-      LinkDescription::Node getNearestVisible( const float2& point,
-                                               bool triangle = false )
+      LinkDescription::NodePtr getNearestVisible( const float2& point,
+                                                  bool triangle = false )
       {
         const QRect& reg = _begin->region;
 
@@ -616,9 +618,9 @@ namespace LinksRouting
           points.push_back(new_center += 9 * normal);
         }
 
-        LinkDescription::Node node(points, link_points);
-        node.set("virtual-covered", true);
-        //node.set("filled", true);
+        auto node = std::make_shared<LinkDescription::Node>(points, link_points);
+        node->set("virtual-covered", true);
+        //node->set("filled", true);
 
         return node;
       }
@@ -695,16 +697,19 @@ namespace LinksRouting
     for( auto node = hedge->getNodes().begin();
               node != hedge->getNodes().end();
             ++node )
-      if( node->get<bool>("virtual-covered", false) )
+      if( (*node)->get<bool>("virtual-covered", false) )
         node = hedge->getNodes().erase(node);
     // TODO check why still sometimes regions don't get removed immediately
+
+    float2 hedge_center;
+    size_t num_visible = 0;
 
     for( auto node = hedge->getNodes().begin();
               node != hedge->getNodes().end();
             ++node )
     {
-      if(    !node->get<std::string>("virtual-outside").empty()
-          || node->get<bool>("virtual-covered", false) )
+      if(    !(*node)->get<std::string>("virtual-outside").empty()
+          || (*node)->get<bool>("virtual-covered", false) )
       {
         //old_outside_nodes.push_back(node);
         node = hedge->getNodes().erase(node);
@@ -712,11 +717,11 @@ namespace LinksRouting
         continue;
       }
 
-      if( node->get<bool>("outside", false) )
+      if( (*node)->get<bool>("outside", false) )
       {
-        node->set("hidden", true);
+        (*node)->set("hidden", true);
 
-        float2 center = node->getCenter();
+        float2 center = (*node)->getCenter();
         if( center != float2(0,0) )
         {
           for( size_t i = 0; i < num_outside_scroll; ++i )
@@ -735,18 +740,25 @@ namespace LinksRouting
         continue;
       }
 
-      for(auto child = node->getChildren().begin();
-               child != node->getChildren().end();
+      for(auto child = (*node)->getChildren().begin();
+               child != (*node)->getChildren().end();
              ++child )
       {
-        if( updateHedge(regions, *child) )
+        if( updateHedge(regions, child->get()) )
           modified = true;
+
+        float2 center = (*child)->getCenter();
+        if( center != float2(0,0) )
+        {
+          hedge_center += center;
+          num_visible += 1;
+        }
       }
 
       if( !client_wid )
         continue;
 
-      if( updateRegion(regions, &*node, client_wid) )
+      if( updateRegion(regions, node->get(), client_wid) )
         modified = true;
     }
 
@@ -772,10 +784,10 @@ namespace LinksRouting
       points.push_back(out.pos -= 16 * out.normal.normal());
       points.push_back(out.pos +=  5 * out.normal);
 
-      LinkDescription::Node node(points, link_points);
-      node.set("virtual-outside", "side[" + std::to_string(static_cast<unsigned long long>(i)) + "]");
-      node.set("filled", true);
-      updateRegion(regions, &node, client_wid);
+      auto node = std::make_shared<LinkDescription::Node>(points, link_points);
+      node->set("virtual-outside", "side[" + std::to_string(static_cast<unsigned long long>(i)) + "]");
+      node->set("filled", true);
+      updateRegion(regions, node.get(), client_wid);
 
       QRect reg(points[0].x, points[0].y, 0, 0);
       const int border = 4;
@@ -835,29 +847,81 @@ namespace LinksRouting
     for( auto node = hedge->getNodes().begin();
               node != hedge->getNodes().end();
             ++node )
-      if( node->get<bool>("virtual-covered", false) )
+      if( (*node)->get<bool>("virtual-covered", false) )
         node = hedge->getNodes().erase(node);
 
-    CoverWindows cover_windows(first_above, regions.end());
+    if( first_above != regions.end() )
+    {
+      CoverWindows cover_windows(first_above, regions.end());
 
-    // Show regions covered by other windows
+      // Show regions covered by other windows
+      for( auto node = hedge->getNodes().begin();
+                node != hedge->getNodes().end();
+              ++node )
+      {
+        bool covered = !(*node)->get<bool>("outside", false)
+                    &&  (*node)->get<bool>("hidden", false);
+        (*node)->set("covered", covered);
+
+        if( !covered )
+          continue;
+
+        hedge->getNodes().push_back(
+          cover_windows.getNearestVisible((*node)->getCenter())
+        );
+      }
+    }
+
+    for( auto node = hedge->getNodes().begin();
+              node != hedge->getNodes().end();
+            ++node )
+      if( !(*node)->get<bool>("hidden") )
+      {
+        float2 center = (*node)->getCenter();
+        if( center != float2(0,0) )
+        {
+          hedge_center += center;
+          num_visible += 1;
+        }
+      }
+
+    if( num_visible > 0 )
+      hedge_center /= num_visible;
+
+    hedge->setCenter(hedge_center);
+
+    return modified;
+  }
+
+  //----------------------------------------------------------------------------
+  bool IPCServer::updateCenter(LinkDescription::HyperEdge* hedge)
+  {
+    float2 hedge_center;
+    size_t num_visible = 0;
+
     for( auto node = hedge->getNodes().begin();
               node != hedge->getNodes().end();
             ++node )
     {
-      bool covered = !node->get<bool>("outside", false)
-                  &&  node->get<bool>("hidden", false);
-      node->set("covered", covered);
-
-      if( !covered )
-        continue;
-
-      hedge->getNodes().push_back(
-        cover_windows.getNearestVisible(node->getCenter())
-      );
+      for(auto child = (*node)->getChildren().begin();
+               child != (*node)->getChildren().end();
+             ++child )
+      {
+        float2 center = (*child)->getCenter();
+        if( center != float2(0,0) )
+        {
+          hedge_center += center;
+          num_visible += 1;
+        }
+      }
     }
 
-    return modified;
+    if( !num_visible )
+      return false;
+
+    hedge->setCenter(hedge_center / num_visible);
+
+    return true;
   }
 
   //----------------------------------------------------------------------------
@@ -898,8 +962,8 @@ namespace LinksRouting
   }
 
   //----------------------------------------------------------------------------
-  LinkDescription::Node IPCServer::parseRegions( IPCServer::JSON& json,
-                                                 WId client_wid )
+  LinkDescription::NodePtr IPCServer::parseRegions( IPCServer::JSON& json,
+                                                    WId client_wid )
   {
     std::cout << "Parse regions (" << client_wid << ")" << std::endl;
 
@@ -907,7 +971,7 @@ namespace LinksRouting
     LinkDescription::nodes_t nodes;
 
     if( !json.isSet("regions") )
-      return LinkDescription::Node();
+      return LinkDescription::NodePtr();
 
     QVariantList regions = json.getValue<QVariantList>("regions");
     for(auto region = regions.begin(); region != regions.end(); ++region)
@@ -946,10 +1010,11 @@ namespace LinksRouting
       if( points.empty() )
         continue;
 
-      nodes.push_back( LinkDescription::Node(points, props) );
+      nodes.push_back( std::make_shared<LinkDescription::Node>(points, props) );
     }
 
-    LinkDescription::HyperEdge *hedge = new LinkDescription::HyperEdge(nodes);
+    LinkDescription::HyperEdgePtr hedge =
+      std::make_shared<LinkDescription::HyperEdge>(nodes);
     hedge->set("client_wid", std::to_string(
 #ifdef _WIN32
         reinterpret_cast<unsigned long long>(client_wid)
@@ -957,9 +1022,9 @@ namespace LinksRouting
         client_wid
 #endif
     ));
-    updateHedge(windows, hedge);
+    updateHedge(windows, hedge.get());
 
-    return LinkDescription::Node(hedge);
+    return std::make_shared<LinkDescription::Node>(hedge);
   }
 
   //----------------------------------------------------------------------------
