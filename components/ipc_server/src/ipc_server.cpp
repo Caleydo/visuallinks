@@ -406,7 +406,7 @@ namespace LinksRouting
             ++color_id;
         }
         auto hedge = std::make_shared<LinkDescription::HyperEdge>();
-        hedge->addNode( parseRegions(msg, client_wid) );
+        hedge->addNode( parseRegions(msg, client_info) );
         updateCenter(hedge.get());
 
         _slot_links->_data->push_back(
@@ -450,7 +450,7 @@ namespace LinksRouting
 
         LOG_INFO("Received FOUND: " << id_str);
 
-        link->_link->addNode( parseRegions(msg, client_wid) );
+        link->_link->addNode( parseRegions(msg, client_info) );
         updateCenter(link->_link.get());
       }
       else if( task == "ABORT" )
@@ -554,7 +554,14 @@ namespace LinksRouting
       LinkDescription::NodePtr getNearestVisible( const float2& point,
                                                   bool triangle = false )
       {
-        const QRect& reg = _begin->region;
+        QPoint p(point.x, point.y);
+        QRect reg = _begin->region;
+        for(auto it = _begin; it != _end; ++it)
+          if( it->region.contains(p) )
+          {
+            reg = it->region;
+            break;
+          }
 
         float dist[4] = {
           point.x - reg.left(),
@@ -963,15 +970,36 @@ namespace LinksRouting
 
   //----------------------------------------------------------------------------
   LinkDescription::NodePtr IPCServer::parseRegions( IPCServer::JSON& json,
-                                                    WId client_wid )
+                                                    const ClientInfo& client_info )
   {
-    std::cout << "Parse regions (" << client_wid << ")" << std::endl;
-
-    const WindowRegions windows = _window_monitor.getWindows();
-    LinkDescription::nodes_t nodes;
+    std::cout << "Parse regions (" << client_info.wid << ")" << std::endl;
 
     if( !json.isSet("regions") )
       return LinkDescription::NodePtr();
+
+    const WindowRegions windows = _window_monitor.getWindows();
+    auto window_info = std::find_if
+    (
+      windows.begin(),
+      windows.end(),
+      [&client_info](const WindowInfo& winfo)
+      {
+        return winfo.id == client_info.wid;
+      }
+    );
+    float2 top_left( client_info.region.left(),
+                     client_info.region.top() );
+    if( window_info == windows.end() )
+    {
+      LOG_WARN("No such window!");
+    }
+    else
+    {
+      top_left.x += window_info->region.left();
+      top_left.y += window_info->region.top();
+    }
+
+    LinkDescription::nodes_t nodes;
 
     QVariantList regions = json.getValue<QVariantList>("regions");
     for(auto region = regions.begin(); region != regions.end(); ++region)
@@ -1010,6 +1038,13 @@ namespace LinksRouting
       if( points.empty() )
         continue;
 
+      auto rel = props.find("rel");
+      if( rel != props.end() && rel->second == "true" )
+      {
+        for(size_t i = 0; i < points.size(); ++i)
+          points[i] += top_left;
+      }
+
       nodes.push_back( std::make_shared<LinkDescription::Node>(points, props) );
     }
 
@@ -1019,7 +1054,7 @@ namespace LinksRouting
 #ifdef _WIN32
         reinterpret_cast<unsigned long long>(client_wid)
 #else
-        client_wid
+        client_info.wid
 #endif
     ));
     updateHedge(windows, hedge.get());

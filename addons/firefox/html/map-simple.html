@@ -1,0 +1,287 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <title>Google Maps JavaScript API v3 Example: Map Simple</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no"/>
+    <meta charset="utf-8"/>
+    <style>
+      html, body, #map_canvas {
+        margin: 0;
+        padding: 0;
+        height: 100%;
+      }
+
+      .button, .dropdown {
+        cursor: pointer;
+        -webkit-user-select: none;
+        -moz-user-select: none;
+        position: relative;
+        font-family: Arial, sans-serif;
+        font-size: 13px;
+        box-shadow: rgba(0, 0, 0, 0.4) 0 2px 4px;
+        -moz-box-shadow: rgba(0, 0, 0, 0.4) 0 2px 4px;
+        -webkit-box-shadow: rgba(0, 0, 0, 0.4) 0 2px 4px;
+        color: #000;
+        border: 1px solid #717B87;
+        background-color: #fff;
+      }
+      
+      .button {        
+        margin: 5px;
+        padding: 1px 6px;
+        text-align: center;
+      }
+      
+      .error {
+        background-color: #fbb;
+      }
+      
+      .active {
+        background-color: #cfc;
+      }
+      
+      .dropdown {
+        padding: 0;
+        text-align: left;
+      }
+      
+      .context_menu_item, .route-to-header {
+        padding: 0.3em 1em;
+      }
+      
+      .route-to-header {
+        background-color: #bfb;
+        color: #333;
+      }
+
+      .route-to {
+        border-left: 0.3em solid #bfb;
+      }
+      
+      .context_menu_item:hover {
+        background-color: #e6e6e6;
+      }
+      
+      .context_menu_separator {
+        border-top: 1px solid #717B87;
+      }
+
+    </style>
+    <script src="https://maps.googleapis.com/maps/api/js?sensor=false"></script>
+    <script type="text/javascript" src="ContextMenu.js"></script>
+    <script type="text/javascript" src="../src/content/VislinkClient.js"></script>
+    <script>
+      /**
+       * Some helpers and convenience functions
+       */
+      Array.prototype.contains = function(obj)
+      {
+        return this.indexOf(obj) > -1;
+      };
+      
+      Array.prototype.containsOneOf = function(obj)
+      {
+        for(var i in obj)
+          if( this.contains(obj[i]) )
+            return true;
+        return false;
+      };
+      
+      function $(id)
+      {
+        return document.getElementById(id);
+      }
+      
+      function createRegionForPoint(pos)
+      {
+        var x = pos.x - 10;
+        var y = pos.y - 10;
+        var w = 20;
+        var h = 20;
+          
+        return [ [x,     y],
+                  [x + w, y],
+                  [x + w, y + h],
+                  [x,     y + h],
+                  {rel: true} ];
+      }
+
+      // -----------------------------------------------------------------------
+      var geocoder;
+      var map;
+      var client;
+      
+      var max_menu_entries = 5;
+      var route_menu_entries = [];
+
+      var graz = new google.maps.LatLng(47.07, 15.45);
+      
+      /**
+       * The VisLinksControl adds a control to the map that allows
+       * connecting to the vislinks server and shows its status.
+       */
+      function VisLinksControl(map)
+      {
+        var box = document.createElement('div');
+        box.className = 'button';
+        box.index = 1;
+        box.innerHTML = "VisLinks";
+
+        google.maps.event.addDomListener(box, 'click', function(e){
+          client.connect({pos: [e.screenX, e.screenY]});
+        });
+        
+        return box;
+      }
+      
+      /**
+       * Context menu
+       */
+      function initContextMenu(map)
+      {
+        var menuItems = [
+          { className:'route-to-header',
+            eventName:'route-to-header',
+            label:'Create Route to:' }
+        ];
+
+        for(var i = 0; i < max_menu_entries; i += 1)
+        {
+          menuItems.push({
+            className:'context_menu_item route-to',
+            eventName:'route-to',
+            id:'route-to-' + i,
+            label:'-',
+            value: i
+          });
+        }
+
+        menuItems.push(
+          { /* separator */ },
+          { className:'context_menu_item',
+            eventName:'zoom_in_click',
+            label:'Zoom in' },
+          { className: 'context_menu_item',
+            eventName: 'zoom_out_click',
+            label:'Zoom out' },
+          { className:'context_menu_item',
+            eventName:'center_map_click',
+            label:'Center map here' }
+        );
+
+        var contextMenu = new ContextMenu(map, {
+          classNames: {
+            menu: 'dropdown',
+            menuSeparator: 'context_menu_separator'
+          },
+          menuItems: menuItems
+        });
+
+        // handle menu item clicked
+        google.maps.event.addListener(map, 'rightclick', function(mouseEvent)
+        {
+          route_menu_entries = [];
+          contextMenu.show(mouseEvent.latLng);
+
+          // remove old entries
+          for(var i = 0; i < max_menu_entries; ++i)
+            $('route-to-' + i).style.display = 'none';
+
+          // Ask geocoder for names of nearby locations
+          geocoder.geocode({'latLng': mouseEvent.latLng}, function(results, status)
+          {
+            if( status == google.maps.GeocoderStatus.OK )
+            {
+              var count = 0;
+              for(var i = 0; i < results.length; ++i)
+              {
+                if( results[i].types.containsOneOf(["street_address",
+                                                    "postal_code",
+                                                    "postal_town"]) )
+                  continue;
+
+                var name = results[i].address_components[0].long_name;
+                if( route_menu_entries.contains(name) )
+                  continue;
+                  
+                // results[i].geometry.viewport) TODO determine region based on suggested viewport
+
+                route_menu_entries.push(name);
+                var el = $('route-to-' + count);
+                el.style.display = '';
+                el.innerHTML = name;
+
+                if( (count += 1) >= max_menu_entries )
+                  break;
+              }
+            }
+            else
+            {
+              alert("Geocoder failed due to: " + status);
+            }
+          });
+        });
+
+        google.maps.event.addListener(contextMenu, 'menu_item_selected', function(latLng, eventName, value){
+          // latLng is the position of the ContextMenu
+          // eventName is the eventName defined for the clicked ContextMenuItem in the ContextMenuOptions
+          switch(eventName)
+          {
+            case 'zoom_in_click':
+              map.setZoom(map.getZoom()+1);
+              break;
+            case 'zoom_out_click':
+              map.setZoom(map.getZoom()-1);
+              break;
+            case 'center_map_click':
+              map.panTo(latLng); break;
+            case 'route-to':
+              client.replaceLink(
+                route_menu_entries[value],
+                [ createRegionForPoint(
+                    this.getProjection().fromLatLngToContainerPixel(latLng)
+                  )
+                ]
+              );
+          }
+        });
+      }
+      
+      function initialize()
+      {
+        geocoder = new google.maps.Geocoder();
+
+        map = new google.maps.Map( $('map_canvas'),{
+          zoom: 8,
+          center: graz,
+          mapTypeId: google.maps.MapTypeId.ROADMAP,
+          mapTypeControlOptions: {
+            style: google.maps.MapTypeControlStyle.DROPDOWN_MENU
+          },
+        });
+        
+        var vislink_button = new VisLinksControl(map)
+        map.controls[google.maps.ControlPosition.TOP_RIGHT].push(
+          vislink_button
+        );
+
+        initContextMenu(map);
+
+        client = new VislinkClient("Google Maps");
+        client.onstatus = function(status) vislink_button.className = 'button ' + status;
+        client.getRegion = function()
+          [
+            Math.round(window.mozInnerScreenX - window.screenX),
+            Math.round(window.mozInnerScreenY - window.screenY),
+            Math.round(window.innerWidth),
+            Math.round(window.innerHeight)
+          ];
+      }
+
+      google.maps.event.addDomListener(window, 'load', initialize);
+    </script>
+  </head>
+  <body>
+    <div id="map_canvas"></div>
+  </body>
+</html>

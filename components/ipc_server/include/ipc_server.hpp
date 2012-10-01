@@ -103,7 +103,8 @@ namespace LinksRouting
       slot_t<LinksRouting::SlotType::TextPopup>::type _subscribe_popups;
 
       class JSON;
-      LinkDescription::NodePtr parseRegions(JSON& json, WId client_wid);
+      LinkDescription::NodePtr parseRegions( JSON& json,
+                                             const ClientInfo& client_info );
 
       std::string   _debug_regions;
 
