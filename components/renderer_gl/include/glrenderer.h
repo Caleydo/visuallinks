@@ -42,31 +42,6 @@ namespace LinksRouting
 
     protected:
 
-      bool  _enabled;
-
-      struct Color
-      {
-        float r, g, b;
-
-        Color(){};
-        Color(int r, int g, int b):
-          r(r/256.f),
-          g(g/256.f),
-          b(b/256.f)
-        {}
-        operator const float*()
-        {
-          return &r;
-        }
-        Color operator*(float rhs) const
-        {
-          Color ret;
-          ret.r = rhs * r;
-          ret.g = rhs * g;
-          ret.b = rhs * b;
-          return ret;
-        }
-      };
       std::vector<Color> _colors;
 
       /** Subscribe to the routed links */

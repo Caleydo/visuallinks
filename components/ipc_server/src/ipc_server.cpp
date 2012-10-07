@@ -23,6 +23,23 @@ namespace LinksRouting
 
   WId windowAt( const WindowRegions& regions,
                 const QPoint& pos );
+  std::string to_string(const QRect& r)
+  {
+    std::stringstream strm;
+    strm << r.left() << '|' << r.top() << '|' << r.right() << '|' << r.bottom();
+    return strm.str();
+  }
+
+  std::string WIdtoStr(WId wid)
+  {
+    return std::to_string(
+#ifdef _WIN32
+      reinterpret_cast<unsigned long long>(wid)
+#else
+      wid
+#endif
+    );
+  }
 
   /**
    * Helper for handling json messages
@@ -543,6 +560,11 @@ namespace LinksRouting
         _end(end)
       {}
 
+      bool valid() const
+      {
+        return _begin != _end;
+      }
+
       bool hit(const QPoint& point)
       {
         for(auto it = _begin; it != _end; ++it)
@@ -551,18 +573,19 @@ namespace LinksRouting
         return false;
       }
 
+      QRect getCoverRegion(const float2& point)
+      {
+        QPoint p(point.x, point.y);
+        for(auto it = _begin; it != _end; ++it)
+          if( it->region.contains(p) )
+            return it->region;
+        return QRect();
+      }
+
       LinkDescription::NodePtr getNearestVisible( const float2& point,
                                                   bool triangle = false )
       {
-        QPoint p(point.x, point.y);
-        QRect reg = _begin->region;
-        for(auto it = _begin; it != _end; ++it)
-          if( it->region.contains(p) )
-          {
-            reg = it->region;
-            break;
-          }
-
+        const QRect reg = getCoverRegion(point);
         float dist[4] = {
           point.x - reg.left(),
           reg.right() - point.x,
@@ -596,51 +619,123 @@ namespace LinksRouting
           normal.y = sign;
         }
 
-        LinkDescription::points_t link_points;
-        link_points.push_back(new_center += 12 * normal);
+        return buildIcon(new_center, normal, triangle);
+      }
+
+      /**
+       *
+       * @param p_out       Outside point
+       * @param p_cov       Covered point
+       * @param triangle
+       * @return
+       */
+      LinkDescription::NodePtr getVisibleIntersect( const float2& p_out,
+                                                    const float2& p_cov,
+                                                    bool triangle = false )
+      {
+        const QRect reg = getCoverRegion(p_cov);
+        float2 dir = (p_out - p_cov).normalize();
+
+        float2 normal;
+        float fac = -1;
+
+        if( std::fabs(dir.x) > 0.01 )
+        {
+          // if not too close to vertical try intersecting left or right
+          if( dir.x > 0 )
+          {
+            fac = (reg.right() - p_cov.x) / dir.x;
+            normal.x = 1;
+          }
+          else
+          {
+            fac = (reg.left() - p_cov.x) / dir.x;
+            normal.x = -1;
+          }
+
+          // check if vertically inside the region
+          float y = p_cov.y + fac * dir.y;
+          if( y < reg.top() || y > reg.bottom() )
+            fac = -1;
+        }
+
+        if( fac < 0 )
+        {
+          // nearly vertical or horizontal hit outside of vertical region
+          // boundaries -> intersect with top or bottom
+          normal.x = 0;
+
+          if( dir.y < 0 )
+          {
+            fac = (reg.top() - p_cov.y) / dir.y;
+            normal.y = -1;
+          }
+          else
+          {
+            fac = (reg.bottom() - p_cov.y) / dir.y;
+            normal.y = 1;
+          }
+        }
+
+        float2 new_center = p_cov + fac * dir;
+        return buildIcon(new_center, normal, triangle);
+      }
+
+    protected:
+      const WindowRegions::const_iterator& _begin,
+                                           _end;
+
+      LinkDescription::NodePtr buildIcon( float2 center,
+                                          const float2& normal,
+                                          bool triangle ) const
+      {
+        LinkDescription::points_t link_points, link_points_children;
+        link_points_children.push_back(center);
+        link_points.push_back(center += 12 * normal);
 
         LinkDescription::points_t points;
 
         if( triangle )
         {
-          points.push_back(new_center += 6 * normal.normal());
-          points.push_back(new_center -= 6 * normal.normal() + 12 * normal);
-          points.push_back(new_center -= 6 * normal.normal() - 12 * normal);
+          points.push_back(center += 6 * normal.normal());
+          points.push_back(center -= 6 * normal.normal() + 12 * normal);
+          points.push_back(center -= 6 * normal.normal() - 12 * normal);
         }
         else
         {
-          points.push_back(new_center += 0.5 * normal.normal());
-          points.push_back(new_center -= 9 * normal);
+          points.push_back(center += 0.5 * normal.normal());
+          points.push_back(center -= 9 * normal);
 
-          points.push_back(new_center += 2.5 * normal.normal());
-          points.push_back(new_center += 6   * normal.normal() + 3 * normal);
-          points.push_back(new_center += 1.5 * normal.normal() - 3 * normal);
-          points.push_back(new_center -= 6   * normal.normal() + 3 * normal);
-          points.push_back(new_center -= 9   * normal.normal());
-          points.push_back(new_center -= 6   * normal.normal() - 3 * normal);
-          points.push_back(new_center += 1.5 * normal.normal() + 3 * normal);
-          points.push_back(new_center += 6   * normal.normal() - 3 * normal);
-          points.push_back(new_center += 2.5 * normal.normal());
+          points.push_back(center += 2.5 * normal.normal());
+          points.push_back(center += 6   * normal.normal() + 3 * normal);
+          points.push_back(center += 1.5 * normal.normal() - 3 * normal);
+          points.push_back(center -= 6   * normal.normal() + 3 * normal);
+          points.push_back(center -= 9   * normal.normal());
+          points.push_back(center -= 6   * normal.normal() - 3 * normal);
+          points.push_back(center += 1.5 * normal.normal() + 3 * normal);
+          points.push_back(center += 6   * normal.normal() - 3 * normal);
+          points.push_back(center += 2.5 * normal.normal());
 
-          points.push_back(new_center += 9 * normal);
+          points.push_back(center += 9 * normal);
         }
 
-        auto node = std::make_shared<LinkDescription::Node>(points, link_points);
+        auto node = std::make_shared<LinkDescription::Node>(
+          points,
+          link_points,
+          link_points_children
+        );
         node->set("virtual-covered", true);
         //node->set("filled", true);
 
         return node;
       }
-
-    private:
-      const WindowRegions::const_iterator& _begin,
-                                           _end;
   };
 
   //----------------------------------------------------------------------------
   bool IPCServer::updateHedge( const WindowRegions& regions,
                                LinkDescription::HyperEdge* hedge )
   {
+    hedge->resetNodeParents();
     WId client_wid =
 #ifdef _WIN32
       reinterpret_cast<WId>
@@ -775,8 +870,6 @@ namespace LinksRouting
       if( !out.num_outside )
         continue;
 
-      std::cout << i << ": " << out.num_outside << std::endl;
-
       if( out.normal.x == 0 )
         out.pos.x /= out.num_outside;
       else
@@ -848,19 +941,19 @@ namespace LinksRouting
         );
       }
 
-      hedge->getNodes().push_back( node );
+      hedge->addNode( node );
     }
 
+    LinkDescription::nodes_t covered_nodes;
     for( auto node = hedge->getNodes().begin();
               node != hedge->getNodes().end();
             ++node )
       if( (*node)->get<bool>("virtual-covered", false) )
         node = hedge->getNodes().erase(node);
 
-    if( first_above != regions.end() )
+    CoverWindows cover_windows(first_above, regions.end());
+    if( cover_windows.valid() )
     {
-      CoverWindows cover_windows(first_above, regions.end());
-
       // Show regions covered by other windows
       for( auto node = hedge->getNodes().begin();
                 node != hedge->getNodes().end();
@@ -873,16 +966,24 @@ namespace LinksRouting
         if( !covered )
           continue;
 
-        hedge->getNodes().push_back(
-          cover_windows.getNearestVisible((*node)->getCenter())
+        (*node)->set(
+          "covered-region",
+          to_string( cover_windows.getCoverRegion((*node)->getCenter()) )
         );
+
+        covered_nodes.push_back(*node);
+
+//        hedge->getNodes().push_back(
+//          cover_windows.getNearestVisible((*node)->getCenter())
+//        );
       }
     }
 
     for( auto node = hedge->getNodes().begin();
               node != hedge->getNodes().end();
             ++node )
-      if( !(*node)->get<bool>("hidden") )
+      if(    !(*node)->get<bool>("hidden", false)
+          /*||  (*node)->get<bool>("covered", false) */)
       {
         float2 center = (*node)->getCenter();
         if( center != float2(0,0) )
@@ -896,6 +997,25 @@ namespace LinksRouting
       hedge_center /= num_visible;
 
     hedge->setCenter(hedge_center);
+
+    if( cover_windows.valid() )
+    {
+      for( auto node = covered_nodes.begin();
+                node != covered_nodes.end();
+              ++node )
+      {
+        LinkDescription::NodePtr new_node =
+          cover_windows.getVisibleIntersect(hedge_center, (*node)->getCenter());
+        auto new_hedge = std::make_shared<LinkDescription::HyperEdge>();
+        new_hedge->set("client_wid", WIdtoStr(client_wid));
+        new_hedge->set("no-parent-route", true);
+        new_hedge->set("covered", true);
+        new_hedge->addNode(*node);
+        new_hedge->setCenter(new_node->getLinkPointsChildren().front());
+        new_node->getChildren().push_back(new_hedge);
+        hedge->addNode(new_node);
+      }
+    }
 
     return modified;
   }
@@ -1050,13 +1170,7 @@ namespace LinksRouting
 
     LinkDescription::HyperEdgePtr hedge =
       std::make_shared<LinkDescription::HyperEdge>(nodes);
-    hedge->set("client_wid", std::to_string(
-#ifdef _WIN32
-        reinterpret_cast<unsigned long long>(client_wid)
-#else
-        client_info.wid
-#endif
-    ));
+    hedge->set("client_wid", WIdtoStr(client_info.wid));
     updateHedge(windows, hedge.get());
 
     return std::make_shared<LinkDescription::Node>(hedge);

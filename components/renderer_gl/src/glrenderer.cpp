@@ -136,7 +136,7 @@ namespace LinksRouting
   GlRenderer::GlRenderer():
     Configurable("GLRenderer")
   {
-    registerArg("enabled", _enabled = true);
+
   }
 
   //----------------------------------------------------------------------------
@@ -202,9 +202,6 @@ namespace LinksRouting
   //----------------------------------------------------------------------------
   void GlRenderer::process(unsigned int type)
   {
-    if( !_enabled )
-      return;
-
     assert( _blur_x_shader );
     assert( _blur_y_shader );
 
@@ -309,7 +306,9 @@ for( int i = 0; i < 1; ++i )
     color[1] = strtol(end,         &end, 10);
     color[2] = strtol(end,         0,    10);
 
-    _colors.push_back(Color(color[0], color[1], color[2]));
+    _colors.push_back( Color( color[0] / 256.f,
+                              color[1] / 256.f,
+                              color[2] / 256.f ) );
     std::cout << "GlRenderer: Added color (" << val << ")" << std::endl;
 
     return true;
@@ -319,12 +318,13 @@ for( int i = 0; i < 1; ++i )
   bool GlRenderer::renderLinks(const LinkDescription::LinkList& links)
   {
     bool rendered_anything = false;
-    glColor3f(1.0, 0.2, 0.2);
+    Color color(1.0, 0.2, 0.2);
 
     for(auto link = links.begin(); link != links.end(); ++link)
     {
       if( !_colors.empty() )
-        glColor3fv(_colors[ link->_color_id % _colors.size() ]);
+        color = _colors[ link->_color_id % _colors.size() ];
+      const Color color_covered = 0.4f * color;
 
       HyperEdgeQueue hedges_open;
       HyperEdgeSet   hedges_done;
@@ -337,6 +337,11 @@ for( int i = 0; i < 1; ++i )
 
         if( hedges_done.find(hedge) != hedges_done.end() )
           continue;
+
+        if( hedge->get<bool>("covered") )
+          glColor4fv(color_covered);
+        else
+          glColor4fv(color);
 
         auto fork = hedge->getHyperEdgeDescription();
         if( !fork )
@@ -393,7 +398,8 @@ for( int i = 0; i < 1; ++i )
 
     for( auto node = nodes.begin(); node != nodes.end(); ++node )
     {
-      if( (*node)->get<bool>("hidden", false) )
+      if(     (*node)->get<bool>("hidden", false)
+          && !(*node)->get<bool>("covered", false) )
         continue;
 
       for(auto child = (*node)->getChildren().begin();

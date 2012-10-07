@@ -41,28 +41,28 @@ namespace LinkDescription
        * @param val     New value
        */
       template<typename T>
-      void set(const std::string& key, const T val)
+      void set(const std::string& key, const T& val)
       {
-#if defined(WIN32) || defined(_WIN32)
+//#if defined(WIN32) || defined(_WIN32)
         // Use stringstream because visual studio seems do not have the proper
         // std::to_string overloads.
 		std::stringstream strm;
 		strm << val;
 		_props[ key ] = strm.str();
-#else
-		_props[ key ] = std::to_string(val);
-#endif
+//#else
+//		_props[ key ] = std::to_string(val);
+//#endif
       }
 
-      void set(const std::string& key, const std::string& val)
-      {
-        _props[ key ] = val;
-      }
-
-      void set(const std::string& key, const char* val)
-      {
-        _props[ key ] = val;
-      }
+//      void set(const std::string& key, const std::string& val)
+//      {
+//        _props[ key ] = val;
+//      }
+//
+//      void set(const std::string& key, const char* val)
+//      {
+//        _props[ key ] = val;
+//      }
 
       /**
        * Get a property
@@ -98,9 +98,13 @@ namespace LinkDescription
       Node();
       explicit Node( const points_t& points,
                      const props_t& props = props_t() );
-      explicit Node( const points_t& points,
+      Node( const points_t& points,
                      const points_t& link_points,
                      const props_t& props = props_t() );
+      Node( const points_t& points,
+            const points_t& link_points,
+            const points_t& link_points_children,
+            const props_t& props = props_t() );
       explicit Node(HyperEdgePtr hedge);
 
       points_t& getVertices();
@@ -108,6 +112,9 @@ namespace LinkDescription
 
       points_t& getLinkPoints();
       const points_t& getLinkPoints() const;
+
+      points_t& getLinkPointsChildren();
+      const points_t& getLinkPointsChildren() const;
 
       float2 getCenter();
 
@@ -117,12 +124,14 @@ namespace LinkDescription
       const hedges_t& getChildren() const;
       hedges_t& getChildren();
 
-      inline void addChildren(const hedges_t& edges);
+      void addChildren(const hedges_t& edges);
+      void addChild(const HyperEdgePtr& hedge);
 
     private:
 
       points_t _points;
       points_t _link_points;
+      points_t _link_points_children;
       HyperEdge* _parent;
       hedges_t _children;
   };
@@ -150,6 +159,7 @@ namespace LinkDescription
 
       void addNodes(const nodes_t& nodes);
       void addNode(const NodePtr& node);
+      void resetNodeParents();
 
       const Node* getParent() const;
 

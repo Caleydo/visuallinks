@@ -42,6 +42,20 @@ namespace LinkDescription
   }
 
   //----------------------------------------------------------------------------
+  Node::Node( const points_t& points,
+              const points_t& link_points,
+              const points_t& link_points_children,
+              const props_t& props ):
+    PropertyElement( props ),
+    _points( points ),
+    _link_points( link_points ),
+    _link_points_children( link_points_children ),
+    _parent(0)
+  {
+
+  }
+
+  //----------------------------------------------------------------------------
   Node::Node(HyperEdgePtr hedge):
     _parent(0)
   {
@@ -71,6 +85,19 @@ namespace LinkDescription
   const points_t& Node::getLinkPoints() const
   {
     return getLinkPoints();
+  }
+
+  //----------------------------------------------------------------------------
+  points_t& Node::getLinkPointsChildren()
+  {
+    return _link_points_children.empty() ? getLinkPoints()
+                                         : _link_points_children;
+  }
+
+  //----------------------------------------------------------------------------
+  const points_t& Node::getLinkPointsChildren() const
+  {
+    return getLinkPointsChildren();
   }
 
   //----------------------------------------------------------------------------
@@ -117,6 +144,13 @@ namespace LinkDescription
     for(auto it = edges.begin(); it != edges.end(); ++it)
       (*it)->_parent = this;
     _children.insert(_children.end(), edges.begin(), edges.end());
+  }
+
+  //----------------------------------------------------------------------------
+  void Node::addChild(const HyperEdgePtr& hedge)
+  {
+    hedge->_parent = this;
+    _children.push_back(hedge);
   }
 
   //----------------------------------------------------------------------------
@@ -189,6 +223,13 @@ namespace LinkDescription
   {
     _nodes.push_back(node);
     _nodes.back()->_parent = this;
+  }
+
+  //----------------------------------------------------------------------------
+  void HyperEdge::resetNodeParents()
+  {
+    for(auto it = _nodes.begin(); it != _nodes.end(); ++it)
+      (*it)->_parent = this;
   }
 
   //----------------------------------------------------------------------------

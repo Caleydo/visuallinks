@@ -84,7 +84,9 @@ namespace LinksRouting
               node != hedge->getNodes().end();
             ++node )
     {
-      if( (*node)->get<bool>("hidden", false) )
+      if( (    (*node)->get<bool>("hidden", false)
+           && !(*node)->get<bool>("covered", false)
+          ) || (*node)->getParent() != hedge )
         continue;
 
       // add children (hyperedges)
@@ -94,7 +96,7 @@ namespace LinksRouting
       {
         LinkDescription::points_t center(1);
         center[0] = route(child->get());
-        if( center[0] == float2(0,0) )
+        if( center[0] == float2(0,0) || (*child)->get<bool>("no-parent-route") )
           continue;
 
         fork->position += center[0];
@@ -142,7 +144,7 @@ namespace LinksRouting
       fork->outgoing.push_back(LinkDescription::HyperEdgeDescriptionSegment());
       //fork->outgoing.back().parent = fork;
 
-      if( regions.size() > 1 )
+      if( regions.size() > 1 || !hedge->getParent() )
         // Only add route if at least one other node exists
         fork->outgoing.back().trail.push_back(min_vert);
 
