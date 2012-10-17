@@ -2,6 +2,7 @@
 #include "float2.hpp"
 #include "log.hpp"
 
+#include <GL/glu.h>
 #include <iostream>
 
 namespace LinksRouting
@@ -134,7 +135,8 @@ namespace LinksRouting
 
   //----------------------------------------------------------------------------
   GlRenderer::GlRenderer():
-    Configurable("GLRenderer")
+    Configurable("GLRenderer"),
+    _tex_img_preview(0)
   {
 
   }
@@ -150,6 +152,10 @@ namespace LinksRouting
   {
     _slot_links = slots.create<SlotType::Image>("/rendered-links");
     _slot_links->_data->type = SlotType::Image::OpenGLTexture;
+    _slot_image = slots.create<SlotType::Image>("/popup-image");
+    _slot_image->_data->type = SlotType::Image::ImageRGBA8;
+    _slot_image->_data->width = 256;
+    _slot_image->_data->height = 384;
   }
 
   //----------------------------------------------------------------------------
@@ -219,39 +225,53 @@ namespace LinksRouting
     {
       rendered_anything = true;
 
-      glColor3f(0.3, 0.3, 0.3);
-      glBegin(GL_QUADS);
+      LinksRouting::SlotType::Image* img = _slot_image->_data.get();
+      if( img->pdata )
+      {
+        std::cout << "load: " << img->width << "x" << img->height << std::endl;
+        if( !_tex_img_preview )
+          glGenTextures(1, &_tex_img_preview);
+        glBindTexture(GL_TEXTURE_2D, _tex_img_preview);
+
+        glTexParameterf( GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR );
+        glTexParameterf( GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR );
+        glTexParameterf( GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP );
+        glTexParameterf( GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP );
+        glPixelStorei(GL_UNPACK_ALIGNMENT, 4);
+
+//        gluBuild2DMipmaps( GL_TEXTURE_2D, GL_RGBA, img->width, img->height,
+//                               GL_RGBA, GL_UNSIGNED_BYTE, img->pdata );
+        glTexImage2D(
+          GL_TEXTURE_2D,
+          0,
+          GL_RGBA,
+          img->width,
+          img->height,
+          0,
+          GL_RGBA,
+          GL_UNSIGNED_BYTE,
+          img->pdata
+        );
+
+        delete[] img->pdata;
+        img->pdata = 0;
+      }
+
       for( auto popup = _subscribe_popups->_data->popups.begin();
                   popup != _subscribe_popups->_data->popups.end();
                 ++popup )
       {
-        if( !popup->visible )
+        if( !popup->region.visible )
           continue;
 
-        glVertex2f(popup->pos.x, popup->pos.y);
-        glVertex2f(popup->pos.x + popup->size.x, popup->pos.y);
-        glVertex2f(popup->pos.x + popup->size.x, popup->pos.y + popup->size.y);
-        glVertex2f(popup->pos.x, popup->pos.y + popup->size.y);
-
+        renderRect(popup->region.region, popup->region.border);
         rendered_anything = true;
-      }
-      glEnd();
 
-      glColor3f(1, 1, 1);
-      glBegin(GL_QUADS);
-      for( auto popup = _subscribe_popups->_data->popups.begin();
-                  popup != _subscribe_popups->_data->popups.end();
-                ++popup )
-      {
-        if( !popup->visible )
-          continue;
-
-        glVertex2f(popup->pos.x + 2,                 popup->pos.y + 2);
-        glVertex2f(popup->pos.x + popup->size.x - 2, popup->pos.y + 2);
-        glVertex2f(popup->pos.x + popup->size.x - 2, popup->pos.y + popup->size.y - 2);
-        glVertex2f(popup->pos.x + 2,                 popup->pos.y + popup->size.y - 2);
+        if( popup->hover_region.visible )
+          renderRect( popup->hover_region.region,
+                      popup->hover_region.border,
+                      _tex_img_preview );
       }
-      glEnd();
     }
     _links_fbo.unbind();
 
@@ -261,36 +281,8 @@ namespace LinksRouting
     glDisable(GL_BLEND);
     glColor4f(1,1,1,1);
 
-    // blur
-    int width = _slot_links->_data->width,
-        height = _slot_links->_data->height;
-for( int i = 0; i < 1; ++i )
-{
-    _links_fbo.swapColorAttachment(1);
-    _links_fbo.bind();
-    _links_fbo.bindTex(0);
-    _blur_x_shader->begin();
-    _blur_x_shader->setUniform1i("inputTex", 0);
-    _blur_x_shader->setUniform1f("scale", 1);
-    _links_fbo.draw(width, height, 0, 0, 0, true, true);
-    _blur_x_shader->end();
-    _links_fbo.unbind();
+    blur(_links_fbo);
 
-    _links_fbo.swapColorAttachment(0);
-    _links_fbo.bind();
-    _links_fbo.bindTex(1);
-    _blur_y_shader->begin();
-    _blur_y_shader->setUniform1i("inputTex", 0);
-    _blur_y_shader->setUniform1f("scale", 1);
-#ifdef USE_DESKTOP_BLEND
-    _blur_y_shader->setUniform1i("normalize_color", 0);
-#else
-    _blur_y_shader->setUniform1i("normalize_color", 1);
-#endif
-    _links_fbo.draw(width, height, 0, 0, 1, true, true);
-    _blur_y_shader->end();
-    _links_fbo.unbind();
-}
     _slot_links->setValid(true);
   }
 
@@ -312,6 +304,40 @@ for( int i = 0; i < 1; ++i )
     std::cout << "GlRenderer: Added color (" << val << ")" << std::endl;
 
     return true;
+  }
+
+  //----------------------------------------------------------------------------
+  void GlRenderer::blur(gl::FBO& fbo)
+  {
+    assert(fbo.colorBuffers.size() >= 2);
+
+    for( int i = 0; i < 1; ++i )
+    {
+      fbo.swapColorAttachment(1);
+      fbo.bind();
+      fbo.bindTex(0);
+      _blur_x_shader->begin();
+      _blur_x_shader->setUniform1i("inputTex", 0);
+      _blur_x_shader->setUniform1f("scale", 1);
+      fbo.draw(fbo.width, fbo.height, 0, 0, 0, true, true);
+      _blur_x_shader->end();
+      fbo.unbind();
+
+      fbo.swapColorAttachment(0);
+      fbo.bind();
+      fbo.bindTex(1);
+      _blur_y_shader->begin();
+      _blur_y_shader->setUniform1i("inputTex", 0);
+      _blur_y_shader->setUniform1f("scale", 1);
+#ifdef USE_DESKTOP_BLEND
+      _blur_y_shader->setUniform1i("normalize_color", 0);
+#else
+      _blur_y_shader->setUniform1i("normalize_color", 1);
+#endif
+      fbo.draw(fbo.width, fbo.height, 0, 0, 1, true, true);
+      _blur_y_shader->end();
+      fbo.unbind();
+    }
   }
 
   //----------------------------------------------------------------------------
@@ -430,4 +456,42 @@ for( int i = 0; i < 1; ++i )
     return rendered_anything;
   }
 
-};
+  //----------------------------------------------------------------------------
+  bool GlRenderer::renderRect(const Rect& rect, size_t b, GLuint tex)
+  {
+    glColor4f(0.3, 0.3, 0.3, 0.8);
+    glBegin(GL_QUADS);
+      glVertex2f(rect.pos.x - b,               rect.pos.y - b);
+      glVertex2f(rect.pos.x + rect.size.x + b, rect.pos.y - b);
+      glVertex2f(rect.pos.x + rect.size.x + b, rect.pos.y + rect.size.y + b);
+      glVertex2f(rect.pos.x - b,               rect.pos.y + rect.size.y + b);
+    glEnd();
+
+    if( tex )
+    {
+      glEnable(GL_TEXTURE_2D);
+      glBindTexture(GL_TEXTURE_2D, tex);
+    }
+
+    glColor3f(1, 1, 1);
+    glBegin(GL_QUADS);
+      glTexCoord2f(0, 0);
+      glVertex2f(rect.pos.x,               rect.pos.y);
+      glTexCoord2f(1, 0);
+      glVertex2f(rect.pos.x + rect.size.x, rect.pos.y);
+      glTexCoord2f(1, 1);
+      glVertex2f(rect.pos.x + rect.size.x, rect.pos.y + rect.size.y);
+      glTexCoord2f(0, 1);
+      glVertex2f(rect.pos.x,               rect.pos.y + rect.size.y);
+    glEnd();
+
+    if( tex )
+    {
+      glDisable(GL_TEXTURE_2D);
+      glBindTexture(GL_TEXTURE_2D, 0);
+    }
+
+    return true;
+  }
+
+}

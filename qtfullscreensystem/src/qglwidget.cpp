@@ -220,7 +220,7 @@ ShaderPtr loadShader( QString vert, QString frag )
     _slot_desktop =
       slot_collector.create<LinksRouting::SlotType::Image>("/desktop");
     _slot_desktop->_data->type = LinksRouting::SlotType::Image::OpenGLTexture;
-    
+
     _slot_mouse =
       slot_collector.create<LinksRouting::SlotType::MouseEvent>("/mouse");
     _slot_popups =
@@ -459,16 +459,32 @@ ShaderPtr loadShader( QString vert, QString frag )
     for( auto popup = _slot_popups->_data->popups.begin();
               popup != _slot_popups->_data->popups.end();
             ++popup )
-      if( popup->visible )
+    {
+      if( popup->region.visible )
         painter.drawText
         (
-          popup->pos.x,
-          popup->pos.y - popup->size.y - 3,
-          popup->size.x,
-          popup->size.y - 4,
+          popup->region.region.pos.x,
+          popup->region.region.pos.y - popup->region.region.size.y - 8,
+          popup->region.region.size.x,
+          popup->region.region.size.y,
           Qt::AlignCenter,
           QString::fromStdString(popup->text)
         );
+
+      if( !popup->hover_region.visible )
+        continue;
+
+//      const LinksRouting::SlotType::Image* img = _slot_image->_data.get();
+//      const float2& pos = popup->hover_region.region.pos;
+//      if( img->pdata )
+//      {
+//        painter.drawImage(
+//          QRect(pos.x + 8, pos.y - _window_offset.y() + 8, 256, 384),
+//          QImage(img->pdata, img->width, img->height, QImage::Format_ARGB32),
+//          QRect(0, 0, 128, 192)
+//        );
+//      }
+    }
   }
 
   //----------------------------------------------------------------------------
@@ -522,6 +538,7 @@ ShaderPtr loadShader( QString vert, QString frag )
     _slot_mouse->_data->triggerLeave();
 
     bool change = false;
+#if 0
     for( auto popup = _slot_popups->_data->popups.begin();
                   popup != _slot_popups->_data->popups.end();
                 ++popup )
@@ -532,9 +549,19 @@ ShaderPtr loadShader( QString vert, QString frag )
         change = true;
       }
     }
-
+#endif
     if( change )
       _cond_render.wakeAll();
+  }
+
+  //----------------------------------------------------------------------------
+  void GLWidget::wheelEvent(QWheelEvent *event)
+  {
+    _slot_mouse->_data->triggerScroll(
+      event->delta(),
+      float2(event->pos().x(), event->pos().y()),
+      event->modifiers()
+    );
   }
 
   //----------------------------------------------------------------------------

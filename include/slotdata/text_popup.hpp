@@ -20,12 +20,34 @@ namespace SlotType
 
   struct TextPopup
   {
+    struct HoverRect
+    {
+      Rect region;
+      float border;
+      bool visible;
+      int zoom;
+
+      HoverRect( const float2& pos,
+                 const float2& size,
+                 float border,
+                 bool visible,
+                 int zoom = 0):
+        region(pos, size),
+        border(border),
+        visible(visible),
+        zoom(zoom)
+      {}
+
+      bool contains(float x, float y) const
+      {
+        return region.contains(x,y, border);
+      }
+    };
     struct Popup
     {
       std::string text;
-      float2 pos;
-      float2 size;
-      bool visible;
+      HoverRect region;
+      HoverRect hover_region;
     };
 
     typedef std::vector<Popup> Popups;

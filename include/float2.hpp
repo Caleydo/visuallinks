@@ -170,4 +170,20 @@ inline std::ostream& operator<<(std::ostream& strm, const float2& p)
   return strm << "(" << p.x << "|" << p.y << ")";
 }
 
+struct Rect
+{
+  float2 pos, size;
+
+  Rect(const float2& pos, const float2& size):
+    pos(pos),
+    size(size)
+  {}
+
+  bool contains(float x, float y, float margin = 0.f) const
+  {
+    return x >= pos.x - margin && x <= pos.x + size.x + margin
+        && y >= pos.y - margin && y <= pos.y + size.y + margin;
+  }
+};
+
 #endif /* _FLOAT2_HPP_ */

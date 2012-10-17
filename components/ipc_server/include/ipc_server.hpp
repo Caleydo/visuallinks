@@ -12,9 +12,10 @@
 #include "common/componentarguments.h"
 #include "config.h"
 #include "linkdescription.h"
-#include "slotdata/polygon.hpp"
 #include "slotdata/component_selection.hpp"
+#include "slotdata/image.hpp"
 #include "slotdata/mouse_event.hpp"
+#include "slotdata/polygon.hpp"
 #include "slotdata/text_popup.hpp"
 #include "window_monitor.hpp"
 
@@ -59,7 +60,8 @@ namespace LinksRouting
     private slots:
 
       void onClientConnection();
-      void onDataReceived(QString data);
+      void onTextReceived(QString data);
+      void onBinaryReceived(QByteArray data);
       void onPong(quint64 elapsedTime);
       void onClientDisconnection();
 
@@ -102,11 +104,16 @@ namespace LinksRouting
       slot_t<SlotType::MouseEvent>::type _subscribe_mouse;
       slot_t<LinksRouting::SlotType::TextPopup>::type _subscribe_popups;
 
+      /* Slot for showing overlay images */
+      slot_t<LinksRouting::SlotType::Image>::type _subscribe_image;
+
       class JSON;
       LinkDescription::NodePtr parseRegions( JSON& json,
                                              const ClientInfo& client_info );
 
       std::string   _debug_regions;
+      int           _preview_width,
+                    _preview_height;
 
   };
 

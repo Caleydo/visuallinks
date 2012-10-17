@@ -36,7 +36,12 @@ namespace SlotType
     };
     unsigned int width, height;
     unsigned int layers;
-    Image()
+    Image():
+      type(ImageRGBA8),
+      pdata(0),
+      width(0),
+      height(0),
+      layers(1)
     { }
     Image(unsigned int w, 
           unsigned int h, 

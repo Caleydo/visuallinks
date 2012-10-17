@@ -41,6 +41,17 @@ namespace LinksRouting
     );
   }
 
+  template<typename T>
+  void clampedStep( T& val,
+                    T step,
+                    T min,
+                    T max,
+                    T max_step = 1)
+  {
+    step = std::max(-max_step, std::min(step, max_step));
+    val = std::max(min, std::min(val + step, max));
+  }
+
   /**
    * Helper for handling json messages
    */
@@ -164,6 +175,8 @@ namespace LinksRouting
   {
     assert(widget);
     registerArg("DebugRegions", _debug_regions);
+    registerArg("PreviewWidth", _preview_width = 256);
+    registerArg("PreviewHeight", _preview_height = 384);
 
 //    qRegisterMetaType<WindowRegions>("WindowRegions");
 //    assert( connect( &_window_monitor, SIGNAL(regionsChanged(WindowRegions)),
@@ -194,6 +207,8 @@ namespace LinksRouting
       slot_subscriber.getSlot<LinksRouting::SlotType::MouseEvent>("/mouse");
     _subscribe_popups =
       slot_subscriber.getSlot<SlotType::TextPopup>("/popups");
+    _subscribe_image =
+      slot_subscriber.getSlot<LinksRouting::SlotType::Image>("/popup-image");
   }
 
   //----------------------------------------------------------------------------
@@ -230,7 +245,7 @@ namespace LinksRouting
   {
     if( !_debug_regions.empty() )
     {
-      onDataReceived( QString::fromStdString(_debug_regions) );
+      onTextReceived( QString::fromStdString(_debug_regions) );
       _debug_regions.clear();
     }
   }
@@ -241,7 +256,8 @@ namespace LinksRouting
     QWsSocket* client_socket = _server->nextPendingConnection();
     QObject* client_object = qobject_cast<QObject*>(client_socket);
 
-    connect(client_object, SIGNAL(frameReceived(QString)), this, SLOT(onDataReceived(QString)));
+    connect(client_object, SIGNAL(frameReceived(QString)), this, SLOT(onTextReceived(QString)));
+    connect(client_object, SIGNAL(frameReceived(QByteArray)), this, SLOT(onBinaryReceived(QByteArray)));
     connect(client_object, SIGNAL(disconnected()), this, SLOT(onClientDisconnection()));
     connect(client_object, SIGNAL(pong(quint64)), this, SLOT(onPong(quint64)));
 
@@ -253,7 +269,7 @@ namespace LinksRouting
   }
 
   //----------------------------------------------------------------------------
-  void IPCServer::onDataReceived(QString data)
+  void IPCServer::onTextReceived(QString data)
   {
     auto client = _clients.find(qobject_cast<QWsSocket*>(sender()));
     if( client == _clients.end() )
@@ -501,6 +517,30 @@ namespace LinksRouting
 //      {"y", std::make_tuple("int")},
 //      {"key", std::make_tuple("string")}
 //    };
+    _cond_data_ready->wakeAll();
+  }
+
+  //----------------------------------------------------------------------------
+  void IPCServer::onBinaryReceived(QByteArray data)
+  {
+    if( data.size() < 3 )
+    {
+      LOG_WARN("Binary message too small (" << data.size() << "byte)");
+      return;
+    }
+
+    std::cout << "Binary data received: " << ((data.size() / 1024) / 1024.f) << "MB" << std::endl;
+    uint8_t type = data.at(0),
+            id = data.at(1);
+
+    delete[] _subscribe_image->_data->pdata;
+    _subscribe_image->_data->pdata = new uint8_t[data.size() - 2];
+    memcpy(_subscribe_image->_data->pdata, data.constData() + 2, data.size() - 2);
+
+    assert( static_cast<size_t>(data.size()) == _subscribe_image->_data->width
+                                              * _subscribe_image->_data->height
+                                              * 4 + 2 );
+
     _cond_data_ready->wakeAll();
   }
 
@@ -890,7 +930,7 @@ namespace LinksRouting
       updateRegion(regions, node.get(), client_wid);
 
       QRect reg(points[0].x, points[0].y, 0, 0);
-      const int border = 4;
+      const int border = 3;
       for(size_t j = 1; j < points.size(); ++j)
       {
         int x = points[j].x,
@@ -909,36 +949,96 @@ namespace LinksRouting
 
       {
         std::string text = std::to_string(static_cast<unsigned long long>(out.num_outside));
-        int width = text.length() * 10 + 10;
+        float2 popup_pos, popup_size(text.length() * 10 + 6, 16);
+        float2 hover_pos, hover_size(_preview_width, _preview_height);
 
-        SlotType::TextPopup::Popup popup = {
+        const size_t border_text = 4,
+                     border_preview = 8;
+
+        if( std::fabs(out.normal.y) > 0.5 )
+        {
+          popup_pos.x = reg.center().x() - popup_size.x / 2;
+          hover_pos.x = reg.center().x() - hover_size.x / 2;
+
+          if( out.normal.y < 0 )
+          {
+            popup_pos.y = reg.top() - popup_size.y - border_text;
+            hover_pos.y = popup_pos.y - hover_size.y + border_text
+                                                     - 2 * border_preview;
+          }
+          else
+          {
+            popup_pos.y = reg.bottom() + border_text;
+            hover_pos.y = popup_pos.y + popup_size.y - border_text
+                                                     + 2 * border_preview;
+          }
+        }
+
+        using SlotType::TextPopup;
+        TextPopup::Popup popup = {
           text,
-          float2(reg.center().x() - width/2, reg.top() - 20),
-          float2(width, 20),
-          false
+          TextPopup::HoverRect(popup_pos, popup_size, border_text, true),
+          TextPopup::HoverRect(hover_pos, hover_size, border_preview, false)
         };
         size_t index = _subscribe_popups->_data->popups.size();
         _subscribe_popups->_data->popups.push_back(popup);
 
+        auto sendRequest = [client_info, &_preview_width, &_preview_height]
+                           (const TextPopup::Popup& popup)
+        {
+          client_info->first->write(QString(
+          "{"
+            "\"task\": \"GET\","
+            "\"id\": \"img-preview\","
+            "\"size\": [" + QString("%1").arg(_preview_width)
+                    + "," + QString("%1").arg(_preview_height)
+                    + "],"
+            "\"zoom\": " + QString("%1").arg(popup.hover_region.zoom) +
+          "}"));
+        };
         _subscribe_mouse->_data->_move_callbacks.push_back(
-          [&,index,reg](int x, int y)
+          [ =,
+            &_subscribe_popups,
+            &_cond_data_ready ](int x, int y)
           {
             auto& popup = _subscribe_popups->_data->popups[index];
-            if( reg.contains(x, y) )
+            if(  popup.region.contains(x, y)
+              || (   popup.hover_region.visible
+                  && popup.hover_region.contains(x, y)
+                 )
+              )
             {
-              if( popup.visible )
+              if( popup.hover_region.visible )
                 return;
 
-              popup.visible = true;
+              popup.hover_region.visible = true;
+              sendRequest(popup);
+
             }
-            else if( !popup.visible )
+            else if( !popup.hover_region.visible )
               return;
             else
-              popup.visible = false;
+              popup.hover_region.visible = false;
 
             _cond_data_ready->wakeAll();
           }
         );
+        _subscribe_mouse->_data->_scroll_callbacks.push_back(
+        [ =,
+          &_subscribe_popups,
+          &_cond_data_ready ](int delta, const float2& pos, uint32_t mod)
+        {
+          auto& popup = _subscribe_popups->_data->popups[index];
+          if( !popup.hover_region.visible )
+              return;
+
+          int old_zoom = popup.hover_region.zoom;
+          clampedStep(popup.hover_region.zoom, delta, 0, 6, 1);
+
+          if( popup.hover_region.zoom != old_zoom )
+            sendRequest(popup);
+        }
+      );
       }
 
       hedge->addNode( node );

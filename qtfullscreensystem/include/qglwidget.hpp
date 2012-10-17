@@ -73,6 +73,7 @@ namespace qtfullscreensystem
 
       virtual void mouseMoveEvent(QMouseEvent *event);
       virtual void leaveEvent(QEvent *event);
+      virtual void wheelEvent(QWheelEvent *event);
 
       void updateScreenShot( QPoint window_offset,
                              QPoint window_end,

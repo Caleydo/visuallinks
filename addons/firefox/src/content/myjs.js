@@ -87,6 +87,15 @@ function getRegion()
   ];
 }
 
+function getScrollRegion()
+{
+  var doc = content.document;
+  return {
+    width: doc.documentElement.scrollWidth,
+    height: doc.documentElement.scrollHeight
+  };
+}
+
 //------------------------------------------------------------------------------
 function onVisLinkButton()
 {
@@ -213,10 +222,11 @@ function reportVisLinks(id, found)
       menu_item: item
     };
   }
-  
+
   send({
     'task': (found ? 'FOUND' : 'INITIATE'),
     'title': document.title,
+    'scroll-region': getScrollRegion(),
     'id': id,
     'stamp': last_stamp,
     'regions': bbs
@@ -277,6 +287,7 @@ function register()
 	try
 	{
       socket = new WebSocket('ws://localhost:4487', 'VLP');
+      socket.binaryType = "arraybuffer";
       socket.onopen = function(event)
       {
         setStatus('active');
@@ -316,7 +327,7 @@ function register()
   
           setTimeout('reportVisLinks("'+msg.id+'", true)',0);
         }
-        else if( msg.task == 'GET-FOUND')
+        else if( msg.task == 'GET-FOUND' )
         {
           if( msg.id == '/routing' )
           {
@@ -345,6 +356,25 @@ function register()
 
               items_routing.appendChild(item);
             }
+          }
+        }
+        else if( msg.task == 'GET' )
+        {
+          if( msg.id == 'img-preview' )
+          {
+            var reg = getScrollRegion();
+            var offset = [0,0];
+            if( typeof(msg.zoom) != 'undefined' && msg.zoom >= 1 )
+            {
+              var orig_width = reg.width;
+
+              reg.height /= Math.pow(2, msg.zoom);
+              reg.width = reg.height * msg.size[0] / msg.size[1];
+
+              if( reg.width > orig_width )
+                offset[0] = (reg.width - orig_width) / 2;
+            }
+            socket.send( grab(msg.size, reg, offset) );
           }
         }
         else
