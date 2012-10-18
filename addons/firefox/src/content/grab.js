@@ -20,7 +20,7 @@ function grab(size, region, offset)
   context.scale( canvas.width / region.width,
                  canvas.height / region.height );
   context.translate(offset[0], offset[1]);
-  context.drawWindow(content.window, 0, 0, region.width, region.height, "#fff");
+  context.drawWindow(content.window, region.x, region.y, region.width, region.height, "#fff");
   context.restore();
 
   var image_data = context.getImageData(0, 0, canvas.width, canvas.height).data;

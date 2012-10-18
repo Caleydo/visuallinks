@@ -36,14 +36,24 @@ namespace SlotType
       KeyboardModifierMask = 0xfe000000 //!< KeyboardModifierMask
     };
 
+    typedef std::function<void (int, int)> ClickCallback;
     typedef std::function<void (int, int)> MoveCallback;
     typedef std::function<void ()> LeaveCallback;
     typedef std::function<void (int, const float2&, uint32_t)> ScrollCallback;
 
+    std::vector<ClickCallback> _click_callbacks;
     std::vector<MoveCallback> _move_callbacks;
     std::vector<LeaveCallback> _leave_callbacks;
     std::vector<ScrollCallback> _scroll_callbacks;
     
+    void triggerClick(int x, int y)
+    {
+      for( auto cb = _click_callbacks.begin();
+                cb != _click_callbacks.end();
+              ++cb )
+        (*cb)(x, y);
+    }
+
     void triggerMove(int x, int y)
     {
       for( auto cb = _move_callbacks.begin();
@@ -70,6 +80,7 @@ namespace SlotType
 
     void clear()
     {
+      _click_callbacks.clear();
       _move_callbacks.clear();
       _leave_callbacks.clear();
       _scroll_callbacks.clear();

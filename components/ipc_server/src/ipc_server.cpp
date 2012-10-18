@@ -42,6 +42,12 @@ namespace LinksRouting
   }
 
   template<typename T>
+  void clamp(T& val, T min, T max)
+  {
+    val = std::max(min, std::min(val, max));
+  }
+
+  template<typename T>
   void clampedStep( T& val,
                     T step,
                     T min,
@@ -49,7 +55,7 @@ namespace LinksRouting
                     T max_step = 1)
   {
     step = std::max(-max_step, std::min(step, max_step));
-    val = std::max(min, std::min(val + step, max));
+    clamp<T>(val += step, min, max);
   }
 
   /**
@@ -105,7 +111,7 @@ namespace LinksRouting
       }
 
       template <class T>
-      T getValue(const QString& key)
+      T getValue(const QString& key) const
       {
         QScriptValue prop = _json.property(key);
 
@@ -116,7 +122,7 @@ namespace LinksRouting
       }
 
       template <class T>
-      T getValue(const QString& key, const T& def)
+      T getValue(const QString& key, const T& def) const
       {
         QScriptValue prop = _json.property(key);
 
@@ -126,7 +132,7 @@ namespace LinksRouting
         return extractValue<T>(prop);
       }
 
-      bool isSet(const QString& key)
+      bool isSet(const QString& key) const
       {
         QScriptValue prop = _json.property(key);
         return prop.isValid() && !prop.isUndefined();
@@ -134,14 +140,14 @@ namespace LinksRouting
 
     private:
 
-      template <class T> T extractValue(QScriptValue&);
+      template <class T> T extractValue(QScriptValue&) const;
 
       QScriptEngine _engine;
       QScriptValue  _json;
   };
 
   template<>
-  QString IPCServer::JSON::extractValue(QScriptValue& val)
+  QString IPCServer::JSON::extractValue(QScriptValue& val) const
   {
     if( !val.isString() )
       throw std::runtime_error("Not a string");
@@ -149,7 +155,7 @@ namespace LinksRouting
   }
 
   template<>
-  uint32_t IPCServer::JSON::extractValue(QScriptValue& val)
+  uint32_t IPCServer::JSON::extractValue(QScriptValue& val) const
   {
     if( !val.isNumber() )
       throw std::runtime_error("Not a number");
@@ -157,11 +163,24 @@ namespace LinksRouting
   }
 
   template<>
-  QVariantList IPCServer::JSON::extractValue(QScriptValue& val)
+  QVariantList IPCServer::JSON::extractValue(QScriptValue& val) const
   {
     if( !val.isArray() )
       throw std::runtime_error("Not an array");
     return val.toVariant().toList();
+  }
+
+  template<>
+  QRect IPCServer::JSON::extractValue(QScriptValue& val) const
+  {
+    QVariantList region_list = extractValue<QVariantList>(val);
+    if( region_list.length() != 4 )
+      throw std::runtime_error("Invalid region (length != 4)");
+
+    return QRect( region_list.at(0).toInt(),
+                  region_list.at(1).toInt(),
+                  region_list.at(2).toInt(),
+                  region_list.at(3).toInt() );
   }
 
   //----------------------------------------------------------------------------
@@ -175,7 +194,7 @@ namespace LinksRouting
   {
     assert(widget);
     registerArg("DebugRegions", _debug_regions);
-    registerArg("PreviewWidth", _preview_width = 256);
+    registerArg("PreviewWidth", _preview_width = 320);
     registerArg("PreviewHeight", _preview_height = 384);
 
 //    qRegisterMetaType<WindowRegions>("WindowRegions");
@@ -305,20 +324,7 @@ namespace LinksRouting
           client_wid = windowAt(_window_monitor.getWindows(), pos);
         }
 
-        QVariantList region_list = msg.getValue<QVariantList>("region");
-        if( region_list.length() != 4 )
-        {
-          LOG_WARN("Received invalid region");
-          return;
-        }
-
-        client_info.region.setRect
-        (
-          region_list.at(0).toInt(),
-          region_list.at(1).toInt(),
-          region_list.at(2).toInt(),
-          region_list.at(3).toInt()
-        );
+        client_info.region = msg.getValue<QRect>("region");
 
         return;
       }
@@ -408,6 +414,8 @@ namespace LinksRouting
         LOG_INFO("Received INITIATE: " << id_str);
         uint32_t color_id = 0;
 
+        updateScrollRegion(msg, client_info);
+
         // TODO keep working for multiple links at the same time
         _subscribe_mouse->_data->clear();
         _subscribe_popups->_data->popups.clear();
@@ -483,6 +491,7 @@ namespace LinksRouting
 
         LOG_INFO("Received FOUND: " << id_str);
 
+        updateScrollRegion(msg, client_info);
         link->_link->addNode( parseRegions(msg, client_info) );
         updateCenter(link->_link.get());
       }
@@ -536,6 +545,10 @@ namespace LinksRouting
     delete[] _subscribe_image->_data->pdata;
     _subscribe_image->_data->pdata = new uint8_t[data.size() - 2];
     memcpy(_subscribe_image->_data->pdata, data.constData() + 2, data.size() - 2);
+
+    _subscribe_image->_data->type = SlotType::Image::ImageRGBA8;
+    _subscribe_image->_data->width = _preview_width;
+    _subscribe_image->_data->height = _preview_height;
 
     assert( static_cast<size_t>(data.size()) == _subscribe_image->_data->width
                                               * _subscribe_image->_data->height
@@ -982,9 +995,32 @@ namespace LinksRouting
         };
         size_t index = _subscribe_popups->_data->popups.size();
         _subscribe_popups->_data->popups.push_back(popup);
+        float preview_aspect = _preview_width
+                             / static_cast<float>(_preview_height);
 
-        auto sendRequest = [client_info, &_preview_width, &_preview_height]
-                           (const TextPopup::Popup& popup)
+        auto updateRegion = [=]( TextPopup::Popup& popup,
+                                 float2 center = float2(-9999, -9999),
+                                 float2 rel_pos = float2() )
+        {
+          QRect reg = client_info->second.scroll_region;
+          int h = reg.height() / pow(2, popup.hover_region.zoom) + 0.5,
+              w = h * preview_aspect + 0.5;
+
+          popup.hover_region.src_region.size.x = w;
+          popup.hover_region.src_region.size.y = h;
+
+          if( center.x > -9999 && center.y > -9999 )
+          {
+            // Center source region around mouse cursor
+            popup.hover_region.src_region.pos.x = center.x - rel_pos.x * w;
+            popup.hover_region.src_region.pos.y = center.y - rel_pos.y * h;
+          }
+
+          clamp<float>(popup.hover_region.src_region.pos.x, 0, reg.width() - w);
+          clamp<float>(popup.hover_region.src_region.pos.y, 0, reg.height() - h);
+        };
+        auto sendRequest = [=, &_preview_width, &_preview_height]
+                           (TextPopup::Popup& popup)
         {
           client_info->first->write(QString(
           "{"
@@ -993,9 +1029,13 @@ namespace LinksRouting
             "\"size\": [" + QString("%1").arg(_preview_width)
                     + "," + QString("%1").arg(_preview_height)
                     + "],"
-            "\"zoom\": " + QString("%1").arg(popup.hover_region.zoom) +
+            "\"src\": " + popup.hover_region.src_region.toString().c_str() +
           "}"));
         };
+
+        /**
+         * Mouse move callback
+         */
         _subscribe_mouse->_data->_move_callbacks.push_back(
           [ =,
             &_subscribe_popups,
@@ -1012,6 +1052,8 @@ namespace LinksRouting
                 return;
 
               popup.hover_region.visible = true;
+
+              updateRegion(popup);
               sendRequest(popup);
 
             }
@@ -1023,22 +1065,85 @@ namespace LinksRouting
             _cond_data_ready->wakeAll();
           }
         );
+
+        /**
+         * Mouse click callback
+         */
+        _subscribe_mouse->_data->_click_callbacks.push_back(
+        [ =,
+          &_subscribe_popups,
+          &_cond_data_ready ](int x, int y)
+        {
+          auto& popup = _subscribe_popups->_data->popups[index];
+          if( !popup.hover_region.visible ||
+              !popup.hover_region.contains(x, y) )
+            return;
+
+          popup.hover_region.visible = false;
+
+          QRect reg = client_info->second.scroll_region;
+          float scale = (reg.height() / pow(2, popup.hover_region.zoom))
+                      / _preview_height;
+          float dy = y - popup.hover_region.region.pos.y,
+                scroll_y = scale * dy + popup.hover_region.src_region.pos.y;
+
+          client_info->first->write(QString(
+          "{"
+            "\"task\": \"SET\","
+            "\"id\": \"scroll-y\","
+            "\"val\": " + QString("%1").arg(scroll_y - 15) +
+          "}"));
+
+          _cond_data_ready->wakeAll();
+        });
+
+        /**
+         * Scroll callback
+         */
         _subscribe_mouse->_data->_scroll_callbacks.push_back(
         [ =,
           &_subscribe_popups,
-          &_cond_data_ready ](int delta, const float2& pos, uint32_t mod)
+          &_cond_data_ready,
+          &_preview_width,
+          &_preview_height ](int delta, const float2& pos, uint32_t mod)
         {
           auto& popup = _subscribe_popups->_data->popups[index];
           if( !popup.hover_region.visible )
               return;
 
-          int old_zoom = popup.hover_region.zoom;
-          clampedStep(popup.hover_region.zoom, delta, 0, 6, 1);
+          QRect reg = client_info->second.scroll_region;
+          float step_y = reg.height() / pow(2, popup.hover_region.zoom)
+                       / _preview_height;
 
-          if( popup.hover_region.zoom != old_zoom )
-            sendRequest(popup);
-        }
-      );
+          if( mod & SlotType::MouseEvent::ShiftModifier )
+          {
+            popup.hover_region.src_region.pos.y -= delta / fabs(delta) * 20 * step_y;
+            updateRegion(popup);
+          }
+          else if( mod & SlotType::MouseEvent::ControlModifier )
+          {
+            float step_x = step_y * preview_aspect;
+            popup.hover_region.src_region.pos.x -= delta / fabs(delta) * 20 * step_x;
+            updateRegion(popup);
+          }
+          else
+          {
+            int old_zoom = popup.hover_region.zoom;
+            clampedStep(popup.hover_region.zoom, delta, 0, 6, 1);
+
+            if( popup.hover_region.zoom != old_zoom )
+            {
+              float scale = (reg.height() / pow(2, old_zoom))
+                          / _preview_height;
+
+              float2 d = pos - popup.hover_region.region.pos,
+                     mouse_pos = scale * d + popup.hover_region.src_region.pos;
+              updateRegion(popup, mouse_pos, d / popup.hover_region.region.size);
+            }
+          }
+
+          sendRequest(popup);
+        });
       }
 
       hedge->addNode( node );
@@ -1274,6 +1379,15 @@ namespace LinksRouting
     updateHedge(windows, hedge.get());
 
     return std::make_shared<LinkDescription::Node>(hedge);
+  }
+
+  //----------------------------------------------------------------------------
+  void IPCServer::updateScrollRegion(const JSON& msg, ClientInfo& client_info)
+  {
+    if( msg.isSet("scroll-region") )
+      client_info.scroll_region = msg.getValue<QRect>("scroll-region");
+    else
+      client_info.scroll_region = client_info.region;
   }
 
   //----------------------------------------------------------------------------

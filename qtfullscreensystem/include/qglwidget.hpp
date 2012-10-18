@@ -71,6 +71,7 @@ namespace qtfullscreensystem
       virtual void resizeEvent(QResizeEvent *event);
       virtual void moveEvent(QMoveEvent *event);
 
+      virtual void mouseReleaseEvent(QMouseEvent *event);
       virtual void mouseMoveEvent(QMouseEvent *event);
       virtual void leaveEvent(QEvent *event);
       virtual void wheelEvent(QWheelEvent *event);

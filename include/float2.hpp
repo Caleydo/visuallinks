@@ -10,7 +10,8 @@
 #define _FLOAT2_HPP_
 
 #include <cmath>
-#include <iostream>
+#include <iosfwd>
+#include <sstream>
 
 /**
  * A simple 2d vector
@@ -165,6 +166,14 @@ inline const float2 operator /(const float2& v, float a)
 /**
  *
  */
+inline const float2 operator /(const float2& lhs, const float2& rhs)
+{
+  return float2(lhs.x / rhs.x, lhs.y / rhs.y);
+}
+
+/**
+ *
+ */
 inline std::ostream& operator<<(std::ostream& strm, const float2& p)
 {
   return strm << "(" << p.x << "|" << p.y << ")";
@@ -173,6 +182,11 @@ inline std::ostream& operator<<(std::ostream& strm, const float2& p)
 struct Rect
 {
   float2 pos, size;
+
+  Rect():
+    pos(0,0),
+    size(-1,-1)
+  {}
 
   Rect(const float2& pos, const float2& size):
     pos(pos),
@@ -183,6 +197,16 @@ struct Rect
   {
     return x >= pos.x - margin && x <= pos.x + size.x + margin
         && y >= pos.y - margin && y <= pos.y + size.y + margin;
+  }
+
+  std::string toString() const
+  {
+    std::stringstream strm;
+    strm << "{\"x\":" << pos.x << ","
+             "\"y\":" << pos.y << ","
+             "\"width\":" << size.x << ","
+             "\"height\":" << size.y << "}";
+    return strm.str();
   }
 };
 

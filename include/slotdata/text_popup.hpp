@@ -22,9 +22,10 @@ namespace SlotType
   {
     struct HoverRect
     {
-      Rect region;
+      Rect region, src_region;
       float border;
       bool visible;
+      float2 offset;
       int zoom;
 
       HoverRect( const float2& pos,

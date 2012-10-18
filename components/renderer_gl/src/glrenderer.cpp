@@ -153,9 +153,6 @@ namespace LinksRouting
     _slot_links = slots.create<SlotType::Image>("/rendered-links");
     _slot_links->_data->type = SlotType::Image::OpenGLTexture;
     _slot_image = slots.create<SlotType::Image>("/popup-image");
-    _slot_image->_data->type = SlotType::Image::ImageRGBA8;
-    _slot_image->_data->width = 256;
-    _slot_image->_data->height = 384;
   }
 
   //----------------------------------------------------------------------------

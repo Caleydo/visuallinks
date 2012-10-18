@@ -81,6 +81,7 @@ namespace LinksRouting
       {
         WId     wid;
         QRect   region;
+        QRect   scroll_region;
       };
       typedef std::map<QWsSocket*, ClientInfo> ClientInfos;
 
@@ -110,6 +111,7 @@ namespace LinksRouting
       class JSON;
       LinkDescription::NodePtr parseRegions( JSON& json,
                                              const ClientInfo& client_info );
+      void updateScrollRegion( const JSON& json, ClientInfo& client_info);
 
       std::string   _debug_regions;
       int           _preview_width,

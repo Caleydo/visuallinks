@@ -222,11 +222,12 @@ function reportVisLinks(id, found)
       menu_item: item
     };
   }
-
+  
+  var reg = getScrollRegion();
   send({
     'task': (found ? 'FOUND' : 'INITIATE'),
     'title': document.title,
-    'scroll-region': getScrollRegion(),
+    'scroll-region': [0, 0, reg.width, reg.height],
     'id': id,
     'stamp': last_stamp,
     'regions': bbs
@@ -364,18 +365,17 @@ function register()
           {
             var reg = getScrollRegion();
             var offset = [0,0];
-            if( typeof(msg.zoom) != 'undefined' && msg.zoom >= 1 )
-            {
-              var orig_width = reg.width;
 
-              reg.height /= Math.pow(2, msg.zoom);
-              reg.width = reg.height * msg.size[0] / msg.size[1];
+            if( msg.src.width > reg.width )
+              offset[0] = (msg.src.width - reg.width) / 2;
 
-              if( reg.width > orig_width )
-                offset[0] = (reg.width - orig_width) / 2;
-            }
-            socket.send( grab(msg.size, reg, offset) );
+            socket.send( grab(msg.size, msg.src, offset) );
           }
+        }
+        else if( msg.task == 'SET' )
+        {
+          if( msg.id == 'scroll-y' )
+            content.scrollTo(0, msg.val);
         }
         else
           alert(event.data);

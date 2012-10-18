@@ -527,6 +527,12 @@ ShaderPtr loadShader( QString vert, QString frag )
   }
   
   //----------------------------------------------------------------------------
+  void GLWidget::mouseReleaseEvent(QMouseEvent *event)
+  {
+    _slot_mouse->_data->triggerClick(event->globalX(), event->globalY());
+  }
+
+  //----------------------------------------------------------------------------
   void GLWidget::mouseMoveEvent(QMouseEvent *event)
   {
     _slot_mouse->_data->triggerMove(event->globalX(), event->globalY());
@@ -559,7 +565,7 @@ ShaderPtr loadShader( QString vert, QString frag )
   {
     _slot_mouse->_data->triggerScroll(
       event->delta(),
-      float2(event->pos().x(), event->pos().y()),
+      float2(event->globalX(), event->globalY()),
       event->modifiers()
     );
   }
