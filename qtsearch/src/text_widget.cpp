@@ -10,19 +10,20 @@
 
 #include <QApplication>
 #include <QBoxLayout>
-#include <QLineEdit>
 #include <QDebug>
+#include <QLineEdit>
 
 //------------------------------------------------------------------------------
 TextWidget::TextWidget(QWidget *parent):
   QWidget( parent ),
   _edit( new QComboBox(this) ),
   _button( new QPushButton(this) ),
+  _menu( new QMenu(this) ),
   _socket( new QWsSocket(this) )
 {
   QHBoxLayout* layout = new QHBoxLayout(this);
   layout->setContentsMargins(0,0,0,0);
-  setSizePolicy(QSizePolicy::MinimumExpanding, QSizePolicy::MinimumExpanding);
+  setSizePolicy(QSizePolicy::MinimumExpanding, QSizePolicy::Minimum);
   setMinimumWidth(256);
 
   QStringList wordList;
@@ -35,10 +36,21 @@ TextWidget::TextWidget(QWidget *parent):
   _button->setIconSize(QSize(16,16));
   layout->addWidget(_button);
 
-  connect(_edit->lineEdit(), SIGNAL(returnPressed()), this, SLOT(triggerSearch()));
-  connect(_button, SIGNAL(pressed()), this, SLOT(triggerSearch()));
+  QPushButton* button_dropdown = new QPushButton(this);
+  button_dropdown->setMenu(_menu);
+  button_dropdown->setFixedWidth(24);
+  layout->addWidget(button_dropdown);
+
+  setFixedHeight( layout->minimumSize().height() );
+
+  connect(_edit->lineEdit(), SIGNAL(returnPressed()),
+             this, SLOT(triggerSearch()));
+  connect(_button, SIGNAL(pressed()),
+             this, SLOT(triggerSearch()));
   connect(_socket, SIGNAL(stateChanged(QAbstractSocket::SocketState)),
              this, SLOT(stateChanged(QAbstractSocket::SocketState)) );
+  connect(_socket, SIGNAL(frameReceived(QString)),
+             this, SLOT(onTextReceived(QString)));
 }
 
 //------------------------------------------------------------------------------
@@ -59,12 +71,18 @@ void TextWidget::triggerSearch()
   switch( _socket->state() )
   {
     case QWsSocket::ConnectedState:
+    {
       _socket->write("{"
         "\"task\": \"INITIATE\","
         "\"id\": \"" + _edit->currentText().replace('"', "\\\"") + "\","
         "\"stamp\": 0"
       "}");
+      QAction* action = new QAction(_edit->currentText(), this);
+      connect(action, SIGNAL(triggered()), this, SLOT(abortRoute()));
+      _actions.insert(action);
+      _menu->addAction(action);
       break;
+    }
     default:
       _socket->connectToHost(QHostAddress::LocalHost, 4487);
       break;
@@ -85,6 +103,31 @@ void TextWidget::stateChanged(QAbstractSocket::SocketState state)
 //      break;
     default:
       _button->setIcon(QIcon("icon-error-16.png"));
+      for(auto it = _actions.begin(); it != _actions.end(); ++it)
+        _menu->removeAction(*it);
+      _actions.clear();
       break;
   }
+}
+
+//------------------------------------------------------------------------------
+void TextWidget::onTextReceived(QString data)
+{
+  qDebug() << "Received: " << data;
+}
+
+//------------------------------------------------------------------------------
+void TextWidget::abortRoute()
+{
+  QAction* action = qobject_cast<QAction*>(sender());
+  _menu->removeAction(action);
+  _actions.erase(action);
+
+  qDebug() << "Abort for " << action->text() << " requested...";
+
+  _socket->write("{"
+    "\"task\": \"ABORT\","
+    "\"id\": \"" + action->text().replace('"', "\\\"") + "\","
+    "\"stamp\": 0"
+  "}");
 }

@@ -145,7 +145,7 @@ function removeRouteData(id)
 }
 
 //------------------------------------------------------------------------------
-function onAbort(id, stamp)
+function onAbort(id, stamp, send_msg = true)
 {
   // TODO
   last_id = null;
@@ -163,11 +163,12 @@ function onAbort(id, stamp)
     removeRouteData(id);
   }
   
-  send({
-    'task': 'ABORT',
-    'id': id,
-    'stamp': stamp
-  });
+  if( send_msg )
+    send({
+      'task': 'ABORT',
+      'id': id,
+      'stamp': stamp
+    });
 }
 
 //------------------------------------------------------------------------------
@@ -327,6 +328,10 @@ function register()
           last_stamp = msg.stamp;
   
           setTimeout('reportVisLinks("'+msg.id+'", true)',0);
+        }
+        else if( msg.task == 'ABORT' )
+        {
+          onAbort(msg.id, msg.stamp, false);
         }
         else if( msg.task == 'GET-FOUND' )
         {

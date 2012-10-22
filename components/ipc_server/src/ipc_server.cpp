@@ -500,15 +500,14 @@ namespace LinksRouting
       {
         if( id.isEmpty() && stamp == (uint32_t)-1 )
           _slot_links->_data->clear();
-        else if( link == _slot_links->_data->end() )
-          LOG_WARN("Received ABORT for none existing REQUEST");
-        else
-        {
+        else if( link != _slot_links->_data->end() )
           _slot_links->_data->erase(link);
+        else
+          LOG_WARN("Received ABORT for none existing REQUEST");
 
-//          for(auto socket = _clients.begin(); socket != _clients.end(); ++socket)
-//            (*socket)->write(request);
-        }
+        for(auto socket = _clients.begin(); socket != _clients.end(); ++socket)
+          if( sender() != socket->first )
+            socket->first->write(data);
       }
       else
       {

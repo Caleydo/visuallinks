@@ -10,9 +10,12 @@
 #define _TEXT_WIDGET_HPP_
 
 #include <QComboBox>
+#include <QMenu>
 #include <QPushButton>
 #include <QWidget>
 #include <QWsSocket.h>
+
+#include <set>
 
 class TextWidget: public QWidget
 {
@@ -30,12 +33,17 @@ class TextWidget: public QWidget
 
     void triggerSearch();
     void stateChanged(QAbstractSocket::SocketState state);
+    void onTextReceived(QString data);
+    void abortRoute();
 
   private:
 
     QComboBox      *_edit;
     QPushButton    *_button;
+    QMenu          *_menu;
     QWsSocket      *_socket;
+
+    std::set<QAction*> _actions;
 };
 
 #endif /* _TEXT_WIDGET_HPP_ */
