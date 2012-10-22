@@ -23,14 +23,13 @@ TextWidget::TextWidget(QWidget *parent):
   QHBoxLayout* layout = new QHBoxLayout(this);
   layout->setContentsMargins(0,0,0,0);
   setSizePolicy(QSizePolicy::MinimumExpanding, QSizePolicy::MinimumExpanding);
-  setMinimumSize(256, 128);
-  setMaximumWidth(256);
+  setMinimumWidth(256);
 
   QStringList wordList;
   wordList << "alpha" << "omega" << "omicron" << "zeta";
   _edit->addItems(wordList);
   _edit->setEditable(true);
-  layout->addWidget(_edit);
+  layout->addWidget(_edit, 1);
 
   _button->setIcon(QIcon("icon-16.png"));
   _button->setIconSize(QSize(16,16));
@@ -59,9 +58,6 @@ void TextWidget::triggerSearch()
 {
   switch( _socket->state() )
   {
-    case QWsSocket::UnconnectedState:
-      _socket->connectToHost(QHostAddress::LocalHost, 4487);
-      break;
     case QWsSocket::ConnectedState:
       _socket->write("{"
         "\"task\": \"INITIATE\","
@@ -70,14 +66,25 @@ void TextWidget::triggerSearch()
       "}");
       break;
     default:
-      qDebug() << "Unknown socket state: " << _socket->state();
+      _socket->connectToHost(QHostAddress::LocalHost, 4487);
       break;
   }
-  //std::cout << "search: " << _edit->currentText().toStdString() << std::endl;
 }
 
 //------------------------------------------------------------------------------
 void TextWidget::stateChanged(QAbstractSocket::SocketState state)
 {
   qDebug() << "State = " << state;
+  switch( _socket->state() )
+  {
+    case QWsSocket::ConnectedState:
+      _button->setIcon(QIcon("icon-active-16.png"));
+      break;
+//    case QWsSocket::UnconnectedState:
+//      _button->setIcon(QIcon("icon-error-16.png"));
+//      break;
+    default:
+      _button->setIcon(QIcon("icon-error-16.png"));
+      break;
+  }
 }

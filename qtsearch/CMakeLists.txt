@@ -14,11 +14,9 @@ set( SOURCE_FILES
 
 set( FIREFOX_ADDON_CONTENT ${PROJROOT}/addons/firefox/src/content)
 set( RUNTIME_FILES
-  ${CMAKE_CURRENT_SOURCE_DIR}/client.html
   ${FIREFOX_ADDON_CONTENT}/icon-16.png
   ${FIREFOX_ADDON_CONTENT}/icon-active-16.png
   ${FIREFOX_ADDON_CONTENT}/icon-error-16.png
-  ${FIREFOX_ADDON_CONTENT}/VislinkClient.js
 )
 
 # dependencies & build
@@ -42,7 +40,6 @@ add_executable(qtsearch ${HEADER_FILES} ${SOURCE_FILES})
 target_link_libraries( qtsearch
   ${QT_QTCORE_LIBRARY}
   ${QT_QTGUI_LIBRARY}
-  ${QT_QTWEBKIT_LIBRARY}
   QtWebSocket
 )
 
