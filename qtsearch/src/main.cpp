@@ -1,0 +1,12 @@
+#include "text_widget.hpp"
+#include <QApplication>
+
+int main(int argc, char *argv[])
+{
+  QApplication app(argc, argv);
+
+  TextWidget w;
+  w.show();
+
+  return app.exec();
+}

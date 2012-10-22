@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <title>Visual Links Control Center</title>
+    <meta charset="utf-8"/>
+    <style>
+      html {
+        width: 256px;
+      }
+      
+      .error {
+        background-color: #fbb;
+      }
+      
+      .active {
+        background-color: #cfc;
+      }
+
+    </style>
+    <script type="text/javascript" src="VislinkClient.js"></script>
+    <script>
+      /**
+       * Some helpers and convenience functions
+       */
+      Array.prototype.contains = function(obj)
+      {
+        return this.indexOf(obj) > -1;
+      };
+      
+      Array.prototype.containsOneOf = function(obj)
+      {
+        for(var i in obj)
+          if( this.contains(obj[i]) )
+            return true;
+        return false;
+      };
+      
+      function $(id)
+      {
+        return document.getElementById(id);
+      }
+      
+      function createRegionForPoint(pos)
+      {
+        var x = pos.x - 10;
+        var y = pos.y - 10;
+        var w = 20;
+        var h = 20;
+          
+        return [ [x,     y],
+                  [x + w, y],
+                  [x + w, y + h],
+                  [x,     y + h],
+                  {rel: true} ];
+      }
+
+      // -----------------------------------------------------------------------
+      var client;
+      
+      /**
+       * Callback for Vislink button
+       */
+      function onVislinkButton(e)
+      {
+        client.connect({pos: [e.screenX, e.screenY]});
+      }
+
+      client = new VislinkClient("Control Center");
+      client.onstatus = function(status)
+      {
+        if( status.length > 0 )
+          status += "-";
+        $("vislink-icon").src = "icon-" + status + "16.png";
+        vislink_control.onStatusChange(status);
+      };
+      client.getRegion = function()
+      {
+        return [
+          Math.round(window.mozInnerScreenX - window.screenX),
+          Math.round(window.mozInnerScreenY - window.screenY),
+          Math.round(window.innerWidth),
+          Math.round(window.innerHeight)
+        ];
+      };
+
+    </script>
+  </head>
+  <body>
+    <input id="search" size="24"/>
+    <button type="button" onclick="onVislinkButton(event)" alt="Vislinks" id="vislink-button"><img id="vislink-icon" src="icon-16.png"/></button>
+  </body>
+</html>
