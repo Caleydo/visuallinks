@@ -117,6 +117,17 @@ namespace LinksRouting
       int           _preview_width,
                     _preview_height;
 
+      struct InteractionHandler
+      {
+        IPCServer* _server;
+        InteractionHandler(IPCServer* server);
+        void updateRegion( const ClientInfos::value_type& client_info,
+                           SlotType::TextPopup::Popup& popup,
+                           float2 center = float2(-9999, -9999),
+                           float2 rel_pos = float2() );
+        void sendRequest(  const ClientInfos::value_type& client_info,
+                           SlotType::TextPopup::Popup& popup );
+      } _interaction_handler;
   };
 
 } // namespace LinksRouting

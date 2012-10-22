@@ -21,7 +21,7 @@ function VislinkClient(application_name)
 	  if( status == 'error' )
 	  {
 	    _socket = 0;
-      window.removeEventListener('resize', function() this._onResize(), false);
+      window.removeEventListener('resize', function(){ this._onResize(); }, false);
 	  }
 	};
 	
@@ -40,7 +40,7 @@ function VislinkClient(application_name)
     try
 	  {
       _socket = new WebSocket(url, 'VLP');
-      window.addEventListener('resize', function() $this._onResize(), false);
+      window.addEventListener('resize', function(){ $this._onResize(); }, false);
 
       _socket.onopen = function(event)
       {

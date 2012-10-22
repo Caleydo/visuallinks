@@ -107,6 +107,7 @@ message("--------------------")
 
 #add default applications
 add_subdir_option(qtfullscreensystem QTFullscreenSystem)
+add_subdir_option(qtsearch QtSearch)
 add_subdir_option(qt-ncc QtNormalizedCrossCorrelationTest FALSE EXCLUDE_FROM_ALL)
 add_subdir_option(qt-ocr QtOCRTest FALSE EXCLUDE_FROM_ALL)
 #add_subdirectory(${PROJROOT}/singleimagesystem ${BIN_DIR}/singleimagesystem)

@@ -26,9 +26,10 @@ class TextWidget: public QWidget
   public slots:
     void onStatusChange(QString status);
 
-  private slots:
+  protected slots:
 
     void triggerSearch();
+    void stateChanged(QAbstractSocket::SocketState state);
 
   private:
 

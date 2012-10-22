@@ -190,7 +190,8 @@ namespace LinksRouting
     Configurable("QtWebsocketServer"),
     _window_monitor(widget, std::bind(&IPCServer::regionsChanged, this, _1)),
     _mutex_slot_links(mutex),
-    _cond_data_ready(cond_data)
+    _cond_data_ready(cond_data),
+    _interaction_handler(this)
   {
     assert(widget);
     registerArg("DebugRegions", _debug_regions);
@@ -995,51 +996,12 @@ namespace LinksRouting
         };
         size_t index = _subscribe_popups->_data->popups.size();
         _subscribe_popups->_data->popups.push_back(popup);
-        float preview_aspect = _preview_width
-                             / static_cast<float>(_preview_height);
-
-        auto updateRegion = [=]( TextPopup::Popup& popup,
-                                 float2 center = float2(-9999, -9999),
-                                 float2 rel_pos = float2() )
-        {
-          QRect reg = client_info->second.scroll_region;
-          int h = reg.height() / pow(2, popup.hover_region.zoom) + 0.5,
-              w = h * preview_aspect + 0.5;
-
-          popup.hover_region.src_region.size.x = w;
-          popup.hover_region.src_region.size.y = h;
-
-          if( center.x > -9999 && center.y > -9999 )
-          {
-            // Center source region around mouse cursor
-            popup.hover_region.src_region.pos.x = center.x - rel_pos.x * w;
-            popup.hover_region.src_region.pos.y = center.y - rel_pos.y * h;
-          }
-
-          clamp<float>(popup.hover_region.src_region.pos.x, 0, reg.width() - w);
-          clamp<float>(popup.hover_region.src_region.pos.y, 0, reg.height() - h);
-        };
-        auto sendRequest = [=, &_preview_width, &_preview_height]
-                           (TextPopup::Popup& popup)
-        {
-          client_info->first->write(QString(
-          "{"
-            "\"task\": \"GET\","
-            "\"id\": \"img-preview\","
-            "\"size\": [" + QString("%1").arg(_preview_width)
-                    + "," + QString("%1").arg(_preview_height)
-                    + "],"
-            "\"src\": " + popup.hover_region.src_region.toString().c_str() +
-          "}"));
-        };
 
         /**
          * Mouse move callback
          */
         _subscribe_mouse->_data->_move_callbacks.push_back(
-          [ =,
-            &_subscribe_popups,
-            &_cond_data_ready ](int x, int y)
+          [&,index,client_info](int x, int y)
           {
             auto& popup = _subscribe_popups->_data->popups[index];
             if(  popup.region.contains(x, y)
@@ -1053,8 +1015,8 @@ namespace LinksRouting
 
               popup.hover_region.visible = true;
 
-              updateRegion(popup);
-              sendRequest(popup);
+              _interaction_handler.updateRegion(*client_info, popup);
+              _interaction_handler.sendRequest(*client_info, popup);
 
             }
             else if( !popup.hover_region.visible )
@@ -1070,9 +1032,7 @@ namespace LinksRouting
          * Mouse click callback
          */
         _subscribe_mouse->_data->_click_callbacks.push_back(
-        [ =,
-          &_subscribe_popups,
-          &_cond_data_ready ](int x, int y)
+        [&,index,client_info](int x, int y)
         {
           auto& popup = _subscribe_popups->_data->popups[index];
           if( !popup.hover_region.visible ||
@@ -1101,12 +1061,9 @@ namespace LinksRouting
          * Scroll callback
          */
         _subscribe_mouse->_data->_scroll_callbacks.push_back(
-        [ =,
-          &_subscribe_popups,
-          &_cond_data_ready,
-          &_preview_width,
-          &_preview_height ](int delta, const float2& pos, uint32_t mod)
-        {
+        [&,index,client_info](int delta, const float2& pos, uint32_t mod)
+        {float preview_aspect = _preview_width
+          / static_cast<float>(_preview_height);
           auto& popup = _subscribe_popups->_data->popups[index];
           if( !popup.hover_region.visible )
               return;
@@ -1118,13 +1075,13 @@ namespace LinksRouting
           if( mod & SlotType::MouseEvent::ShiftModifier )
           {
             popup.hover_region.src_region.pos.y -= delta / fabs(delta) * 20 * step_y;
-            updateRegion(popup);
+            _interaction_handler.updateRegion(*client_info, popup);
           }
           else if( mod & SlotType::MouseEvent::ControlModifier )
           {
             float step_x = step_y * preview_aspect;
             popup.hover_region.src_region.pos.x -= delta / fabs(delta) * 20 * step_x;
-            updateRegion(popup);
+            _interaction_handler.updateRegion(*client_info, popup);
           }
           else
           {
@@ -1138,11 +1095,16 @@ namespace LinksRouting
 
               float2 d = pos - popup.hover_region.region.pos,
                      mouse_pos = scale * d + popup.hover_region.src_region.pos;
-              updateRegion(popup, mouse_pos, d / popup.hover_region.region.size);
+              _interaction_handler.updateRegion(
+                *client_info,
+                popup,
+                mouse_pos,
+                d / popup.hover_region.region.size
+              );
             }
           }
 
-          sendRequest(popup);
+          _interaction_handler.sendRequest(*client_info, popup);
         });
       }
 
@@ -1300,7 +1262,7 @@ namespace LinksRouting
     std::cout << "Parse regions (" << client_info.wid << ")" << std::endl;
 
     if( !json.isSet("regions") )
-      return LinkDescription::NodePtr();
+      return std::make_shared<LinkDescription::Node>();
 
     const WindowRegions windows = _window_monitor.getWindows();
     auto window_info = std::find_if
@@ -1388,6 +1350,56 @@ namespace LinksRouting
       client_info.scroll_region = msg.getValue<QRect>("scroll-region");
     else
       client_info.scroll_region = client_info.region;
+  }
+
+  //----------------------------------------------------------------------------
+  IPCServer::InteractionHandler::InteractionHandler(IPCServer* server):
+    _server(server)
+  {
+
+  }
+
+  //----------------------------------------------------------------------------
+  void IPCServer::InteractionHandler::updateRegion(
+    const ClientInfos::value_type& client_info,
+    SlotType::TextPopup::Popup& popup,
+    float2 center,
+    float2 rel_pos )
+  {
+    float preview_aspect = _server->_preview_width
+                         / static_cast<float>(_server->_preview_height);
+    QRect reg = client_info.second.scroll_region;
+    int h = reg.height() / pow(2, popup.hover_region.zoom) + 0.5,
+        w = h * preview_aspect + 0.5;
+
+    popup.hover_region.src_region.size.x = w;
+    popup.hover_region.src_region.size.y = h;
+
+    if( center.x > -9999 && center.y > -9999 )
+    {
+      // Center source region around mouse cursor
+      popup.hover_region.src_region.pos.x = center.x - rel_pos.x * w;
+      popup.hover_region.src_region.pos.y = center.y - rel_pos.y * h;
+    }
+
+    clamp<float>(popup.hover_region.src_region.pos.x, 0, reg.width() - w);
+    clamp<float>(popup.hover_region.src_region.pos.y, 0, reg.height() - h);
+  }
+
+  //----------------------------------------------------------------------------
+  void IPCServer::InteractionHandler::sendRequest(
+    const ClientInfos::value_type& client_info,
+    SlotType::TextPopup::Popup& popup )
+  {
+    client_info.first->write(QString(
+    "{"
+      "\"task\": \"GET\","
+      "\"id\": \"img-preview\","
+      "\"size\": [" + QString("%1").arg(_server->_preview_width)
+              + "," + QString("%1").arg(_server->_preview_height)
+              + "],"
+      "\"src\": " + popup.hover_region.src_region.toString().c_str() +
+    "}"));
   }
 
   //----------------------------------------------------------------------------
