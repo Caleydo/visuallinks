@@ -47,20 +47,28 @@ namespace LinksRouting
       //resolve parts of identifier (Renderer:FeatureX) and find in config
       std::string valname;
       TiXmlNode* container = const_cast<XmlConfig*>(this)->parseIdentifier(identifier, valname, false);
+      if( !container )
+        return false;
 
       //check if exists
-      TiXmlElement* arg = container->FirstChild(valname)->ToElement();
-      if(!arg)
+      TiXmlNode* arg_node = container->FirstChild(valname);
+      if( !arg_node )
         return false;
+      TiXmlElement* arg = arg_node->ToElement();
+
       //check if types match
       if(checkTypeMatch<T>(identifier, arg) < 2)
         return false;
-      const std::string* valstr = arg->Attribute(valname);
-      std::stringstream argvalstr(*valstr);
+
+      const char* valstr = arg->Attribute("val");
+      if( !valstr )
+        return false;
+
+      std::stringstream argvalstr(valstr);
       argvalstr >> val;
+
       return true;
     }
-
 
     struct CompInfo
     {

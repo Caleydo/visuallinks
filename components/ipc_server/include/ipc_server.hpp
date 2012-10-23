@@ -28,6 +28,7 @@
 #include "datatypes.h"
 
 class QMutex;
+class JSONParser;
 
 namespace LinksRouting
 {
@@ -67,6 +68,20 @@ namespace LinksRouting
 
     protected:
 
+      struct ClientInfo
+      {
+        WId     wid;
+        QRect   region;
+        QRect   scroll_region;
+      };
+      typedef std::map<QWsSocket*, ClientInfo> ClientInfos;
+
+      void onInitiate( LinkDescription::LinkList::iterator& link,
+                       const QString& id,
+                       uint32_t stamp,
+                       const JSONParser& msg,
+                       ClientInfo& client_info );
+
       void regionsChanged(const WindowRegions& regions);
       bool updateHedge( const WindowRegions& regions,
                         LinkDescription::HyperEdge* hedge );
@@ -76,14 +91,6 @@ namespace LinksRouting
                          WId client_wid );
 
     private:
-
-      struct ClientInfo
-      {
-        WId     wid;
-        QRect   region;
-        QRect   scroll_region;
-      };
-      typedef std::map<QWsSocket*, ClientInfo> ClientInfos;
 
       QWsServer          *_server;
       ClientInfos         _clients;
@@ -108,10 +115,10 @@ namespace LinksRouting
       /* Slot for showing overlay images */
       slot_t<LinksRouting::SlotType::Image>::type _subscribe_image;
 
-      class JSON;
-      LinkDescription::NodePtr parseRegions( JSON& json,
+      LinkDescription::NodePtr parseRegions( const JSONParser& json,
                                              const ClientInfo& client_info );
-      void updateScrollRegion( const JSON& json, ClientInfo& client_info);
+      void updateScrollRegion( const JSONParser& json,
+                               ClientInfo& client_info );
 
       std::string   _debug_regions;
       int           _preview_width,

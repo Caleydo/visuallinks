@@ -8,10 +8,9 @@
 
 #include "ipc_server.hpp"
 #include "log.hpp"
+#include "JSONParser.h"
 
 #include <QMutex>
-#include <QScriptEngine>
-#include <QScriptValueIterator>
 
 #include <algorithm>
 #include <map>
@@ -56,131 +55,6 @@ namespace LinksRouting
   {
     step = std::max(-max_step, std::min(step, max_step));
     clamp<T>(val += step, min, max);
-  }
-
-  /**
-   * Helper for handling json messages
-   */
-  class IPCServer::JSON
-  {
-    public:
-
-      JSON(QString data)
-      {
-        _json = _engine.evaluate("("+data+")");
-
-        if( !_json.isValid() )
-          throw std::runtime_error("Failed to evaluted received data.");
-
-        if( _engine.hasUncaughtException() )
-          throw std::runtime_error("Failed to evaluted received data: "
-                                   + _json.toString().toStdString());
-
-        if( _json.isArray() || !_json.isObject() )
-          throw std::runtime_error("Received data is no JSON object.");
-
-
-//        QScriptValueIterator it(_json);
-//        while( it.hasNext() )
-//        {
-//          it.next();
-//          const std::string key = it.name().toStdString();
-//          const auto val_config = types.find(key);
-//
-//          if( val_config == types.end() )
-//          {
-//            LOG_WARN("Unknown parameter (" << key << ")");
-//            continue;
-//          }
-//
-//          const std::string type = std::get<0>(val_config->second);
-//          if(    ((type == "int" || type == "float") && !it.value().isNumber())
-//              || (type == "string" && !it.value().isString()) )
-//          {
-//            LOG_WARN("Wrong type for parameter `" << key << "` ("
-//                     << type << " expected)");
-//            continue;
-//          }
-//
-//          std::cout << "valid: "
-//                    << key
-//                    << "="
-//                    << it.value().toString().toStdString()
-//                    << std::endl;
-//        }
-      }
-
-      template <class T>
-      T getValue(const QString& key) const
-      {
-        QScriptValue prop = _json.property(key);
-
-        if( !prop.isValid() || prop.isUndefined() )
-          throw std::runtime_error("No such property ("+key.toStdString()+")");
-
-        return extractValue<T>(prop);
-      }
-
-      template <class T>
-      T getValue(const QString& key, const T& def) const
-      {
-        QScriptValue prop = _json.property(key);
-
-        if( !prop.isValid() || prop.isUndefined() )
-          return def;
-
-        return extractValue<T>(prop);
-      }
-
-      bool isSet(const QString& key) const
-      {
-        QScriptValue prop = _json.property(key);
-        return prop.isValid() && !prop.isUndefined();
-      }
-
-    private:
-
-      template <class T> T extractValue(QScriptValue&) const;
-
-      QScriptEngine _engine;
-      QScriptValue  _json;
-  };
-
-  template<>
-  QString IPCServer::JSON::extractValue(QScriptValue& val) const
-  {
-    if( !val.isString() )
-      throw std::runtime_error("Not a string");
-    return val.toString();
-  }
-
-  template<>
-  uint32_t IPCServer::JSON::extractValue(QScriptValue& val) const
-  {
-    if( !val.isNumber() )
-      throw std::runtime_error("Not a number");
-    return val.toUInt32();
-  }
-
-  template<>
-  QVariantList IPCServer::JSON::extractValue(QScriptValue& val) const
-  {
-    if( !val.isArray() )
-      throw std::runtime_error("Not an array");
-    return val.toVariant().toList();
-  }
-
-  template<>
-  QRect IPCServer::JSON::extractValue(QScriptValue& val) const
-  {
-    QVariantList region_list = extractValue<QVariantList>(val);
-    if( region_list.length() != 4 )
-      throw std::runtime_error("Invalid region (length != 4)");
-
-    return QRect( region_list.at(0).toInt(),
-                  region_list.at(1).toInt(),
-                  region_list.at(2).toInt(),
-                  region_list.at(3).toInt() );
   }
 
   //----------------------------------------------------------------------------
@@ -307,7 +181,7 @@ namespace LinksRouting
 
     try
     {
-      JSON msg(data);
+      JSONParser msg(data);
 
       QString task = msg.getValue<QString>("task");
       if( task == "REGISTER" || task == "RESIZE" )
@@ -411,71 +285,7 @@ namespace LinksRouting
       );
 
       if( task == "INITIATE" )
-      {
-        LOG_INFO("Received INITIATE: " << id_str);
-        uint32_t color_id = 0;
-
-        updateScrollRegion(msg, client_info);
-
-        // TODO keep working for multiple links at the same time
-        _subscribe_mouse->_data->clear();
-        _subscribe_popups->_data->popups.clear();
-
-        // Remove eventually existing search for same id
-        if( link != _slot_links->_data->end() )
-        {
-          // keep color
-          color_id = link->_color_id;
-
-          LOG_INFO("Replacing search for " << link->_id);
-          _slot_links->_data->erase(link);
-        }
-        else
-        {
-          // get first unused color
-          while
-          (
-            std::find_if
-            (
-              _slot_links->_data->begin(),
-              _slot_links->_data->end(),
-              [color_id](const LinkDescription::LinkDescription& desc)
-              {
-                return desc._color_id == color_id;
-              }
-            ) != _slot_links->_data->end()
-          )
-            ++color_id;
-        }
-        auto hedge = std::make_shared<LinkDescription::HyperEdge>();
-        hedge->addNode( parseRegions(msg, client_info) );
-        updateCenter(hedge.get());
-
-        _slot_links->_data->push_back(
-          LinkDescription::LinkDescription
-          (
-            id_str,
-            stamp,
-            hedge, // TODO add props?
-            color_id
-          )
-        );
-        _slot_links->setValid(true);
-
-        // Send request to all clients
-        QString request(
-          "{"
-            "\"task\": \"REQUEST\","
-            "\"id\": \"" + id.replace('"', "\\\"") + "\","
-            "\"stamp\": " + QString("%1").arg(stamp) +
-          "}"
-        );
-
-//        for(QWsSocket* socket: _clients)
-//          socket->write(request);
-        for(auto socket = _clients.begin(); socket != _clients.end(); ++socket)
-          socket->first->write(request);
-      }
+        onInitiate(link, id, stamp, msg, client_info);
       else if( task == "FOUND" )
       {
         if( link == _slot_links->_data->end() )
@@ -539,8 +349,8 @@ namespace LinksRouting
     }
 
     std::cout << "Binary data received: " << ((data.size() / 1024) / 1024.f) << "MB" << std::endl;
-    uint8_t type = data.at(0),
-            id = data.at(1);
+//    uint8_t type = data.at(0),
+//            id = data.at(1);
 
     delete[] _subscribe_image->_data->pdata;
     _subscribe_image->_data->pdata = new uint8_t[data.size() - 2];
@@ -574,6 +384,93 @@ namespace LinksRouting
     socket->deleteLater();
 
     LOG_INFO("Client disconnected");
+  }
+
+  //----------------------------------------------------------------------------
+  void IPCServer::onInitiate( LinkDescription::LinkList::iterator& link,
+                              const QString& id,
+                              uint32_t stamp,
+                              const JSONParser& msg,
+                              ClientInfo& client_info )
+  {
+    const std::string id_str = id.toStdString();
+    LOG_INFO("Received INITIATE: " << id_str);
+    uint32_t color_id = 0;
+
+    std::string history;
+    (*_subscribe_user_config->_data)->getString("QtWebsocketServer:SearchHistory", history);
+
+    std::cout << "old: " << history << std::endl;
+
+    QString clean_id = QString(id).replace(",","") + ",";
+    QString new_history = clean_id
+                        + QString::fromStdString(history).replace(clean_id, "");
+
+    qDebug() << new_history;
+
+    (*_subscribe_user_config->_data)->setString("QtWebsocketServer:SearchHistory",
+                                                new_history.toStdString());
+
+    updateScrollRegion(msg, client_info);
+
+    // TODO keep working for multiple links at the same time
+    _subscribe_mouse->_data->clear();
+    _subscribe_popups->_data->popups.clear();
+
+    // Remove eventually existing search for same id
+    if( link != _slot_links->_data->end() )
+    {
+      // keep color
+      color_id = link->_color_id;
+
+      LOG_INFO("Replacing search for " << link->_id);
+      _slot_links->_data->erase(link);
+    }
+    else
+    {
+      // get first unused color
+      while
+      (
+        std::find_if
+        (
+          _slot_links->_data->begin(),
+          _slot_links->_data->end(),
+          [color_id](const LinkDescription::LinkDescription& desc)
+          {
+            return desc._color_id == color_id;
+          }
+        ) != _slot_links->_data->end()
+      )
+        ++color_id;
+    }
+    auto hedge = std::make_shared<LinkDescription::HyperEdge>();
+    hedge->addNode( parseRegions(msg, client_info) );
+    updateCenter(hedge.get());
+
+    _slot_links->_data->push_back(
+      LinkDescription::LinkDescription
+      (
+        id.toStdString(),
+        stamp,
+        hedge, // TODO add props?
+        color_id
+      )
+    );
+    _slot_links->setValid(true);
+
+    // Send request to all clients
+    QString request(
+      "{"
+        "\"task\": \"REQUEST\","
+        "\"id\": \"" + QString(id).replace('"', "\\\"") + "\","
+        "\"stamp\": " + QString::number(stamp) +
+      "}"
+    );
+
+//        for(QWsSocket* socket: _clients)
+//          socket->write(request);
+    for(auto socket = _clients.begin(); socket != _clients.end(); ++socket)
+      socket->first->write(request);
   }
 
   //----------------------------------------------------------------------------
@@ -1255,7 +1152,7 @@ namespace LinksRouting
   }
 
   //----------------------------------------------------------------------------
-  LinkDescription::NodePtr IPCServer::parseRegions( IPCServer::JSON& json,
+  LinkDescription::NodePtr IPCServer::parseRegions( const JSONParser& json,
                                                     const ClientInfo& client_info )
   {
     std::cout << "Parse regions (" << client_info.wid << ")" << std::endl;
@@ -1343,7 +1240,8 @@ namespace LinksRouting
   }
 
   //----------------------------------------------------------------------------
-  void IPCServer::updateScrollRegion(const JSON& msg, ClientInfo& client_info)
+  void IPCServer::updateScrollRegion( const JSONParser& msg,
+                                      ClientInfo& client_info )
   {
     if( msg.isSet("scroll-region") )
       client_info.scroll_region = msg.getValue<QRect>("scroll-region");
