@@ -210,37 +210,48 @@ namespace LinksRouting
 
       if( task == "GET" )
       {
+        QString val;
         if( id == "/routing" )
         {
-          QString routers = "{\"active\": \""
-                          + QString::fromStdString(_subscribe_routing->_data->active)
-                          + "\", \"default\": \""
-                          + QString::fromStdString(_subscribe_routing->_data->getDefault())
-                          + "\", \"available\":[";
+          val = "{\"active\": \""
+              + QString::fromStdString(_subscribe_routing->_data->active)
+              + "\", \"default\": \""
+              + QString::fromStdString(_subscribe_routing->_data->getDefault())
+              + "\", \"available\":[";
           if( !_subscribe_routing->_data->available.empty() )
           {
             for( auto comp = _subscribe_routing->_data->available.begin();
                  comp != _subscribe_routing->_data->available.end();
                  ++comp )
-              routers += "[\"" + QString::fromStdString(comp->first) + "\","
-                       + (comp->second ? '1' : '0') + "],";
-            routers.replace(routers.length() - 1, 1, ']');
+              val += "[\"" + QString::fromStdString(comp->first) + "\","
+                   + (comp->second ? '1' : '0') + "],";
+            val.replace(val.length() - 1, 1, ']');
           }
           else
-            routers.push_back(']');
-          routers.push_back('}');
-
-          client->first->write
-          ("{"
-              "\"task\": \"GET-FOUND\","
-              "\"id\": \"" + id.replace('"', "\\\"") + "\","
-              "\"val\":" + routers +
-           "}");
+            val.push_back(']');
+          val.push_back('}');
+        }
+        else if( id == "/search-history" )
+        {
+          std::string history;
+          (*_subscribe_user_config->_data)->getString("QtWebsocketServer:SearchHistory", history);
+          val = "\""
+              + QString::fromStdString(history).replace('"', "\\\"")
+              + "\"";
         }
         else
         {
           LOG_WARN("Requesting unknown value: " << id_str);
+          return;
         }
+
+        client->first->write
+        ("{"
+            "\"task\": \"GET-FOUND\","
+            "\"id\": \"" + id.replace('"', "\\\"") + "\","
+            "\"val\":" + val +
+         "}");
+
         return;
       }
       else if( task == "SET" )
@@ -400,13 +411,9 @@ namespace LinksRouting
     std::string history;
     (*_subscribe_user_config->_data)->getString("QtWebsocketServer:SearchHistory", history);
 
-    std::cout << "old: " << history << std::endl;
-
     QString clean_id = QString(id).replace(",","") + ",";
     QString new_history = clean_id
                         + QString::fromStdString(history).replace(clean_id, "");
-
-    qDebug() << new_history;
 
     (*_subscribe_user_config->_data)->setString("QtWebsocketServer:SearchHistory",
                                                 new_history.toStdString());

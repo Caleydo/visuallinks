@@ -7,6 +7,7 @@
  */
 
 #include "text_widget.hpp"
+#include "JSONParser.h"
 
 #include <QApplication>
 #include <QBoxLayout>
@@ -26,9 +27,6 @@ TextWidget::TextWidget(QWidget *parent):
   setSizePolicy(QSizePolicy::MinimumExpanding, QSizePolicy::Minimum);
   setMinimumWidth(256);
 
-  QStringList wordList;
-  wordList << "alpha" << "omega" << "omicron" << "zeta";
-  _edit->addItems(wordList);
   _edit->setEditable(true);
   layout->addWidget(_edit, 1);
 
@@ -97,6 +95,10 @@ void TextWidget::stateChanged(QAbstractSocket::SocketState state)
   {
     case QWsSocket::ConnectedState:
       _button->setIcon(QIcon("icon-active-16.png"));
+      _socket->write(QString("{"
+        "\"task\": \"GET\","
+        "\"id\": \"/search-history\""
+      "}"));
       break;
 //    case QWsSocket::UnconnectedState:
 //      _button->setIcon(QIcon("icon-error-16.png"));
@@ -114,6 +116,28 @@ void TextWidget::stateChanged(QAbstractSocket::SocketState state)
 void TextWidget::onTextReceived(QString data)
 {
   qDebug() << "Received: " << data;
+
+  try
+  {
+    JSONParser msg(data);
+    QString task = msg.getValue<QString>("task");
+
+    if( task == "GET-FOUND" )
+    {
+      QString id = msg.getValue<QString>("id"),
+              val = msg.getValue<QString>("val");
+
+      QStringList values = val.split(',', QString::SkipEmptyParts);
+
+      while( _edit->count() )
+        _edit->removeItem(0);
+      _edit->addItems(values);
+    }
+  }
+  catch(std::runtime_error& ex)
+  {
+    qDebug() << "Failed to handle message: " << ex.what();
+  }
 }
 
 //------------------------------------------------------------------------------
