@@ -193,6 +193,13 @@ struct Rect
     size(size)
   {}
 
+#ifdef QRECT_H
+  Rect(const QRect& r):
+    pos(r.left(), r.top()),
+    size(r.width(), r.height())
+  {}
+#endif
+
   bool contains(float x, float y, float margin = 0.f) const
   {
     return x >= pos.x - margin && x <= pos.x + size.x + margin

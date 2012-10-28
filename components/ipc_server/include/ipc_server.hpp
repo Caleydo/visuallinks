@@ -9,6 +9,9 @@
 #ifndef _IPC_SERVER_HPP_
 #define _IPC_SERVER_HPP_
 
+#include <QtCore>
+#include <qwindowdefs.h>
+
 #include "common/componentarguments.h"
 #include "config.h"
 #include "linkdescription.h"
@@ -21,9 +24,6 @@
 
 #include "QWsServer.h"
 #include "QWsSocket.h"
-
-#include <QtCore>
-#include <qwindowdefs.h>
 
 #include "datatypes.h"
 

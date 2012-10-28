@@ -763,6 +763,7 @@ namespace LinksRouting
     float2 hedge_center;
     size_t num_visible = 0;
 
+    const LinkDescription::nodes_t nodes = hedge->getNodes();
     for( auto node = hedge->getNodes().begin();
               node != hedge->getNodes().end();
             ++node )
@@ -894,9 +895,14 @@ namespace LinksRouting
         using SlotType::TextPopup;
         TextPopup::Popup popup = {
           text,
+          nodes,
           TextPopup::HoverRect(popup_pos, popup_size, border_text, true),
           TextPopup::HoverRect(hover_pos, hover_size, border_preview, false)
         };
+        popup.hover_region.offset.x = region.left();
+        popup.hover_region.offset.y = region.top();
+        popup.hover_region.scroll_region = client_info->second.scroll_region;
+
         size_t index = _subscribe_popups->_data->popups.size();
         _subscribe_popups->_data->popups.push_back(popup);
 

@@ -69,9 +69,10 @@ namespace LinksRouting
       void blur(gl::FBO& fbo);
 
       bool renderLinks(const LinkDescription::LinkList& links);
-      bool renderNodes( HyperEdgeQueue& hedges_open,
-                        HyperEdgeSet& hedges_done,
-                        const LinkDescription::nodes_t& nodes );
+      bool renderNodes( const LinkDescription::nodes_t& nodes,
+                        HyperEdgeQueue* hedges_open = NULL,
+                        HyperEdgeSet* hedges_done = NULL,
+                        bool render_all = false );
       bool renderRect(const Rect& rect, size_t border = 2, GLuint tex = 0);
   };
 }

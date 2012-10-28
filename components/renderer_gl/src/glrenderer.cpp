@@ -264,10 +264,35 @@ namespace LinksRouting
         renderRect(popup->region.region, popup->region.border);
         rendered_anything = true;
 
-        if( popup->hover_region.visible )
-          renderRect( popup->hover_region.region,
-                      popup->hover_region.border,
-                      _tex_img_preview );
+        if( !popup->hover_region.visible )
+          continue;
+
+        renderRect( popup->hover_region.region,
+                    popup->hover_region.border,
+                    _tex_img_preview );
+
+        const Rect& hover = popup->hover_region.region,
+                  & src = popup->hover_region.src_region,
+                  & scroll = popup->hover_region.scroll_region;
+
+        glColor3f(1, 0, 0);
+
+        glMatrixMode(GL_MODELVIEW);
+        glPushMatrix();
+
+        glTranslatef(hover.pos.x, hover.pos.y, 0);
+        glScalef(hover.size.x / src.size.x, hover.size.y / src.size.y, 0);
+
+        float2 offset = popup->hover_region.offset;
+        if( src.size.x > scroll.size.x )
+          offset.x -= (src.size.x - scroll.size.x) / 2;
+        offset -= scroll.pos - src.pos;
+
+        glTranslatef(-offset.x, -offset.y, 0);
+
+        renderNodes(popup->nodes, 0, 0, true);
+
+        glPopMatrix();
       }
     }
     _links_fbo.unbind();
@@ -369,7 +394,7 @@ namespace LinksRouting
         auto fork = hedge->getHyperEdgeDescription();
         if( !fork )
         {
-          if( renderNodes(hedges_open, hedges_done, hedge->getNodes()) )
+          if( renderNodes(hedge->getNodes(), &hedges_open, &hedges_done) )
             rendered_anything = true;
 
           continue;
@@ -379,7 +404,7 @@ namespace LinksRouting
              segment != fork->outgoing.end();
              ++segment )
         {
-          if( renderNodes(hedges_open, hedges_done, segment->nodes) )
+          if( renderNodes(segment->nodes, &hedges_open, &hedges_done) )
             rendered_anything = true;
 
           if( segment->trail.empty() )
@@ -413,22 +438,27 @@ namespace LinksRouting
   }
 
   //----------------------------------------------------------------------------
-  bool GlRenderer::renderNodes( HyperEdgeQueue& hedges_open,
-                                HyperEdgeSet& hedges_done,
-                                const LinkDescription::nodes_t& nodes )
+  bool GlRenderer::renderNodes( const LinkDescription::nodes_t& nodes,
+                                HyperEdgeQueue* hedges_open,
+                                HyperEdgeSet* hedges_done,
+                                bool render_all )
   {
     bool rendered_anything = false;
 
     for( auto node = nodes.begin(); node != nodes.end(); ++node )
     {
-      if(     (*node)->get<bool>("hidden", false)
+      if(    !render_all
+          &&  (*node)->get<bool>("hidden", false)
           && !(*node)->get<bool>("covered", false) )
         continue;
 
-      for(auto child = (*node)->getChildren().begin();
-               child != (*node)->getChildren().end();
-             ++child )
-        hedges_open.push( child->get() );
+      if( hedges_open )
+      {
+        for(auto child = (*node)->getChildren().begin();
+                 child != (*node)->getChildren().end();
+               ++child )
+          hedges_open->push( child->get() );
+      }
 
       if( (*node)->getVertices().empty() )
         continue;

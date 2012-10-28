@@ -91,6 +91,8 @@ function getScrollRegion()
 {
   var doc = content.document;
   return {
+    x: content.scrollX,
+    y: content.scrollY,
     width: doc.documentElement.scrollWidth,
     height: doc.documentElement.scrollHeight
   };
@@ -228,7 +230,7 @@ function reportVisLinks(id, found)
   send({
     'task': (found ? 'FOUND' : 'INITIATE'),
     'title': document.title,
-    'scroll-region': [0, 0, reg.width, reg.height],
+    'scroll-region': [reg.x, reg.y, reg.width, reg.height],
     'id': id,
     'stamp': last_stamp,
     'regions': bbs

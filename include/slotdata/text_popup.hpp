@@ -9,6 +9,7 @@
 #define TEXT_POPUP_HPP_
 
 #include "../float2.hpp"
+#include "../linkdescription.h"
 
 #include <string>
 #include <vector>
@@ -22,7 +23,7 @@ namespace SlotType
   {
     struct HoverRect
     {
-      Rect region, src_region;
+      Rect region, src_region, scroll_region;
       float border;
       bool visible;
       float2 offset;
@@ -47,6 +48,7 @@ namespace SlotType
     struct Popup
     {
       std::string text;
+      LinkDescription::nodes_t nodes;
       HoverRect region;
       HoverRect hover_region;
     };
