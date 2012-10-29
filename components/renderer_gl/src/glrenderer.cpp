@@ -277,11 +277,25 @@ namespace LinksRouting
 
         glColor3f(1, 0, 0);
 
+        GLdouble proj[16];
+        glGetDoublev(GL_PROJECTION_MATRIX, proj);
+
+        float offset_y = (proj[13] + 1) / proj[5];
+
+        glPushAttrib(GL_VIEWPORT_BIT);
+        glViewport(hover.pos.x, hover.pos.y + offset_y, hover.size.x, hover.size.y);
+
+        glMatrixMode(GL_PROJECTION);
+        glPushMatrix();
+        glLoadIdentity();
+        glOrtho(0, hover.size.x, 0, hover.size.y, -1, 1);
+
         glMatrixMode(GL_MODELVIEW);
         glPushMatrix();
+        glLoadIdentity();
 
-        glTranslatef(hover.pos.x, hover.pos.y, 0);
-        glScalef(hover.size.x / src.size.x, hover.size.y / src.size.y, 0);
+        float scale = hover.size.y / src.size.y;
+        glScalef(scale, scale, 0);
 
         float2 offset = popup->hover_region.offset;
         if( src.size.x > scroll.size.x )
@@ -293,6 +307,10 @@ namespace LinksRouting
         renderNodes(popup->nodes, 0, 0, true);
 
         glPopMatrix();
+        glMatrixMode(GL_PROJECTION);
+        glPopMatrix();
+
+        glPopAttrib();
       }
     }
     _links_fbo.unbind();
