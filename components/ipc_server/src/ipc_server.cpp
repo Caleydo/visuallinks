@@ -1099,8 +1099,8 @@ namespace LinksRouting
         _subscribe_mouse->_data->_click_callbacks.push_back(
         [center,client_wid](int x, int y)
         {
-          if( (center - float2(x,y)).length() < 10 )
-            return;
+//          if( (center - float2(x,y)).length() > 10 )
+//            return;
 
           std::cout << "raise: "
                     << QxtWindowSystem::activeWindow(client_wid)
@@ -1250,14 +1250,25 @@ namespace LinksRouting
       if( points.empty() )
         continue;
 
+      float2 center;
+
       auto rel = props.find("rel");
       if( rel != props.end() && rel->second == "true" )
       {
         for(size_t i = 0; i < points.size(); ++i)
-          points[i] += top_left;
+          center += (points[i] += top_left);
+      }
+      else
+      {
+        for(size_t i = 0; i < points.size(); ++i)
+          center += points[i];
       }
 
-      nodes.push_back( std::make_shared<LinkDescription::Node>(points, props) );
+      center /= points.size();
+      LinkDescription::points_t link_points;
+      link_points.push_back(center);
+
+      nodes.push_back( std::make_shared<LinkDescription::Node>(points, link_points, props) );
     }
 
     LinkDescription::HyperEdgePtr hedge =

@@ -99,8 +99,8 @@ namespace LinkDescription
       explicit Node( const points_t& points,
                      const props_t& props = props_t() );
       Node( const points_t& points,
-                     const points_t& link_points,
-                     const props_t& props = props_t() );
+            const points_t& link_points,
+            const props_t& props = props_t() );
       Node( const points_t& points,
             const points_t& link_points,
             const points_t& link_points_children,

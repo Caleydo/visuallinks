@@ -77,7 +77,8 @@ namespace LinksRouting
   template<typename Collection>
   line_borders_t calcLineBorders( const Collection& points,
                                   float width,
-                                  bool closed = false )
+                                  bool closed = false,
+                                  float widen_end = 0.f )
   {
     auto begin = std::begin(points),
          end = std::end(points);
@@ -87,6 +88,8 @@ namespace LinksRouting
 
     if( p0 == end || p1 == end )
       return line_borders_t();
+
+    widen_end = std::min(widen_end, (*(end - 2) - *(end - 1)).length());
 
     line_borders_t ret;
     float w_out = 0.5 * width,
@@ -104,6 +107,8 @@ namespace LinksRouting
         dir = (((closed && p1 == end) ? *begin : *p1) - *p0).normalize();
         float2 mean_dir = 0.5f * (prev_dir + dir);
         normal = float2( mean_dir.y, -mean_dir.x );
+
+        prev_dir = dir;
       }
       else // !closed && p1 == end
       {
@@ -117,8 +122,7 @@ namespace LinksRouting
       ret.first.push_back(  *p0 + offset_out );
       ret.second.push_back( *p0 - offset_in );
 
-      prev_dir = dir;
-      prev_normal = float2( dir.y, -dir.x );
+      prev_normal = prev_dir.normal();
 
       if(p1 != end)
         ++p1;
@@ -128,6 +132,27 @@ namespace LinksRouting
     {
       ret.first.push_back( ret.first.front() );
       ret.second.push_back( ret.second.front() );
+    }
+    else if( widen_end > 1.f )
+    {
+      float f = widen_end / 35.f;
+
+      ret.first.back() -= f * 35 * prev_dir;
+      ret.second.back() -= f * 35 * prev_dir;
+
+      const float offsets[][2] = {
+        {16, 2},
+        {11, 3},
+        {8, 5}
+      };
+
+      for(size_t i = 0; i < sizeof(offsets)/sizeof(offsets[0]); ++i)
+      {
+        ret.first.push_back( ret.first.back() + f * offsets[i][0] * prev_dir
+                                              + offsets[i][1] * prev_normal );
+        ret.second.push_back( ret.second.back() + f * offsets[i][0] * prev_dir
+                                                - offsets[i][1] * prev_normal );
+      }
     }
 
     return ret;
@@ -422,30 +447,33 @@ namespace LinksRouting
              segment != fork->outgoing.end();
              ++segment )
         {
+          if( !segment->trail.empty() )
+          {
+            // Draw path
+            std::vector<float2> points;
+            points.reserve(segment->trail.size() + 1);
+            points.push_back(fork->position);
+            points.insert(points.end(), segment->trail.begin(), segment->trail.end());
+            points = smooth(points, 0.4, 10);
+            float widen_size = 0.f;
+            if( segment->nodes.back()->getChildren().empty() )
+              widen_size = 55;
+            line_borders_t region = calcLineBorders(points, 3, false, widen_size);
+            glBegin(GL_TRIANGLE_STRIP);
+            for( auto first = std::begin(region.first),
+                      second = std::begin(region.second);
+                 first != std::end(region.first);
+                 ++first,
+                 ++second )
+            {
+              glVertex2f(first->x, first->y);
+              glVertex2f(second->x, second->y);
+            }
+            glEnd();
+          }
+
           if( renderNodes(segment->nodes, 3.f, &hedges_open, &hedges_done) )
             rendered_anything = true;
-
-          if( segment->trail.empty() )
-            continue;
-
-          // Draw path
-          std::vector<float2> points;
-          points.reserve(segment->trail.size() + 1);
-          points.push_back(fork->position);
-          points.insert(points.end(), segment->trail.begin(), segment->trail.end());
-          points = smooth(points, 0.4, 10);
-          line_borders_t region = calcLineBorders(points, 3);
-          glBegin(GL_TRIANGLE_STRIP);
-          for( auto first = std::begin(region.first),
-                    second = std::begin(region.second);
-               first != std::end(region.first);
-               ++first,
-               ++second )
-          {
-            glVertex2f(first->x, first->y);
-            glVertex2f(second->x, second->y);
-          }
-          glEnd();
         }
 
         hedges_done.insert(hedge);
@@ -483,6 +511,18 @@ namespace LinksRouting
         continue;
 
       bool filled = (*node)->get<bool>("filled", false);
+      if( !filled && !render_all )
+      {
+        glPushAttrib(GL_CURRENT_BIT);
+        glColor4f(0,0,0,0);
+        glBegin(GL_POLYGON);
+        for( auto vert = std::begin((*node)->getVertices());
+                  vert != std::end((*node)->getVertices());
+                ++vert )
+          glVertex2f(vert->x, vert->y);
+        glEnd();
+        glPopAttrib();
+      }
       line_borders_t region = calcLineBorders( (*node)->getVertices(),
                                                line_width,
                                                true );
