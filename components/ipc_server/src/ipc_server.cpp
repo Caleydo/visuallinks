@@ -1015,6 +1015,29 @@ namespace LinksRouting
 
           _interaction_handler.sendRequest(*client_info, popup);
         });
+
+        /**
+         * Drag callback
+         */
+        _subscribe_mouse->_data->_drag_callbacks.push_back(
+        [&,index,client_info](const float2& delta)
+        {float preview_aspect = _preview_width
+          / static_cast<float>(_preview_height);
+          auto& popup = _subscribe_popups->_data->popups[index];
+          if( !popup.hover_region.visible )
+              return;
+
+          QRect reg = client_info->second.scroll_region;
+          float step_y = reg.height() / pow(2, popup.hover_region.zoom)
+                       / _preview_height;
+
+          popup.hover_region.src_region.pos.y -= delta.y * step_y;
+          float step_x = step_y * preview_aspect;
+          popup.hover_region.src_region.pos.x -= delta.x * step_x;
+
+          _interaction_handler.updateRegion(*client_info, popup);
+          _interaction_handler.sendRequest(*client_info, popup);
+        });
       }
 
       hedge->addNode( node );

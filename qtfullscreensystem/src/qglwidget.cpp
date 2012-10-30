@@ -96,6 +96,7 @@ ShaderPtr loadShader( QString vert, QString frag )
   GLWidget::GLWidget(int& argc, char *argv[]):
     Configurable("QGLWidget"),
     _cur_fbo(0),
+    _do_drag(false),
     _server(&_mutex_slot_links, &_cond_render, this)
   {
     QApplication::setOrganizationDomain("icg.tugraz.at");
@@ -529,13 +530,26 @@ ShaderPtr loadShader( QString vert, QString frag )
   //----------------------------------------------------------------------------
   void GLWidget::mouseReleaseEvent(QMouseEvent *event)
   {
-    _slot_mouse->_data->triggerClick(event->globalX(), event->globalY());
+    if( _do_drag )
+      _do_drag = false;
+    else
+      _slot_mouse->_data->triggerClick(event->globalX(), event->globalY());
   }
 
   //----------------------------------------------------------------------------
   void GLWidget::mouseMoveEvent(QMouseEvent *event)
   {
-    _slot_mouse->_data->triggerMove(event->globalX(), event->globalY());
+    if( !event->buttons() )
+      _slot_mouse->_data->triggerMove(event->globalX(), event->globalY());
+    else if( event->buttons() & Qt::LeftButton )
+    {
+      float2 pos(event->globalX(), event->globalY());
+      if( _do_drag )
+        _slot_mouse->_data->triggerDrag(pos - _last_mouse_pos);
+      else
+        _do_drag = true;
+      _last_mouse_pos = pos;
+    }
   }
   
   //----------------------------------------------------------------------------

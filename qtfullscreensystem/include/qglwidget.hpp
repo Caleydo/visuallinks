@@ -90,6 +90,9 @@ namespace qtfullscreensystem
       QPoint _window_offset;
       QPoint _window_end;
 
+      bool _do_drag;
+      float2 _last_mouse_pos;
+
       LinksRouting::slot_t<LinksRouting::SlotType::Image>::type _slot_desktop;
       LinksRouting::slot_t<LinksRouting::SlotType::MouseEvent>::type _slot_mouse;
       LinksRouting::slot_t<LinksRouting::SlotType::TextPopup>::type _slot_popups;

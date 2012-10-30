@@ -38,11 +38,13 @@ namespace SlotType
 
     typedef std::function<void (int, int)> ClickCallback;
     typedef std::function<void (int, int)> MoveCallback;
+    typedef std::function<void (const float2&)> DragCallback;
     typedef std::function<void ()> LeaveCallback;
     typedef std::function<void (int, const float2&, uint32_t)> ScrollCallback;
 
     std::vector<ClickCallback> _click_callbacks;
     std::vector<MoveCallback> _move_callbacks;
+    std::vector<DragCallback> _drag_callbacks;
     std::vector<LeaveCallback> _leave_callbacks;
     std::vector<ScrollCallback> _scroll_callbacks;
     
@@ -62,6 +64,14 @@ namespace SlotType
         (*cb)(x, y);
     }
     
+    void triggerDrag(const float2& d)
+    {
+      for( auto cb = _drag_callbacks.begin();
+                cb != _drag_callbacks.end();
+              ++cb )
+        (*cb)(d);
+    }
+
     void triggerLeave()
     {
       for( auto cb = _leave_callbacks.begin();
@@ -82,6 +92,7 @@ namespace SlotType
     {
       _click_callbacks.clear();
       _move_callbacks.clear();
+      _drag_callbacks.clear();
       _leave_callbacks.clear();
       _scroll_callbacks.clear();
     }
