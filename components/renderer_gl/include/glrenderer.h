@@ -70,6 +70,7 @@ namespace LinksRouting
 
       bool renderLinks(const LinkDescription::LinkList& links);
       bool renderNodes( const LinkDescription::nodes_t& nodes,
+                        float line_width = 3,
                         HyperEdgeQueue* hedges_open = NULL,
                         HyperEdgeSet* hedges_done = NULL,
                         bool render_all = false );

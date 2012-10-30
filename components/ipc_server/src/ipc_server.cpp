@@ -1090,6 +1090,22 @@ namespace LinksRouting
         new_hedge->setCenter(new_node->getLinkPointsChildren().front());
         new_node->getChildren().push_back(new_hedge);
         hedge->addNode(new_node);
+
+        float2 center = new_hedge->getCenter();
+
+        /**
+         * Mouse click callback
+         */
+        _subscribe_mouse->_data->_click_callbacks.push_back(
+        [center,client_wid](int x, int y)
+        {
+          if( (center - float2(x,y)).length() < 10 )
+            return;
+
+          std::cout << "raise: "
+                    << QxtWindowSystem::activeWindow(client_wid)
+                    << std::endl;
+        });
       }
     }
 

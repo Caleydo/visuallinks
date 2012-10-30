@@ -105,6 +105,11 @@ WId QxtWindowSystem::activeWindow()
     return qxt_getWindows(net_active).value(0);
 }
 
+int QxtWindowSystem::activeWindow(WId window)
+{
+    return XRaiseWindow(QX11Info::display(), window);
+}
+
 WId QxtWindowSystem::findWindow(const QString& title)
 {
     Window result = 0;

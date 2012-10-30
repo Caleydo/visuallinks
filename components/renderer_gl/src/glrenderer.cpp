@@ -304,7 +304,7 @@ namespace LinksRouting
 
         glTranslatef(-offset.x, -offset.y, 0);
 
-        renderNodes(popup->nodes, 0, 0, true);
+        renderNodes(popup->nodes, 3.f / scale, 0, 0, true);
 
         glPopMatrix();
         glMatrixMode(GL_PROJECTION);
@@ -412,7 +412,7 @@ namespace LinksRouting
         auto fork = hedge->getHyperEdgeDescription();
         if( !fork )
         {
-          if( renderNodes(hedge->getNodes(), &hedges_open, &hedges_done) )
+          if( renderNodes(hedge->getNodes(), 3.f, &hedges_open, &hedges_done) )
             rendered_anything = true;
 
           continue;
@@ -422,7 +422,7 @@ namespace LinksRouting
              segment != fork->outgoing.end();
              ++segment )
         {
-          if( renderNodes(segment->nodes, &hedges_open, &hedges_done) )
+          if( renderNodes(segment->nodes, 3.f, &hedges_open, &hedges_done) )
             rendered_anything = true;
 
           if( segment->trail.empty() )
@@ -457,6 +457,7 @@ namespace LinksRouting
 
   //----------------------------------------------------------------------------
   bool GlRenderer::renderNodes( const LinkDescription::nodes_t& nodes,
+                                float line_width,
                                 HyperEdgeQueue* hedges_open,
                                 HyperEdgeSet* hedges_done,
                                 bool render_all )
@@ -482,7 +483,9 @@ namespace LinksRouting
         continue;
 
       bool filled = (*node)->get<bool>("filled", false);
-      line_borders_t region = calcLineBorders((*node)->getVertices(), 3, true);
+      line_borders_t region = calcLineBorders( (*node)->getVertices(),
+                                               line_width,
+                                               true );
       glBegin(filled ? GL_POLYGON : GL_TRIANGLE_STRIP);
       for( auto first = std::begin(region.first),
                 second = std::begin(region.second);
