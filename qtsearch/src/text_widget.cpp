@@ -22,6 +22,7 @@ TextWidget::TextWidget(QWidget *parent):
   _menu( new QMenu(this) ),
   _socket( new QWsSocket(this) )
 {
+  setWindowTitle("VisLinks - Search");
   QHBoxLayout* layout = new QHBoxLayout(this);
   layout->setContentsMargins(0,0,0,0);
   setSizePolicy(QSizePolicy::MinimumExpanding, QSizePolicy::Minimum);

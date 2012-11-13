@@ -26,7 +26,7 @@ namespace SlotType
       Rect region, src_region, scroll_region;
       float border;
       bool visible;
-      float2 offset;
+      float2 offset, dim;
       int zoom;
 
       HoverRect( const float2& pos,

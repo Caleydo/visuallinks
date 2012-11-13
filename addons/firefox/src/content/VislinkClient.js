@@ -67,53 +67,11 @@ function VislinkClient(application_name)
 //        removeAllRouteData();
       };
       _socket.onmessage = function(event)
-      {/*
-        msg = JSON.parse(event.data);
-        if( msg.task == 'REQUEST' )
-        {
-          //alert('id='+last_id+"|"+msg.id+"\nstamp="+last_stamp+"|"+msg.stamp);
-          if( msg.id == last_id && msg.stamp == last_stamp )
-            // already handled
-            return;// alert('already handled...');
-  
-          last_id = msg.id;
-          last_stamp = msg.stamp;
-  
-          setTimeout('reportVisLinks("'+msg.id+'", true)',0);
-        }
-        else if( msg.task == 'GET-FOUND')
-        {
-          if( msg.id == '/routing' )
-          {
-            removeAllChildren(items_routing);
-            routing = msg.val;
-            for(var router in msg.val.available)
-            {
-              var name = msg.val.available[router][0];
-              var valid = msg.val.available[router][1];
+      {
+        var msg = JSON.parse(event.data);
 
-              var item = document.createElement("menuitem");
-              item.setAttribute("label", name);
-              item.setAttribute("type", "radio");
-              item.setAttribute("name", "routing-algorithm");
-              item.setAttribute("tooltiptext", "Use '" + name + "' for routing.");
-
-              // Mark available (Routers not able to route are disabled)
-              if( !valid )
-                item.setAttribute("disabled", true);
-              else
-                item.setAttribute("oncommand", "reportSelectRouting('"+name+"')");
-
-              // Mark current router
-              if( msg.val.active == name )
-                item.setAttribute("checked", true);
-
-              items_routing.appendChild(item);
-            }
-          }
-        }
-        else*/
-          alert(event.data);
+        if( typeof($this.onmessage) === 'function' )
+	        $this.onmessage(msg);
       }
 	  }
 	  catch (err)
@@ -154,6 +112,17 @@ function VislinkClient(application_name)
       'title': document.title,
       'id': id,
       'stamp': 1,//last_stamp,
+      'regions': regions
+    });
+  };
+  
+  this.reportLink = function(id, stamp, regions)
+  {
+    this.send({
+      'task': 'FOUND',
+      'title': document.title,
+      'id': id,
+      'stamp': stamp,
       'regions': regions
     });
   };

@@ -363,6 +363,8 @@ namespace LinksRouting
 //    uint8_t type = data.at(0),
 //            id = data.at(1);
 
+    QMutexLocker lock_links(_mutex_slot_links);
+
     delete[] _subscribe_image->_data->pdata;
     _subscribe_image->_data->pdata = new uint8_t[data.size() - 2];
     memcpy(_subscribe_image->_data->pdata, data.constData() + 2, data.size() - 2);
@@ -834,13 +836,12 @@ namespace LinksRouting
         out.pos.y /= out.num_outside;
 
       LinkDescription::points_t link_points;
-      link_points.push_back(out.pos += 5 * out.normal);
+      link_points.push_back(out.pos += 7 * out.normal);
 
       LinkDescription::points_t points;
-      points.push_back(out.pos +=  8 * out.normal.normal());
-      points.push_back(out.pos -=  5 * out.normal);
-      points.push_back(out.pos -= 16 * out.normal.normal());
-      points.push_back(out.pos +=  5 * out.normal);
+      points.push_back(out.pos +=  3 * out.normal + 12 * out.normal.normal());
+      points.push_back(out.pos -= 10 * out.normal + 12 * out.normal.normal());
+      points.push_back(out.pos += 10 * out.normal - 12 * out.normal.normal());
 
       auto node = std::make_shared<LinkDescription::Node>(points, link_points);
       node->set("virtual-outside", "side[" + std::to_string(static_cast<unsigned long long>(i)) + "]");
@@ -901,6 +902,8 @@ namespace LinksRouting
         };
         popup.hover_region.offset.x = region.left();
         popup.hover_region.offset.y = region.top();
+        popup.hover_region.dim.x = region.width();
+        popup.hover_region.dim.y = region.height();
         popup.hover_region.scroll_region = client_info->second.scroll_region;
 
         size_t index = _subscribe_popups->_data->popups.size();
@@ -1138,6 +1141,9 @@ namespace LinksRouting
   //----------------------------------------------------------------------------
   bool IPCServer::updateCenter(LinkDescription::HyperEdge* hedge)
   {
+    const LinkDescription::Node* p = hedge->getParent();
+    const LinkDescription::HyperEdge* pp = p ? p->getParent() : 0;
+    std::cout << hedge << ", p=" << p << ", pp=" << pp << std::endl;
     float2 hedge_center;
     size_t num_visible = 0;
 
@@ -1162,6 +1168,7 @@ namespace LinksRouting
       return false;
 
     hedge->setCenter(hedge_center / num_visible);
+    std::cout << " - center = " << hedge_center << hedge_center/num_visible << std::endl;
 
     return true;
   }

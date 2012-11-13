@@ -144,7 +144,7 @@ namespace LinksRouting
       fork->outgoing.push_back(LinkDescription::HyperEdgeDescriptionSegment());
       //fork->outgoing.back().parent = fork;
 
-      if( regions.size() > 1 || !hedge->getParent() )
+      //if( regions.size() > 1 || !hedge->getParent() )
         // Only add route if at least one other node exists
         fork->outgoing.back().trail.push_back(min_vert);
 

@@ -141,9 +141,9 @@ namespace LinksRouting
       ret.second.back() -= f * 35 * prev_dir;
 
       const float offsets[][2] = {
-        {16, 2},
-        {11, 3},
-        {8, 5}
+        {16, 1.5},
+        {11, 2},
+        { 8, 2.5}
       };
 
       for(size_t i = 0; i < sizeof(offsets)/sizeof(offsets[0]); ++i)
@@ -329,6 +329,18 @@ namespace LinksRouting
 
         glTranslatef(-offset.x, -offset.y, 0);
 
+        const float w = 4.f;
+        const float2 vp_pos = popup->hover_region.offset + 0.5f * float2(w, w);
+        const float2 vp_dim = popup->hover_region.dim - 4.f * float2(w, w);
+
+        glLineWidth(w);
+        glBegin(GL_LINE_LOOP);
+          glVertex2f(vp_pos.x, vp_pos.y);
+          glVertex2f(vp_pos.x + vp_dim.x, vp_pos.y);
+          glVertex2f(vp_pos.x + vp_dim.x, vp_pos.y + vp_dim.y);
+          glVertex2f(vp_pos.x, vp_pos.y + vp_dim.y);
+        glEnd();
+
         renderNodes(popup->nodes, 3.f / scale, 0, 0, true);
 
         glPopMatrix();
@@ -365,7 +377,8 @@ namespace LinksRouting
 
     _colors.push_back( Color( color[0] / 256.f,
                               color[1] / 256.f,
-                              color[2] / 256.f ) );
+                              color[2] / 256.f,
+                              0.9f ) );
     std::cout << "GlRenderer: Added color (" << val << ")" << std::endl;
 
     return true;
@@ -457,7 +470,12 @@ namespace LinksRouting
             points = smooth(points, 0.4, 10);
             float widen_size = 0.f;
             if( segment->nodes.back()->getChildren().empty() )
-              widen_size = 55;
+            {
+              if( !segment->nodes.back()->get<std::string>("virtual-outside").empty() )
+                widen_size = 13;
+              else
+                widen_size = 55;
+            }
             line_borders_t region = calcLineBorders(points, 3, false, widen_size);
             glBegin(GL_TRIANGLE_STRIP);
             for( auto first = std::begin(region.first),
@@ -491,6 +509,8 @@ namespace LinksRouting
                                 bool render_all )
   {
     bool rendered_anything = false;
+    GLfloat cur_color[4];
+    glGetFloatv(GL_CURRENT_COLOR, cur_color);
 
     for( auto node = nodes.begin(); node != nodes.end(); ++node )
     {
@@ -513,15 +533,17 @@ namespace LinksRouting
       bool filled = (*node)->get<bool>("filled", false);
       if( !filled && !render_all )
       {
-        glPushAttrib(GL_CURRENT_BIT);
-        glColor4f(0,0,0,0);
+        glColor4f( cur_color[0] * 0.5,
+                   cur_color[1] * 0.5,
+                   cur_color[2] * 0.5,
+                   cur_color[3] * 0.3 );
         glBegin(GL_POLYGON);
         for( auto vert = std::begin((*node)->getVertices());
                   vert != std::end((*node)->getVertices());
                 ++vert )
           glVertex2f(vert->x, vert->y);
         glEnd();
-        glPopAttrib();
+        glColor4fv(cur_color);
       }
       line_borders_t region = calcLineBorders( (*node)->getVertices(),
                                                line_width,

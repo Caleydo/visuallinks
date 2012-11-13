@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html>
   <head>
-    <title>Google Maps JavaScript API v3 Example: Map Simple</title>
+    <title>VisLinks - Google Maps</title>
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no"/>
     <meta charset="utf-8"/>
     <style>
@@ -94,22 +94,31 @@
       
       function createRegionForPoint(pos)
       {
-        var x = pos.x - 10;
-        var y = pos.y - 10;
-        var w = 20;
-        var h = 20;
-          
-        return [ [x,     y],
+        var r = 10;
+        var cnt = 10;
+        
+        var points = new Array(cnt + 1);
+        var step = 2 * Math.PI / cnt;
+
+        for(var i = 0; i < cnt; i += 1)
+          points[i] = [ pos.x + r * Math.cos(i * step),
+                        pos.y + r * Math.sin(i * step) ];
+        points[cnt] = {rel: true};
+        
+        return points;
+
+        /*return [ [x,     y],
                   [x + w, y],
                   [x + w, y + h],
                   [x,     y + h],
-                  {rel: true} ];
+                  {rel: true} ];*/
       }
 
       // -----------------------------------------------------------------------
       var geocoder;
       var map;
       var client;
+      var contextMenu;
       
       var max_menu_entries = 5;
       var route_menu_entries = [];
@@ -169,7 +178,7 @@
             label:'Center map here' }
         );
 
-        var contextMenu = new ContextMenu(map, {
+        contextMenu = new ContextMenu(map, {
           classNames: {
             menu: 'dropdown',
             menuSeparator: 'context_menu_separator'
@@ -276,6 +285,57 @@
             Math.round(window.innerWidth),
             Math.round(window.innerHeight)
           ];
+        client.onmessage = function(msg)
+        {
+//          alert(JSON.stringify(msg));
+          if( msg.task == 'REQUEST' )
+          {
+            var id = msg.id;
+            var stamp = msg.stamp;
+            // Ask geocoder for locations matching the name
+            geocoder.geocode({'address': id}, function(results, status)
+            {
+              if( status == google.maps.GeocoderStatus.OK )
+              {
+                var count = 0;
+                for(var i = 0; i < results.length; ++i)
+                {
+                  if( results[i].types.containsOneOf(["street_address",
+                                                      "postal_code",
+                                                      "postal_town"]) )
+                    continue;
+
+                  var name = results[i].address_components[0].long_name;
+
+                  // results[i].geometry.viewport) TODO determine region based on suggested viewport
+/*                  createRegionForPoint(
+                    map.getProjection().fromLatLngToContainerPixel(results[i].geometry.location)
+                  );*/
+                }
+                
+                client.reportLink
+                (
+                  id,
+                  stamp,
+                  [ createRegionForPoint
+                    (
+                      contextMenu
+                        .getProjection()
+                        .fromLatLngToContainerPixel
+                        (
+                          results[0].geometry.location
+                        )
+                    )
+                  ]
+                );
+              }
+              else
+              {
+                alert("Geocoder failed due to: " + status);
+              }
+            });
+          }
+        };
       }
 
       google.maps.event.addDomListener(window, 'load', initialize);
