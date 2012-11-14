@@ -66,15 +66,23 @@ namespace LinksRouting
       typedef std::queue<const LinkDescription::HyperEdge*> HyperEdgeQueue;
       typedef std::set<const LinkDescription::HyperEdge*> HyperEdgeSet;
 
+      Color getCurrentColor() const;
+
       void blur(gl::FBO& fbo);
 
-      bool renderLinks(const LinkDescription::LinkList& links);
+      bool renderLinks( const LinkDescription::LinkList& links,
+                        int pass = 0 );
       bool renderNodes( const LinkDescription::nodes_t& nodes,
                         float line_width = 3,
                         HyperEdgeQueue* hedges_open = NULL,
                         HyperEdgeSet* hedges_done = NULL,
-                        bool render_all = false );
-      bool renderRect(const Rect& rect, size_t border = 2, GLuint tex = 0);
+                        bool render_all = false,
+                        int pass = 0 );
+      bool renderRect( const Rect& rect,
+                       size_t margin = 2,
+                       GLuint tex = 0,
+                       const Color& fill = Color(1, 1, 1, 1),
+                       const Color& border = Color(0.3, 0.3, 0.3, 0.8) );
   };
 }
 

@@ -200,6 +200,33 @@ struct Rect
   {}
 #endif
 
+  float l() const { return pos.x; }
+  float r() const { return pos.x + size.x; }
+
+  float t() const { return pos.y; }
+  float b() const { return pos.y + size.y; }
+
+  void expand(const float2& p)
+  {
+    if( size.x < 0 || size.y < 0 )
+    {
+      pos = p;
+      size = float2(0,0);
+    }
+    else
+    {
+      float left   = std::min(p.x, l()),
+            right  = std::max(p.x, r()),
+            top    = std::min(p.y, t()),
+            bottom = std::max(p.y, b());
+
+      pos.x = left;
+      pos.y = top;
+      size.x = right - left;
+      size.y = bottom - top;
+    }
+  }
+
   bool contains(float x, float y, float margin = 0.f) const
   {
     return x >= pos.x - margin && x <= pos.x + size.x + margin

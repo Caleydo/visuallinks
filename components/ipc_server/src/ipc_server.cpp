@@ -25,7 +25,7 @@ namespace LinksRouting
   std::string to_string(const QRect& r)
   {
     std::stringstream strm;
-    strm << r.left() << '|' << r.top() << '|' << r.right() << '|' << r.bottom();
+    strm << r.left() << ' ' << r.top() << ' ' << r.right() << ' ' << r.bottom();
     return strm.str();
   }
 
@@ -1066,11 +1066,43 @@ namespace LinksRouting
         (*node)->set("covered", covered);
 
         if( !covered )
+        {
+          (*node)->set("covered-region", std::string());
           continue;
+        }
 
-        (*node)->set(
-          "covered-region",
-          to_string( cover_windows.getCoverRegion((*node)->getCenter()) )
+        (*node)->set("covered-region", to_string(region));
+        (*node)->set("hover", false);
+
+        Rect bb;
+        for( auto vert = (*node)->getVertices().begin();
+                  vert != (*node)->getVertices().end();
+                ++vert )
+          bb.expand(*vert);
+
+        /**
+         * Mouse move callback
+         */
+        _subscribe_mouse->_data->_move_callbacks.push_back(
+          [&,bb,node](int x, int y)
+          {
+            bool hover = (*node)->get<bool>("hover");
+            if( bb.contains(x, y) )
+            {
+              if( hover )
+                return;
+              hover = true;
+            }
+            else if( hover )
+            {
+              hover = false;
+            }
+            else
+              return;
+
+            (*node)->set("hover", hover);
+            _cond_data_ready->wakeAll();
+          }
         );
 
         covered_nodes.push_back(*node);

@@ -158,6 +158,14 @@ namespace LinksRouting
     return ret;
   }
 
+  Rect parseRect(const std::string& str)
+  {
+    float l, r, t, b;
+    std::stringstream strm(str);
+    strm >> l >> t >> r >> b;
+    return Rect( float2(l, t), float2(r - l, b - t) );
+  }
+
   //----------------------------------------------------------------------------
   GlRenderer::GlRenderer():
     Configurable("GLRenderer"),
@@ -242,7 +250,10 @@ namespace LinksRouting
     if( _subscribe_links->_data->empty() )
       return _links_fbo.unbind();
 
-    bool rendered_anything = renderLinks(*_subscribe_links->_data);
+    bool rendered_anything = false;
+    for(int pass = 0; pass <= 1; ++pass)
+      rendered_anything |= renderLinks(*_subscribe_links->_data, pass);
+
     if( !_subscribe_popups->_data->popups.empty() )
     {
       rendered_anything = true;
@@ -300,6 +311,27 @@ namespace LinksRouting
                   & src = popup->hover_region.src_region,
                   & scroll = popup->hover_region.scroll_region;
 
+        // ---------
+        // Scrollbar
+
+        if( src.size.y < scroll.size.y )
+        {
+          float bar_height = std::max(src.size.y / scroll.size.y, 0.05f)
+                           * hover.size.y;
+          float rel_pos_y = src.pos.y / (scroll.size.y - src.size.y);
+
+          float2 scroll_pos = hover.pos
+                            + float2( hover.size.x + 4,
+                                      rel_pos_y * (hover.size.y - bar_height) );
+
+          glColor4f(1,0.5,0.25,1);
+          glLineWidth(4);
+          glBegin(GL_LINE_STRIP);
+            glVertex2f(scroll_pos.x, scroll_pos.y);
+            glVertex2f(scroll_pos.x, scroll_pos.y + bar_height);
+          glEnd();
+        }
+
         glColor3f(1, 0, 0);
 
         GLdouble proj[16];
@@ -341,7 +373,7 @@ namespace LinksRouting
           glVertex2f(vp_pos.x, vp_pos.y + vp_dim.y);
         glEnd();
 
-        renderNodes(popup->nodes, 3.f / scale, 0, 0, true);
+        renderNodes(popup->nodes, 3.f / scale, 0, 0, true, 1);
 
         glPopMatrix();
         glMatrixMode(GL_PROJECTION);
@@ -385,6 +417,14 @@ namespace LinksRouting
   }
 
   //----------------------------------------------------------------------------
+  Color GlRenderer::getCurrentColor() const
+  {
+    GLfloat cur_color[4];
+    glGetFloatv(GL_CURRENT_COLOR, cur_color);
+    return Color(cur_color[0], cur_color[1], cur_color[2], cur_color[3]);
+  }
+
+  //----------------------------------------------------------------------------
   void GlRenderer::blur(gl::FBO& fbo)
   {
     assert(fbo.colorBuffers.size() >= 2);
@@ -419,7 +459,8 @@ namespace LinksRouting
   }
 
   //----------------------------------------------------------------------------
-  bool GlRenderer::renderLinks(const LinkDescription::LinkList& links)
+  bool GlRenderer::renderLinks( const LinkDescription::LinkList& links,
+                                int pass )
   {
     bool rendered_anything = false;
     Color color(1.0, 0.2, 0.2);
@@ -450,7 +491,12 @@ namespace LinksRouting
         auto fork = hedge->getHyperEdgeDescription();
         if( !fork )
         {
-          if( renderNodes(hedge->getNodes(), 3.f, &hedges_open, &hedges_done) )
+          if( renderNodes( hedge->getNodes(),
+                           3.f,
+                           &hedges_open,
+                           &hedges_done,
+                           false,
+                           pass ) )
             rendered_anything = true;
 
           continue;
@@ -460,7 +506,7 @@ namespace LinksRouting
              segment != fork->outgoing.end();
              ++segment )
         {
-          if( !segment->trail.empty() )
+          if( pass == 1 && !segment->trail.empty() )
           {
             // Draw path
             std::vector<float2> points;
@@ -490,7 +536,12 @@ namespace LinksRouting
             glEnd();
           }
 
-          if( renderNodes(segment->nodes, 3.f, &hedges_open, &hedges_done) )
+          if( renderNodes( segment->nodes,
+                           3.f,
+                           &hedges_open,
+                           &hedges_done,
+                           false,
+                           pass ) )
             rendered_anything = true;
         }
 
@@ -506,11 +557,11 @@ namespace LinksRouting
                                 float line_width,
                                 HyperEdgeQueue* hedges_open,
                                 HyperEdgeSet* hedges_done,
-                                bool render_all )
+                                bool render_all,
+                                int pass )
   {
     bool rendered_anything = false;
-    GLfloat cur_color[4];
-    glGetFloatv(GL_CURRENT_COLOR, cur_color);
+    const Color current_color = getCurrentColor();
 
     for( auto node = nodes.begin(); node != nodes.end(); ++node )
     {
@@ -530,20 +581,33 @@ namespace LinksRouting
       if( (*node)->getVertices().empty() )
         continue;
 
+      if( pass == 0 )
+      {
+        if(   !render_all
+            && (*node)->get<bool>("hidden")
+            && (*node)->get<bool>("covered")
+            && (*node)->get<bool>("hover") )
+        {
+          const Rect r = parseRect( (*node)->get<std::string>("covered-region") );
+          renderRect(r, 3.f, 0, 0.5 * current_color, 2 * current_color);
+          rendered_anything = true;
+        }
+        continue;
+      }
+
       bool filled = (*node)->get<bool>("filled", false);
       if( !filled && !render_all )
       {
-        glColor4f( cur_color[0] * 0.5,
-                   cur_color[1] * 0.5,
-                   cur_color[2] * 0.5,
-                   cur_color[3] * 0.3 );
+        Color light = 0.5 * current_color;
+        light.a *= 0.6;
+        glColor4fv(light);
         glBegin(GL_POLYGON);
         for( auto vert = std::begin((*node)->getVertices());
                   vert != std::end((*node)->getVertices());
                 ++vert )
           glVertex2f(vert->x, vert->y);
         glEnd();
-        glColor4fv(cur_color);
+        glColor4fv(current_color);
       }
       line_borders_t region = calcLineBorders( (*node)->getVertices(),
                                                line_width,
@@ -567,9 +631,13 @@ namespace LinksRouting
   }
 
   //----------------------------------------------------------------------------
-  bool GlRenderer::renderRect(const Rect& rect, size_t b, GLuint tex)
+  bool GlRenderer::renderRect( const Rect& rect,
+                               size_t b,
+                               GLuint tex,
+                               const Color& fill,
+                               const Color& border )
   {
-    glColor4f(0.3, 0.3, 0.3, 0.8);
+    glColor4fv(border);
     glBegin(GL_QUADS);
       glVertex2f(rect.pos.x - b,               rect.pos.y - b);
       glVertex2f(rect.pos.x + rect.size.x + b, rect.pos.y - b);
@@ -583,7 +651,7 @@ namespace LinksRouting
       glBindTexture(GL_TEXTURE_2D, tex);
     }
 
-    glColor3f(1, 1, 1);
+    glColor4fv(fill);
     glBegin(GL_QUADS);
       glTexCoord2f(0, 0);
       glVertex2f(rect.pos.x,               rect.pos.y);
