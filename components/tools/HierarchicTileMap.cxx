@@ -66,11 +66,11 @@ HierarchicTileMap* Layer::getMap() const
 MapRect::QuadList MapRect::getQuads() const
 {
   QuadList ret;
+  size_t tile_width = layer.getMap()->getTileWidth(),
+         tile_height = layer.getMap()->getTileHeight();
+
   foreachTile([&](Tile& tile, size_t x, size_t y)
   {
-    size_t tile_width = layer.getMap()->getTileWidth(),
-           tile_height = layer.getMap()->getTileHeight();
-
     size_t min_x = std::max<float>(min[0] + 0.5, x * tile_width),
            min_y = std::max<float>(min[1] + 0.5, y * tile_height),
            max_x = std::min<float>(max[0] + 0.5, x * tile_width + tile.width),
@@ -103,6 +103,26 @@ MapRect::QuadList MapRect::getQuads() const
     ret[ &tile ] = quads;
   });
   return ret;
+}
+
+//------------------------------------------------------------------------------
+float2 MapRect::getSize() const
+{
+  float2 size;
+  size_t tile_width = layer.getMap()->getTileWidth(),
+         tile_height = layer.getMap()->getTileHeight();
+  foreachTile([&](Tile& tile, size_t x, size_t y)
+  {
+    float max_x = x * tile_width + tile.width,
+          max_y = y * tile_height + tile.height;
+
+    if( max_x > size.x )
+      size.x = max_x;
+    if( max_y > size.y )
+      size.y = max_y;
+  });
+
+  return size;
 }
 
 //------------------------------------------------------------------------------

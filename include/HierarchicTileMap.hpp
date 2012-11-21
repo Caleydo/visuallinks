@@ -56,6 +56,7 @@ struct MapRect
   typedef std::map<Tile*, Quads> QuadList;
 
   QuadList getQuads() const;
+  float2 getSize() const;
 
   typedef std::function<void(Tile&,size_t x,size_t y)> tile_callback_t;
   void foreachTile(const tile_callback_t& func) const;

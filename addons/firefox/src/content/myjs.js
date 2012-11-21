@@ -372,18 +372,7 @@ function register()
         }
         else if( msg.task == 'GET' )
         {
-          Application.console.log(event.data);
-          if( msg.id == 'img-preview' )
-          {
-            var reg = getScrollRegion();
-            var offset = [0,0];
-
-            if( msg.src.width > reg.width )
-              offset[0] = (msg.src.width - reg.width) / 2;
-
-            socket.send( grab(msg.size, msg.src, offset) );
-          }
-          else if( msg.id == 'preview-tile' )
+          if( msg.id == 'preview-tile' )
           {
             tile_requests.enqueue(msg);
             if( !tile_timeout )
@@ -392,6 +381,8 @@ function register()
               tile_timeout = true;
             }
           }
+          else
+            Application.console.warn("Unknown GET request: " + event.data);
         }
         else if( msg.task == 'SET' )
         {
@@ -420,8 +411,10 @@ function handleTileRequest()
   }
   
   var req = tile_requests.dequeue();
-  socket.send( grab(req.size, req.src, [0,0], 1, req.req_id) );
+  socket.send( grab(req.size, req.src, req.req_id) );
   
+  // We need to wait a bit before sending the next tile to not congest the
+  // receiver queue.
   setTimeout('handleTileRequest()', 200);
   tile_timeout = true;
 }

@@ -367,7 +367,7 @@ namespace LinksRouting
 
     QMutexLocker lock_links(_mutex_slot_links);
 
-    if( type != 0 )
+    if( type != 1 )
     {
       LOG_WARN("Invalid binary data!");
       return;

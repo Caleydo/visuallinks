@@ -270,13 +270,19 @@ namespace LinksRouting
           continue;
 
         renderRect( popup->hover_region.region,
-                    popup->hover_region.border );
+                    popup->hover_region.border,
+                    Color(0.3,0.3,0.3) );
+
+
+        const Rect& hover = popup->hover_region.region,
+                  & src = popup->hover_region.src_region,
+                  & scroll = popup->hover_region.scroll_region;
 
         HierarchicTileMapPtr tile_map = popup->hover_region.tile_map.lock();
         if( tile_map )
         {
-          MapRect rect = tile_map->requestRect( popup->hover_region.src_region,
-                                                popup->hover_region.zoom );
+          MapRect rect = tile_map->requestRect(src, popup->hover_region.zoom);
+          float2 rect_size = rect.getSize();
           MapRect::QuadList quads = rect.getQuads();
           for(auto quad = quads.begin(); quad != quads.end(); ++quad)
           {
@@ -318,8 +324,12 @@ namespace LinksRouting
             glEnable(GL_TEXTURE_2D);
             glBindTexture(GL_TEXTURE_2D, quad->first->id);
 
+            float offset_x = 0;
+            if( hover.size.x > rect_size.x )
+              offset_x = (hover.size.x - rect_size.x) / 2;
+
             glPushMatrix();
-            glTranslatef( popup->hover_region.region.pos.x,
+            glTranslatef( popup->hover_region.region.pos.x + offset_x,
                           popup->hover_region.region.pos.y,
                           0 );
 
@@ -338,10 +348,6 @@ namespace LinksRouting
             glBindTexture(GL_TEXTURE_2D, 0);
           }
         }
-
-        const Rect& hover = popup->hover_region.region,
-                  & src = popup->hover_region.src_region,
-                  & scroll = popup->hover_region.scroll_region;
 
         // ---------
         // Scrollbar
@@ -621,7 +627,7 @@ namespace LinksRouting
             && (*node)->get<bool>("hover") )
         {
           const Rect r = parseRect( (*node)->get<std::string>("covered-region") );
-          renderRect(r, 3.f, 0, 0.5 * current_color, 2 * current_color);
+          renderRect(r, 3.f, 0.5 * current_color, 2 * current_color);
           rendered_anything = true;
         }
         continue;
@@ -665,7 +671,7 @@ namespace LinksRouting
   //----------------------------------------------------------------------------
   bool GlRenderer::renderRect( const Rect& rect,
                                size_t b,
-                               GLuint tex,
+                               //GLuint tex,
                                const Color& fill,
                                const Color& border )
   {
@@ -677,11 +683,11 @@ namespace LinksRouting
       glVertex2f(rect.pos.x - b,               rect.pos.y + rect.size.y + b);
     glEnd();
 
-    if( tex )
-    {
-      glEnable(GL_TEXTURE_2D);
-      glBindTexture(GL_TEXTURE_2D, tex);
-    }
+//    if( tex )
+//    {
+//      glEnable(GL_TEXTURE_2D);
+//      glBindTexture(GL_TEXTURE_2D, tex);
+//    }
 
     glColor4fv(fill);
     glBegin(GL_QUADS);
@@ -695,11 +701,11 @@ namespace LinksRouting
       glVertex2f(rect.pos.x,               rect.pos.y + rect.size.y);
     glEnd();
 
-    if( tex )
-    {
-      glDisable(GL_TEXTURE_2D);
-      glBindTexture(GL_TEXTURE_2D, 0);
-    }
+//    if( tex )
+//    {
+//      glDisable(GL_TEXTURE_2D);
+//      glBindTexture(GL_TEXTURE_2D, 0);
+//    }
 
     return true;
   }
