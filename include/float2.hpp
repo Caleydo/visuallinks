@@ -30,6 +30,14 @@ struct float2
    *
    */
   float2(float _x, float _y) : x(_x), y(_y) { }
+  
+  /**
+   *
+   */
+  float* ptr()
+  {
+    return &x;
+  }
 
   /**
    *
@@ -78,6 +86,13 @@ struct float2
   {
     x -= rhs.x;
     y -= rhs.y;
+    return *this;
+  }
+
+  float2& operator*=(float rhs)
+  {
+    x *= rhs;
+    y *= rhs;
     return *this;
   }
 
@@ -183,15 +198,8 @@ struct Rect
 {
   float2 pos, size;
 
-  Rect():
-    pos(0,0),
-    size(-1,-1)
-  {}
-
-  Rect(const float2& pos, const float2& size):
-    pos(pos),
-    size(size)
-  {}
+  Rect();
+  Rect(const float2& pos, const float2& size);
 
 #ifdef QRECT_H
   Rect(const QRect& r):
@@ -206,42 +214,22 @@ struct Rect
   float t() const { return pos.y; }
   float b() const { return pos.y + size.y; }
 
-  void expand(const float2& p)
-  {
-    if( size.x < 0 || size.y < 0 )
-    {
-      pos = p;
-      size = float2(0,0);
-    }
-    else
-    {
-      float left   = std::min(p.x, l()),
-            right  = std::max(p.x, r()),
-            top    = std::min(p.y, t()),
-            bottom = std::max(p.y, b());
+  void expand(const float2& p);
+  bool contains(float x, float y, float margin = 0.f) const;
 
-      pos.x = left;
-      pos.y = top;
-      size.x = right - left;
-      size.y = bottom - top;
-    }
-  }
+  std::string toString(bool round = false) const;
 
-  bool contains(float x, float y, float margin = 0.f) const
-  {
-    return x >= pos.x - margin && x <= pos.x + size.x + margin
-        && y >= pos.y - margin && y <= pos.y + size.y + margin;
-  }
-
-  std::string toString() const
-  {
-    std::stringstream strm;
-    strm << "{\"x\":" << pos.x << ","
-             "\"y\":" << pos.y << ","
-             "\"width\":" << size.x << ","
-             "\"height\":" << size.y << "}";
-    return strm.str();
-  }
+  Rect& operator *=(float a);
 };
+
+inline const Rect operator *(float a, const Rect& r)
+{
+  return Rect(r) *= a;
+}
+
+inline std::ostream& operator<<(std::ostream& strm, const Rect& r)
+{
+  return strm << r.pos << " -> " << r.size;
+}
 
 #endif /* _FLOAT2_HPP_ */

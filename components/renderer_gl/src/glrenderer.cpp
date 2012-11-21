@@ -168,8 +168,7 @@ namespace LinksRouting
 
   //----------------------------------------------------------------------------
   GlRenderer::GlRenderer():
-    Configurable("GLRenderer"),
-    _tex_img_preview(0)
+    Configurable("GLRenderer")
   {
 
   }
@@ -185,7 +184,6 @@ namespace LinksRouting
   {
     _slot_links = slots.create<SlotType::Image>("/rendered-links");
     _slot_links->_data->type = SlotType::Image::OpenGLTexture;
-    _slot_image = slots.create<SlotType::Image>("/popup-image");
   }
 
   //----------------------------------------------------------------------------
@@ -258,38 +256,6 @@ namespace LinksRouting
     {
       rendered_anything = true;
 
-      LinksRouting::SlotType::Image* img = _slot_image->_data.get();
-      if( img->pdata )
-      {
-        std::cout << "load: " << img->width << "x" << img->height << std::endl;
-        if( !_tex_img_preview )
-          glGenTextures(1, &_tex_img_preview);
-        glBindTexture(GL_TEXTURE_2D, _tex_img_preview);
-
-        glTexParameterf( GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR );
-        glTexParameterf( GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR );
-        glTexParameterf( GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP );
-        glTexParameterf( GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP );
-        glPixelStorei(GL_UNPACK_ALIGNMENT, 4);
-
-//        gluBuild2DMipmaps( GL_TEXTURE_2D, GL_RGBA, img->width, img->height,
-//                               GL_RGBA, GL_UNSIGNED_BYTE, img->pdata );
-        glTexImage2D(
-          GL_TEXTURE_2D,
-          0,
-          GL_RGBA,
-          img->width,
-          img->height,
-          0,
-          GL_RGBA,
-          GL_UNSIGNED_BYTE,
-          img->pdata
-        );
-
-        delete[] img->pdata;
-        img->pdata = 0;
-      }
-
       for( auto popup = _subscribe_popups->_data->popups.begin();
                   popup != _subscribe_popups->_data->popups.end();
                 ++popup )
@@ -304,8 +270,74 @@ namespace LinksRouting
           continue;
 
         renderRect( popup->hover_region.region,
-                    popup->hover_region.border,
-                    _tex_img_preview );
+                    popup->hover_region.border );
+
+        HierarchicTileMapPtr tile_map = popup->hover_region.tile_map.lock();
+        if( tile_map )
+        {
+          MapRect rect = tile_map->requestRect( popup->hover_region.src_region,
+                                                popup->hover_region.zoom );
+          MapRect::QuadList quads = rect.getQuads();
+          for(auto quad = quads.begin(); quad != quads.end(); ++quad)
+          {
+            if( quad->first->type == Tile::ImageRGBA8 )
+            {
+              std::cout << "load tile to GPU (" << quad->first->width
+                                         << "x" << quad->first->height
+                                         << ")" << std::endl;
+              GLuint tex_id;
+              glGenTextures(1, &tex_id);
+              glBindTexture(GL_TEXTURE_2D, tex_id);
+
+              glTexParameterf( GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR );
+              glTexParameterf( GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR );
+              glTexParameterf( GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP );
+              glTexParameterf( GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP );
+              glPixelStorei(GL_UNPACK_ALIGNMENT, 4);
+
+              glTexImage2D(
+                GL_TEXTURE_2D,
+                0,
+                GL_RGBA,
+                quad->first->width,
+                quad->first->height,
+                0,
+                GL_RGBA,
+                GL_UNSIGNED_BYTE,
+                quad->first->pdata
+              );
+
+              delete[] quad->first->pdata;
+              quad->first->id = tex_id;
+              quad->first->type = Tile::OpenGLTexture;
+            }
+
+            if( quad->first->type != Tile::OpenGLTexture )
+              continue;
+
+            glEnable(GL_TEXTURE_2D);
+            glBindTexture(GL_TEXTURE_2D, quad->first->id);
+
+            glPushMatrix();
+            glTranslatef( popup->hover_region.region.pos.x,
+                          popup->hover_region.region.pos.y,
+                          0 );
+
+            glColor4f(1,1,1,1);
+            glBegin(GL_QUADS);
+            for(size_t i = 0; i < quad->second._coords.size(); ++i)
+            {
+              glTexCoord2fv(quad->second._tex_coords[i].ptr());
+              glVertex2fv(quad->second._coords[i].ptr());
+            }
+            glEnd();
+
+            glPopMatrix();
+
+            glDisable(GL_TEXTURE_2D);
+            glBindTexture(GL_TEXTURE_2D, 0);
+          }
+        }
 
         const Rect& hover = popup->hover_region.region,
                   & src = popup->hover_region.src_region,

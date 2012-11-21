@@ -10,6 +10,7 @@
 
 #include "../float2.hpp"
 #include "../linkdescription.h"
+#include "../HierarchicTileMap.hpp"
 
 #include <string>
 #include <vector>
@@ -28,6 +29,7 @@ namespace SlotType
       bool visible;
       float2 offset, dim;
       int zoom;
+      HierarchicTileMapWeakPtr tile_map;
 
       HoverRect( const float2& pos,
                  const float2& size,

@@ -12,6 +12,8 @@ var items_routing = null;
 var active_routes = new Object();
 var timeout = null;
 var routing = null;
+var tile_requests = null;
+var tile_timeout = false;
 
 var prefs = Components.classes["@mozilla.org/fuel/application;1"]
                       .getService(Components.interfaces.fuelIApplication)
@@ -290,6 +292,8 @@ function register()
 
 	try
 	{
+	  tile_requests = new Queue();
+
       socket = new WebSocket('ws://localhost:4487', 'VLP');
       socket.binaryType = "arraybuffer";
       socket.onopen = function(event)
@@ -318,7 +322,7 @@ function register()
       };
       socket.onmessage = function(event)
       {
-        msg = JSON.parse(event.data);
+        var msg = JSON.parse(event.data);
         if( msg.task == 'REQUEST' )
         {
           //alert('id='+last_id+"|"+msg.id+"\nstamp="+last_stamp+"|"+msg.stamp);
@@ -368,6 +372,7 @@ function register()
         }
         else if( msg.task == 'GET' )
         {
+          Application.console.log(event.data);
           if( msg.id == 'img-preview' )
           {
             var reg = getScrollRegion();
@@ -377,6 +382,15 @@ function register()
               offset[0] = (msg.src.width - reg.width) / 2;
 
             socket.send( grab(msg.size, msg.src, offset) );
+          }
+          else if( msg.id == 'preview-tile' )
+          {
+            tile_requests.enqueue(msg);
+            if( !tile_timeout )
+            {
+              setTimeout('handleTileRequest()', 50);
+              tile_timeout = true;
+            }
           }
         }
         else if( msg.task == 'SET' )
@@ -395,6 +409,21 @@ function register()
 		return false;
 	}
 	return true;
+}
+
+function handleTileRequest()
+{
+  if( tile_requests.isEmpty() )
+  {
+    tile_timeout = false;
+    return;
+  }
+  
+  var req = tile_requests.dequeue();
+  socket.send( grab(req.size, req.src, [0,0], 1, req.req_id) );
+  
+  setTimeout('handleTileRequest()', 200);
+  tile_timeout = true;
 }
 
 //------------------------------------------------------------------------------

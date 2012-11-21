@@ -4,6 +4,7 @@
 <overlay id="Scrapper-Overlay" xmlns="http://www.mozilla.org/keymaster/gatekeeper/there.is.only.xul">
 
 <script type="application/x-javascript" src="chrome://mypl/content/grab.js" />
+<script type="application/x-javascript" src="chrome://mypl/content/Queue.js" />
 <script type="application/x-javascript" src="chrome://mypl/content/myjs.js" />
 
 <toolbarpalette id="BrowserToolbarPalette">

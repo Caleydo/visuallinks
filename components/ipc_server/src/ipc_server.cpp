@@ -101,8 +101,6 @@ namespace LinksRouting
       slot_subscriber.getSlot<LinksRouting::SlotType::MouseEvent>("/mouse");
     _subscribe_popups =
       slot_subscriber.getSlot<SlotType::TextPopup>("/popups");
-    _subscribe_image =
-      slot_subscriber.getSlot<LinksRouting::SlotType::Image>("/popup-image");
   }
 
   //----------------------------------------------------------------------------
@@ -359,23 +357,44 @@ namespace LinksRouting
       return;
     }
 
-    std::cout << "Binary data received: " << ((data.size() / 1024) / 1024.f) << "MB" << std::endl;
-//    uint8_t type = data.at(0),
-//            id = data.at(1);
+    uint8_t type = data.at(0),
+            seq_id = data.at(1);
+
+    std::cout << "Binary data received: "
+              << ((data.size() / 1024) / 1024.f) << "MB"
+              << " type=" << (int)type
+              << " seq=" << (int)seq_id << std::endl;
 
     QMutexLocker lock_links(_mutex_slot_links);
 
-    delete[] _subscribe_image->_data->pdata;
-    _subscribe_image->_data->pdata = new uint8_t[data.size() - 2];
-    memcpy(_subscribe_image->_data->pdata, data.constData() + 2, data.size() - 2);
+    if( type != 0 )
+    {
+      LOG_WARN("Invalid binary data!");
+      return;
+    }
 
-    _subscribe_image->_data->type = SlotType::Image::ImageRGBA8;
-    _subscribe_image->_data->width = _preview_width;
-    _subscribe_image->_data->height = _preview_height;
+    std::cout << "request #" << (int)seq_id << std::endl;
 
-    assert( static_cast<size_t>(data.size()) == _subscribe_image->_data->width
-                                              * _subscribe_image->_data->height
-                                              * 4 + 2 );
+    auto request = _interaction_handler._tile_requests.find(seq_id);
+    if( request == _interaction_handler._tile_requests.end() )
+    {
+      LOG_WARN("Received unknown tile request.");
+      return;
+    }
+
+    HierarchicTileMapPtr tile_map = request->second.tile_map.lock();
+    if( !tile_map )
+    {
+      LOG_WARN("Received tile request for expired map.");
+      _interaction_handler._tile_requests.erase(request);
+      return;
+    }
+
+    tile_map->setTileData( request->second.x,
+                           request->second.y,
+                           request->second.zoom,
+                           data.constData() + 2,
+                           data.size() - 2 );
 
     _cond_data_ready->wakeAll();
   }
@@ -905,6 +924,7 @@ namespace LinksRouting
         popup.hover_region.dim.x = region.width();
         popup.hover_region.dim.y = region.height();
         popup.hover_region.scroll_region = client_info->second.scroll_region;
+        popup.hover_region.tile_map = client_info->second.tile_map;
 
         size_t index = _subscribe_popups->_data->popups.size();
         _subscribe_popups->_data->popups.push_back(popup);
@@ -928,7 +948,6 @@ namespace LinksRouting
               popup.hover_region.visible = true;
 
               _interaction_handler.updateRegion(*client_info, popup);
-              _interaction_handler.sendRequest(*client_info, popup);
 
             }
             else if( !popup.hover_region.visible )
@@ -1015,8 +1034,6 @@ namespace LinksRouting
               );
             }
           }
-
-          _interaction_handler.sendRequest(*client_info, popup);
         });
 
         /**
@@ -1039,7 +1056,6 @@ namespace LinksRouting
           popup.hover_region.src_region.pos.x -= delta.x * step_x;
 
           _interaction_handler.updateRegion(*client_info, popup);
-          _interaction_handler.sendRequest(*client_info, popup);
         });
       }
 
@@ -1349,11 +1365,18 @@ namespace LinksRouting
       client_info.scroll_region = msg.getValue<QRect>("scroll-region");
     else
       client_info.scroll_region = client_info.region;
+
+    client_info.tile_map =
+      std::make_shared<HierarchicTileMap>( client_info.scroll_region.width(),
+                                           client_info.scroll_region.height(),
+                                           _preview_width,
+                                           _preview_height );
   }
 
   //----------------------------------------------------------------------------
   IPCServer::InteractionHandler::InteractionHandler(IPCServer* server):
-    _server(server)
+    _server(server),
+    _tile_request_id(0)
   {
 
   }
@@ -1367,38 +1390,84 @@ namespace LinksRouting
   {
     float preview_aspect = _server->_preview_width
                          / static_cast<float>(_server->_preview_height);
-    QRect reg = client_info.second.scroll_region;
+    const QRect& reg = client_info.second.scroll_region;
     int h = reg.height() / pow(2, popup.hover_region.zoom) + 0.5,
         w = h * preview_aspect + 0.5;
 
-    popup.hover_region.src_region.size.x = w;
-    popup.hover_region.src_region.size.y = h;
+    Rect& src = popup.hover_region.src_region;
+    float2 old_pos = src.pos;
+
+    src.size.x = w;
+    src.size.y = h;
 
     if( center.x > -9999 && center.y > -9999 )
     {
       // Center source region around mouse cursor
-      popup.hover_region.src_region.pos.x = center.x - rel_pos.x * w;
-      popup.hover_region.src_region.pos.y = center.y - rel_pos.y * h;
+      src.pos.x = center.x - rel_pos.x * w;
+      src.pos.y = center.y - rel_pos.y * h;
     }
 
-    clamp<float>(popup.hover_region.src_region.pos.x, 0, reg.width() - w);
-    clamp<float>(popup.hover_region.src_region.pos.y, 0, reg.height() - h);
-  }
+    clamp<float>(src.pos.x, 0, reg.width() - w);
+    clamp<float>(src.pos.y, 0, reg.height() - h);
 
-  //----------------------------------------------------------------------------
-  void IPCServer::InteractionHandler::sendRequest(
-    const ClientInfos::value_type& client_info,
-    SlotType::TextPopup::Popup& popup )
-  {
-    client_info.first->write(QString(
-    "{"
-      "\"task\": \"GET\","
-      "\"id\": \"img-preview\","
-      "\"size\": [" + QString("%1").arg(_server->_preview_width)
-              + "," + QString("%1").arg(_server->_preview_height)
-              + "],"
-      "\"src\": " + popup.hover_region.src_region.toString().c_str() +
-    "}"));
+//    if( old_pos == src.pos )
+//      return;
+
+    const HierarchicTileMapPtr& tile_map = client_info.second.tile_map;
+    bool sent = false;
+
+    float scale = 1/tile_map->getLayerScale(popup.hover_region.zoom);
+    MapRect rect = tile_map->requestRect(src, popup.hover_region.zoom);
+    rect.foreachTile([&](Tile& tile, size_t x, size_t y)
+    {
+      if( tile.type == Tile::NONE )
+      {
+        auto req = std::find_if
+        (
+          _tile_requests.begin(),
+          _tile_requests.end(),
+          [&](const TileRequests::value_type& tile_req)
+          {
+            return (tile_req.second.tile_map.lock() == tile_map)
+                && (tile_req.second.zoom == popup.hover_region.zoom)
+                && (tile_req.second.x == x)
+                && (tile_req.second.y == y);
+          }
+        );
+
+        if( req != _tile_requests.end() )
+          // already sent
+          return;
+
+        Rect src( float2( x * tile_map->getTileWidth(),
+                          y * tile_map->getTileHeight() ),
+                  float2(tile.width, tile.height) );
+        src *= scale;
+
+        TileRequest tile_req = {
+          tile_map,
+          popup.hover_region.zoom,
+          x, y
+        };
+        uint8_t req_id = ++_tile_request_id;
+        _tile_requests[req_id] = tile_req;
+
+        client_info.first->write(QString(
+        "{"
+          "\"task\": \"GET\","
+          "\"id\": \"preview-tile\","
+          "\"size\": [" + QString::number(tile.width)
+                  + "," + QString::number(tile.height)
+                  + "],"
+          "\"src\": " + src.toString(true).c_str() + ","
+          "\"req_id\": " + QString::number(req_id) +
+        "}"));
+        sent = true;
+      }
+    });
+
+    if( !sent )
+      _server->_cond_data_ready->wakeAll();
   }
 
   //----------------------------------------------------------------------------

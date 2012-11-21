@@ -2,7 +2,7 @@
  *
  * @note Based on https://addons.mozilla.org/de/firefox/addon/screengrab-fix-version/
  */
-function grab(size, region, offset)
+function grab(size, region, offset, type = 0, req_id = 0)
 {
   var canvas =
     document.createElementNS("http://www.w3.org/1999/xhtml", "html:canvas");
@@ -27,8 +27,8 @@ function grab(size, region, offset)
   var len = image_data.length;
   var bytearray = new Uint8Array(len + 2);
   
-  bytearray[0] = 0; // type
-  bytearray[1] = 0; // id
+  bytearray[0] = type;   // type
+  bytearray[1] = req_id; // id
 
   for( var i = 0; i < len; ++i )
     bytearray[i + 2] = image_data[i];

@@ -77,6 +77,7 @@ void TextWidget::triggerSearch()
         "\"stamp\": 0"
       "}");
       QAction* action = new QAction(_edit->currentText(), this);
+      action->setIcon( QApplication::style()->standardIcon(QStyle::SP_DialogCancelButton) );
       connect(action, SIGNAL(triggered()), this, SLOT(abortRoute()));
       _actions.insert(action);
       _menu->addAction(action);

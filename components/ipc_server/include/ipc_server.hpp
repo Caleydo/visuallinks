@@ -14,6 +14,7 @@
 
 #include "common/componentarguments.h"
 #include "config.h"
+#include "HierarchicTileMap.hpp"
 #include "linkdescription.h"
 #include "slotdata/component_selection.hpp"
 #include "slotdata/image.hpp"
@@ -73,6 +74,7 @@ namespace LinksRouting
         WId     wid;
         QRect   region;
         QRect   scroll_region;
+        HierarchicTileMapPtr tile_map;
       };
       typedef std::map<QWsSocket*, ClientInfo> ClientInfos;
 
@@ -112,9 +114,6 @@ namespace LinksRouting
       slot_t<SlotType::MouseEvent>::type _subscribe_mouse;
       slot_t<LinksRouting::SlotType::TextPopup>::type _subscribe_popups;
 
-      /* Slot for showing overlay images */
-      slot_t<LinksRouting::SlotType::Image>::type _subscribe_image;
-
       LinkDescription::NodePtr parseRegions( const JSONParser& json,
                                              const ClientInfo& client_info );
       void updateScrollRegion( const JSONParser& json,
@@ -127,13 +126,23 @@ namespace LinksRouting
       struct InteractionHandler
       {
         IPCServer* _server;
+
+        struct TileRequest
+        {
+          HierarchicTileMapWeakPtr tile_map;
+          int zoom;
+          size_t x, y;
+        };
+
+        typedef std::map<uint8_t, TileRequest> TileRequests;
+        TileRequests  _tile_requests;
+        uint8_t       _tile_request_id;
+
         InteractionHandler(IPCServer* server);
         void updateRegion( const ClientInfos::value_type& client_info,
                            SlotType::TextPopup::Popup& popup,
                            float2 center = float2(-9999, -9999),
                            float2 rel_pos = float2() );
-        void sendRequest(  const ClientInfos::value_type& client_info,
-                           SlotType::TextPopup::Popup& popup );
       } _interaction_handler;
   };
 

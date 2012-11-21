@@ -51,17 +51,12 @@ namespace LinksRouting
       /** Publish the links rendered to fbo */
       slot_t<SlotType::Image>::type _slot_links;
 
-      /** Overlay/preview image */
-      slot_t<SlotType::Image>::type _slot_image;
-
       /** Frame buffer object where links get rendered to */
       gl::FBO   _links_fbo;
 
       cwc::glShaderManager  _shader_manager;
       cwc::glShader*        _blur_x_shader;
       cwc::glShader*        _blur_y_shader;
-
-      GLuint    _tex_img_preview;
 
       typedef std::queue<const LinkDescription::HyperEdge*> HyperEdgeQueue;
       typedef std::set<const LinkDescription::HyperEdge*> HyperEdgeSet;

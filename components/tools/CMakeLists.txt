@@ -19,7 +19,9 @@ set(HEADER_FILES
 
 set(SOURCE_FILES
   fbo.cxx
+  HierarchicTileMap.cxx
   linkdescription.cpp
+  Rect.cxx
 )
 
 add_definitions(-DNOMULTISAMPLING)
