@@ -21,6 +21,7 @@ set(SOURCE_FILES
   fbo.cxx
   HierarchicTileMap.cxx
   linkdescription.cpp
+  PartitionHelper.cxx
   Rect.cxx
 )
 

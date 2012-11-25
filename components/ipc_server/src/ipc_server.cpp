@@ -1260,7 +1260,7 @@ namespace LinksRouting
 
   //----------------------------------------------------------------------------
   LinkDescription::NodePtr IPCServer::parseRegions( const JSONParser& json,
-                                                    const ClientInfo& client_info )
+                                                    ClientInfo& client_info )
   {
     std::cout << "Parse regions (" << client_info.wid << ")" << std::endl;
 
@@ -1290,12 +1290,16 @@ namespace LinksRouting
     }
 
     LinkDescription::nodes_t nodes;
+    float avg_height = 0;
 
     QVariantList regions = json.getValue<QVariantList>("regions");
     for(auto region = regions.begin(); region != regions.end(); ++region)
     {
       LinkDescription::points_t points;
       LinkDescription::props_t props;
+
+      float min_y = 0,
+            max_y = 0;
 
       //for(QVariant point: region.toList())
       auto regionlist = region->toList();
@@ -1314,6 +1318,18 @@ namespace LinksRouting
             coords.at(0).toInt(),
             coords.at(1).toInt()
           ));
+
+          if( points.size() == 1 )
+          {
+            min_y = max_y = points.back().y;
+          }
+          else
+          {
+            if( points.back().y > max_y )
+              max_y = points.back().y;
+            else if( points.back().y < min_y )
+              min_y = points.back().y;
+          }
         }
         else if( point->type() == QVariant::Map )
         {
@@ -1328,6 +1344,7 @@ namespace LinksRouting
       if( points.empty() )
         continue;
 
+      avg_height += max_y - min_y;
       float2 center;
 
       auto rel = props.find("rel");
@@ -1349,10 +1366,31 @@ namespace LinksRouting
       nodes.push_back( std::make_shared<LinkDescription::Node>(points, link_points, props) );
     }
 
+    if( !nodes.empty() )
+      avg_height /= nodes.size();
+
     LinkDescription::HyperEdgePtr hedge =
       std::make_shared<LinkDescription::HyperEdge>(nodes);
     hedge->set("client_wid", WIdtoStr(client_info.wid));
     updateHedge(windows, hedge.get());
+
+    std::cout << "avg_height = " << avg_height << std::endl;
+
+    float offset = client_info.scroll_region.top() - top_left.y;
+
+    PartitionHelper part;
+    for(auto node = nodes.begin(); node != nodes.end(); ++node)
+    {
+      const Rect& bb = (*node)->getBoundingBox();
+      part.add( float2( offset + bb.t() - 3 * avg_height,
+                        offset + bb.b() + 3 * avg_height ) );
+    }
+    part.clip(0, client_info.scroll_region.height(), 2 * avg_height);
+    Partitions partitions = part.getPartitions();
+
+    hedge->set("partitions", to_string(partitions));
+    std::cout << to_string(partitions) << std::endl;
+    client_info.partitions = partitions;
 
     return std::make_shared<LinkDescription::Node>(hedge);
   }
@@ -1459,6 +1497,7 @@ namespace LinksRouting
           "\"size\": [" + QString::number(tile.width)
                   + "," + QString::number(tile.height)
                   + "],"
+          "\"sections\":" + to_string(client_info.second.partitions).c_str() + ","
           "\"src\": " + src.toString(true).c_str() + ","
           "\"req_id\": " + QString::number(req_id) +
         "}"));

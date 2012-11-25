@@ -411,7 +411,7 @@ function handleTileRequest()
   }
   
   var req = tile_requests.dequeue();
-  socket.send( grab(req.size, req.src, req.req_id) );
+  socket.send( grab(req.size, req.src, req.req_id, req.sections) );
   
   // We need to wait a bit before sending the next tile to not congest the
   // receiver queue.

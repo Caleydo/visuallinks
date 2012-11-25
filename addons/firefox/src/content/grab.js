@@ -2,7 +2,7 @@
  *
  * @note Based on https://addons.mozilla.org/de/firefox/addon/screengrab-fix-version/
  */
-function grab(size, region, req_id)
+function grab(size, region, req_id, sections)
 {
   var canvas =
     document.createElementNS("http://www.w3.org/1999/xhtml", "html:canvas");
@@ -13,12 +13,25 @@ function grab(size, region, req_id)
   canvas.style.height = canvas.style.maxheight = canvas.height + "px";
 
   var context = canvas.getContext("2d");
-
-  context.save();
+  context.fillStyle = "#555";
+  context.fillRect(0, 0, size[0], size[1]);
   context.scale( canvas.width / region.width,
                  canvas.height / region.height );
-  context.drawWindow(content.window, region.x, region.y, region.width, region.height, "#fff");
-  context.restore();
+
+  for( var i = 0; i < sections.length; ++i )
+  {
+    if(    sections[i][1] <= region.y
+        || sections[i][0] >= region.y + region.height )
+      continue;
+
+    var top = Math.max(region.y, sections[i][0]);
+    var bottom = Math.min(region.y + region.height, sections[i][1]);
+
+    context.save();
+    context.translate(0, top - region.y);
+    context.drawWindow(content.window, region.x, top, region.width, bottom - top, "#fff");
+    context.restore();
+  }
 
   var image_data = context.getImageData(0, 0, canvas.width, canvas.height).data;
   var len = image_data.length;

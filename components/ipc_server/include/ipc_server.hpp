@@ -16,6 +16,7 @@
 #include "config.h"
 #include "HierarchicTileMap.hpp"
 #include "linkdescription.h"
+#include "PartitionHelper.hxx"
 #include "slotdata/component_selection.hpp"
 #include "slotdata/image.hpp"
 #include "slotdata/mouse_event.hpp"
@@ -74,6 +75,7 @@ namespace LinksRouting
         WId     wid;
         QRect   region;
         QRect   scroll_region;
+        Partitions           partitions;
         HierarchicTileMapPtr tile_map;
       };
       typedef std::map<QWsSocket*, ClientInfo> ClientInfos;
@@ -115,7 +117,7 @@ namespace LinksRouting
       slot_t<LinksRouting::SlotType::TextPopup>::type _subscribe_popups;
 
       LinkDescription::NodePtr parseRegions( const JSONParser& json,
-                                             const ClientInfo& client_info );
+                                             ClientInfo& client_info );
       void updateScrollRegion( const JSONParser& json,
                                ClientInfo& client_info );
 

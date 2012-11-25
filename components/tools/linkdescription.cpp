@@ -84,7 +84,7 @@ namespace LinkDescription
   //----------------------------------------------------------------------------
   const points_t& Node::getLinkPoints() const
   {
-    return getLinkPoints();
+    return const_cast<Node*>(this)->getLinkPoints();
   }
 
   //----------------------------------------------------------------------------
@@ -97,11 +97,11 @@ namespace LinkDescription
   //----------------------------------------------------------------------------
   const points_t& Node::getLinkPointsChildren() const
   {
-    return getLinkPointsChildren();
+    return const_cast<Node*>(this)->getLinkPointsChildren();
   }
 
   //----------------------------------------------------------------------------
-  float2 Node::getCenter()
+  float2 Node::getCenter() const
   {
     const points_t& points = getLinkPoints();
     float2 center;
@@ -112,6 +112,27 @@ namespace LinkDescription
       center /= points.size();
 
     return center;
+  }
+
+  //----------------------------------------------------------------------------
+  Rect Node::getBoundingBox() const
+  {
+    float2 min = _points.front(),
+           max = _points.front();
+    for( auto p = _points.begin(); p != _points.end(); ++p )
+    {
+      if( p->x < min.x )
+        min.x = p->x;
+      else if( p->x > max.x )
+        max.x = p->x;
+
+      if( p->y < min.y )
+        min.y = p->y;
+      else if( p->y > max.y )
+        max.y = p->y;
+    }
+
+    return Rect(min, max - min);
   }
 
   //----------------------------------------------------------------------------

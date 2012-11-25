@@ -116,7 +116,8 @@ namespace LinkDescription
       points_t& getLinkPointsChildren();
       const points_t& getLinkPointsChildren() const;
 
-      float2 getCenter();
+      float2 getCenter() const;
+      Rect getBoundingBox() const;
 
       HyperEdge* getParent();
       const HyperEdge* getParent() const;
