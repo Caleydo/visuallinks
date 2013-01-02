@@ -3,6 +3,8 @@
 
 <overlay id="Scrapper-Overlay" xmlns="http://www.mozilla.org/keymaster/gatekeeper/there.is.only.xul">
 
+<script type="application/x-javascript" src="chrome://mypl/content/grab.js" />
+<script type="application/x-javascript" src="chrome://mypl/content/Queue.js" />
 <script type="application/x-javascript" src="chrome://mypl/content/myjs.js" />
 
 <toolbarpalette id="BrowserToolbarPalette">
@@ -13,7 +15,12 @@
 	             oncommand="onVisLinkButton()"
 	             class="toolbarbutton-1 chromeclass-toolbar-additional vislink">
     <menupopup id="vislink_menu">
+      <div id="routing-selector" orient="vertical">
+        <menuitem label="No routing algorithm1" disabled="true" />
+      </div>
+      <menuseparator />
       <menuitem label="Abort all" oncommand="onAbort('', -1)"/>
+      <menuitem label="Settings" oncommand="window.open('chrome://mypl/content/preferences.xul', 'VisLinks - Settings', 'chrome');"/>
       <menuseparator />
     </menupopup>
   </toolbarbutton>

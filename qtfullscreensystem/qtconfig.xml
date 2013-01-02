@@ -16,17 +16,14 @@
 	<DownsampleCost type="Integer" val="8" />
   </ComponentCostanalysis>
 
+  <CPURouting>
+  </CPURouting>
+
   <GPURouting>
-    <enabled type="Bool" val="true" />
-    <NoQueue type="Bool" val="true" />
     <BlockSizeX type="Integer" val="8" />
     <BlockSizeY type="Integer" val="8" />
   </GPURouting>
   
-  
-  <!-- <ComponentRenderer>
-    <TestDouble type="Float" val="0.25" />
-  </ComponentRenderer> -->
   <GLRenderer>
     <enabled type="Bool" val="true" />
     <link-color type="String" val="228 26 28" />

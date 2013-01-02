@@ -5,12 +5,17 @@
 
 #include "slots.hpp"
 #include "slotdata/image.hpp"
+#include "slotdata/mouse_event.hpp"
+#include "slotdata/text_popup.hpp"
 
 #include "staticcore.h"
 #include "xmlconfig.h"
 #include "ipc_server.hpp"
 #include "glcostanalysis.h"
-#include "gpurouting.h"
+#include "cpurouting.h"
+#if USE_GPU_ROUTING
+# include "gpurouting.h"
+#endif
 #include "glrenderer.h"
 
 #include <QMutex>
@@ -21,7 +26,8 @@
 namespace qtfullscreensystem
 {
   class GLWidget:
-    public QGLWidget,
+    public QWidget,
+    public LinksRouting::Component,
     public LinksRouting::ComponentArguments
   {
     public:
@@ -37,12 +43,6 @@ namespace qtfullscreensystem
       void publishSlots(LinksRouting::SlotCollector slots);
       void subscribeSlots(LinksRouting::SlotSubscriber& slot_subscriber);
 
-      const std::string& name() const
-      {
-        static const std::string name("QGLWidget");
-        return name;
-      }
-
       /**
        *
        */
@@ -51,7 +51,7 @@ namespace qtfullscreensystem
       /**
        * Do actual render (To be called eg. by renderthread)
        */
-      void render();
+      void render(int pass, QGLPixelBuffer* pbuffer);
 
       /**
        * Start rendering thread
@@ -63,16 +63,26 @@ namespace qtfullscreensystem
        */
       void waitForData();
 
+      QImage _image;
+
     protected:
 
-      void resizeEvent(QResizeEvent * event);
-      void moveEvent(QMoveEvent *event);
+      virtual void paintEvent(QPaintEvent *event);
+      virtual void resizeEvent(QResizeEvent *event);
+      virtual void moveEvent(QMoveEvent *event);
 
-      void updateScreenShot(QPoint window_offset,  QPoint window_end);
+      virtual void mouseReleaseEvent(QMouseEvent *event);
+      virtual void mouseMoveEvent(QMouseEvent *event);
+      virtual void leaveEvent(QEvent *event);
+      virtual void wheelEvent(QWheelEvent *event);
+
+      void updateScreenShot( QPoint window_offset,
+                             QPoint window_end,
+                             QGLPixelBuffer* pbuffer );
 
     private:
 
-      RenderThread  _render_thread;
+      QSharedPointer<RenderThread> _render_thread;
 
       int _cur_fbo;
       std::unique_ptr<QGLFramebufferObject> _fbo_desktop[2];
@@ -80,7 +90,12 @@ namespace qtfullscreensystem
       QPoint _window_offset;
       QPoint _window_end;
 
+      bool _do_drag;
+      float2 _last_mouse_pos;
+
       LinksRouting::slot_t<LinksRouting::SlotType::Image>::type _slot_desktop;
+      LinksRouting::slot_t<LinksRouting::SlotType::MouseEvent>::type _slot_mouse;
+      LinksRouting::slot_t<LinksRouting::SlotType::TextPopup>::type _slot_popups;
       QPixmap _screenshot;
 
       // TODO make readonly
@@ -90,10 +105,14 @@ namespace qtfullscreensystem
 
       /** And now the components */
       LinksRouting::StaticCore      _core;
-      LinksRouting::XmlConfig       _config;
+      LinksRouting::XmlConfig       _config,
+                                    _user_config;
       LinksRouting::IPCServer       _server;
       LinksRouting::GlCostAnalysis  _cost_analysis;
-      LinksRouting::GPURouting      _routing;
+      LinksRouting::CPURouting      _routing_cpu;
+#if USE_GPU_ROUTING
+      LinksRouting::GPURouting      _routing_gpu;
+#endif
       LinksRouting::GlRenderer      _renderer;
 
       QMutex            _mutex_slot_links;

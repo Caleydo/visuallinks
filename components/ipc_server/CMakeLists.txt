@@ -16,10 +16,12 @@ set(HEADER_FILES
 
 set( HEADER_FILES_MOC
   include/ipc_server.hpp
+  include/window_monitor.hpp
 )
 
 set(SOURCE_FILES
   src/ipc_server.cpp
+  src/window_monitor.cpp
 )
 
 set(CL_FILES

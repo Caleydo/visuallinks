@@ -13,15 +13,18 @@
 
 namespace LinksRouting
 {
-  class GlCostAnalysis: public CostAnalysis, public ComponentArguments
+  class GlCostAnalysis:
+    public CostAnalysis,
+    public ComponentArguments
   {
     protected:
-      std::string myname;
+
       int _downsampleSaliency;
       int _downsampleCost;
       int _downsampleSaliencyToCost;
 
     public:
+
       GlCostAnalysis();
       virtual ~GlCostAnalysis();
 
@@ -30,18 +33,14 @@ namespace LinksRouting
 
       bool startup(Core* core, unsigned int type);
       void init();
-      void initGL();
+      bool initGL();
       void shutdown();
-      bool supports(Type type) const
+      bool supports(unsigned int type) const
       {
-        return type == Component::Costanalysis;
-      }
-      const std::string& name() const
-      {
-        return myname;
+        return (type & Component::Costanalysis);
       }
 
-      void process(Type type);
+      void process(unsigned int type);
 
 //      bool setSceneInput(const Component::MapData& inputmap);
 //      bool setCostreductionInput(const Component::MapData& inputmap);

@@ -33,9 +33,25 @@
 
 3.1 Message types
 
+   REGISTER
+
+              {
+                'task': 'REGISTER',
+                'name': 'Optional Name',
+                'pos': [px, py],
+                'region': [x, y, width, height]
+              }
+
+   RESIZE
+
+              {
+                'task': 'RESIZE',
+                'region': [x, y, width, height]
+              }
+
    INITIATE   Initiates a new routing and linking process by sending the
-              identifier to search to the server. Optionally locations inside
-              the clients region can be added in an optional 'regions' filled.
+              identifier to search to the server. Locations inside
+              the clients region can be added in the optional 'regions' field.
               
               The following example shows a message to initiate a search for the
               string 'test' with two occurrences bounded by one rectangular and
@@ -80,16 +96,46 @@
                              [[40, 100], [100, 200], [10, 200]]
                            ]
               }
-              
-   ABORT	  If a client sends an ABORT to the server then the server forwards
+
+   ABORT      If a client sends an ABORT to the server then the server forwards
               the message to all clients and removes every displayed route for
               the given link id.
               
               If all routes should be aborted set id to the empty string and
               stamp to -1.
 
-   			  {
+              {
                 'task': 'ABORT',
                 'id': 'test',
                 'stamp': 123456789
+              }
+
+   GET        A client can request currently set configuration values and
+              parameters with sending a GET request.
+              
+              {
+                'task': 'GET',
+                'id': '/routing'
+              }
+
+   GET-FOUND  After receiving a GET request the server answers with a GET-FOUND
+              which continas the requested id and it's value(s)
+              
+              {
+                'task': 'GET-FOUND',
+                'id': '/routing',
+                'val': {
+                  'active:': 'CPURouting',
+                  'available': [ ['GPURouting', 1],
+                                 ['CPURouting', 1] ]
+                }
+              }
+
+   SET        A client can also set configuration values and parameters with
+              sending a SET request.
+              
+              {
+                'task': 'SET',
+                'id': '/routing',
+                'val': 'CPURouting'
               }

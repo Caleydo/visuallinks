@@ -19,10 +19,13 @@
 
 #include <QApplication>
 #include <QBitmap>
+#include <QDesktopServices>
 #include <QDesktopWidget>
 #include <QMoveEvent>
+#include <QStaticText>
 
 #include <QGLShader>
+#include <QGLPixelBuffer>
 
 #define LOG_ENTER_FUNC() qDebug() << __FUNCTION__
 
@@ -91,19 +94,38 @@ ShaderPtr loadShader( QString vert, QString frag )
 
   //----------------------------------------------------------------------------
   GLWidget::GLWidget(int& argc, char *argv[]):
-    _render_thread(this),
+    Configurable("QGLWidget"),
     _cur_fbo(0),
+    _do_drag(false),
     _server(&_mutex_slot_links, &_cond_render, this)
   {
+    QApplication::setOrganizationDomain("icg.tugraz.at");
+    QApplication::setOrganizationName("icg.tugraz.at");
+    QApplication::setApplicationName("VisLinks");
+
+    const QString config_dir =
+      QDesktopServices::storageLocation(QDesktopServices::DataLocation);
+    const std::string user_config = config_dir.toStdString() + "/config.xml";
+
+    {
+      // Ensure config path and user config file exist
+      QDir().mkpath(config_dir);
+      QFile file( QString::fromStdString(user_config) );
+      if( !file.open(QIODevice::ReadWrite | QIODevice::Text) )
+        LOG_ERROR("Failed to open user config!");
+      else if( !file.size() )
+      {
+        LOG_INFO("Creating empty user config in '" << user_config << "'");
+        file.write(
+          "<!-- VisLinks user config (overrides config file) -->\n"
+          "<config/>"
+        );
+      }
+    }
+
     //--------------------------------
     // Setup opengl and window
     //--------------------------------
-
-    if( !QGLFormat::hasOpenGL() )
-      qFatal("OpenGL not supported!");
-
-    if( !QGLFramebufferObject::hasOpenGLFramebufferObjects() )
-      qFatal("OpenGL framebufferobjects not supported!");
 
     // fullscreen
     setGeometry( QApplication::desktop()->screen(-1)->geometry() );
@@ -129,18 +151,7 @@ ShaderPtr loadShader( QString vert, QString frag )
     setMask(QRegion(-1, -1, 1, 1));
 #endif
 
-    setAutoBufferSwap(false);
-    
-    if( !isValid() )
-      qFatal("Unable to create OpenGL context (not valid)");
-
-    qDebug
-    (
-      "Created GLWidget with OpenGL %d.%d",
-      format().majorVersion(),
-      format().minorVersion()
-    );
-    doneCurrent();
+    setMouseTracking(true);
 
     //--------------------------------
     // Setup component system
@@ -153,11 +164,18 @@ ShaderPtr loadShader( QString vert, QString frag )
 
     publishSlots(_core.getSlotCollector());
 
-    _core.startup(argv[1]);
+    _config.initFrom(argv[1]);
+    _user_config.initFrom(user_config);
+
+    _core.startup();
     _core.attachComponent(&_config);
+    _core.attachComponent(&_user_config);
     _core.attachComponent(&_server);
     _core.attachComponent(&_cost_analysis);
-    _core.attachComponent(&_routing);
+    _core.attachComponent(&_routing_cpu);
+#if USE_GPU_ROUTING
+    _core.attachComponent(&_routing_gpu);
+#endif
     _core.attachComponent(&_renderer);
 
     _core.attachComponent(this);
@@ -169,7 +187,12 @@ ShaderPtr loadShader( QString vert, QString frag )
     LinksRouting::SlotSubscriber subscriber = _core.getSlotSubscriber();
     subscribeSlots(subscriber);
 
-    //std::cout << "Is virtual desktop: " << QApplication::desktop()->isVirtualDesktop() << std::endl;
+    _render_thread =
+      QSharedPointer<RenderThread>(new RenderThread(this, width(), height()));
+
+    //std::cout << "Is virtual desktop: "
+    //          << QApplication::desktop()->isVirtualDesktop()
+    //          << std::endl;
   }
 
   //----------------------------------------------------------------------------
@@ -198,6 +221,11 @@ ShaderPtr loadShader( QString vert, QString frag )
     _slot_desktop =
       slot_collector.create<LinksRouting::SlotType::Image>("/desktop");
     _slot_desktop->_data->type = LinksRouting::SlotType::Image::OpenGLTexture;
+
+    _slot_mouse =
+      slot_collector.create<LinksRouting::SlotType::MouseEvent>("/mouse");
+    _slot_popups =
+      slot_collector.create<LinksRouting::SlotType::TextPopup>("/popups");
   }
 
   //----------------------------------------------------------------------------
@@ -224,17 +252,17 @@ ShaderPtr loadShader( QString vert, QString frag )
 
     if( !_debug_desktop_image.empty() )
     {
-      LOG_INFO("Using image instead of screenshot: " << _debug_desktop_image);
-      if( _slot_desktop->isValid() )
-        LOG_WARN("Already initialized!");
-
-      static QPixmap img( QString::fromStdString(_debug_desktop_image) );
-
-      _slot_desktop->_data->id = bindTexture(img);
-      _slot_desktop->_data->width = img.width();
-      _slot_desktop->_data->height = img.height();
-
-      _slot_desktop->setValid(true);
+//      LOG_INFO("Using image instead of screenshot: " << _debug_desktop_image);
+//      if( _slot_desktop->isValid() )
+//        LOG_WARN("Already initialized!");
+//
+//      static QPixmap img( QString::fromStdString(_debug_desktop_image) );
+//
+//      _slot_desktop->_data->id = bindTexture(img);
+//      _slot_desktop->_data->width = img.width();
+//      _slot_desktop->_data->height = img.height();
+//
+//      _slot_desktop->setValid(true);
     }
     else
     {
@@ -269,9 +297,10 @@ ShaderPtr loadShader( QString vert, QString frag )
   }
 
   //----------------------------------------------------------------------------
-  void GLWidget::render()
+  void GLWidget::render(int pass, QGLPixelBuffer* pbuffer)
   {
-    updateScreenShot(_window_offset, _window_end);
+    if( pass == 0 )
+      updateScreenShot(_window_offset, _window_end, pbuffer);
 
     float x = _window_offset.x(),
           y = _window_offset.y(),
@@ -281,18 +310,16 @@ ShaderPtr loadShader( QString vert, QString frag )
     glMatrixMode(GL_PROJECTION);
     glOrtho(x, x + w, y, y + h, -1.0, 1.0);
 
-
     {
       QMutexLocker lock_links(&_mutex_slot_links);
-      _core.process();
+      _core.process(pass == 0 ? (Component::Renderer | 64) : Component::Any);
     }
 
     glMatrixMode(GL_PROJECTION);
     glLoadIdentity();
 
     // normal draw...
-    //glClear(GL_COLOR_BUFFER_BIT);
-
+    glClear(GL_COLOR_BUFFER_BIT);
     glActiveTexture(GL_TEXTURE0);
     glBindTexture(GL_TEXTURE_2D, _subscribe_links->_data->id);
 
@@ -347,14 +374,17 @@ ShaderPtr loadShader( QString vert, QString frag )
 #endif
 
     glBindTexture(GL_TEXTURE_2D, 0);
-    static int counter = 0;
 
-    static QImage links(size(), QImage::Format_RGB888);
-    glPushAttrib(GL_CLIENT_PIXEL_STORE_BIT);
-    glPixelStorei(GL_PACK_ALIGNMENT, 1);
-    glReadPixels(0, 0, width(), height(), GL_RGB, GL_UNSIGNED_BYTE, links.bits());
+//    static QImage links(size(), QImage::Format_RGB888);
+//    glPushAttrib(GL_CLIENT_PIXEL_STORE_BIT);
+//    glPixelStorei(GL_PACK_ALIGNMENT, 1);
+//    glReadPixels(0, 0, width(), height(), GL_RGB, GL_UNSIGNED_BYTE, links.bits());
     //links.mirrored().save(QString("links%1.png").arg(counter));
 
+    static int counter = 0;
+
+    glFinish();
+    QImage links = pbuffer->toImage();
     //--------------------------------------------------------------------------
     auto writeTexture = []
     (
@@ -378,14 +408,14 @@ ShaderPtr loadShader( QString vert, QString frag )
 //    writeTexture(_core.getSlotSubscriber().getSlot<LinksRouting::SlotType::Image>("/downsampled_desktop"), QString("downsampled_desktop%1.png").arg(counter));
 //    writeTexture(_core.getSlotSubscriber().getSlot<LinksRouting::SlotType::Image>("/featuremap"), QString("featuremap%1.png").arg(counter));
 
-    glPopAttrib();
+    //glPopAttrib();
 
     //links.save("fbo.png");
-    if( !_subscribe_routed_links->_data->empty() )
+    if( _subscribe_links->isValid() )
     {
-//      writeTexture(_subscribe_links, QString("links%1.png").arg(counter));
+      //writeTexture(_subscribe_links, QString("links%1.png").arg(counter));
 
-      QBitmap mask = QBitmap::fromImage( links.mirrored().createMaskFromColor( qRgb(0,0,0) ) );
+      QBitmap mask = QBitmap::fromImage( links.createMaskFromColor( qRgba(0,0,0, 0) ) );
       setMask(mask);
 //      mask.save(QString("mask%1.png").arg(counter));
     }
@@ -397,6 +427,8 @@ ShaderPtr loadShader( QString vert, QString frag )
 #endif
 
     ++counter;
+    _image = links;
+    update();
 	/*
 	QPixmap screen = QPixmap::fromImage( grabFrameBuffer(true) );
 	screen.save(QString("links%1.png").arg(counter));*/
@@ -407,14 +439,53 @@ ShaderPtr loadShader( QString vert, QString frag )
   //----------------------------------------------------------------------------
   void GLWidget::startRender()
   {
-    _render_thread.start();
+    _render_thread->start();
   }
 
   //----------------------------------------------------------------------------
   void GLWidget::waitForData()
   {
     QMutexLocker lock(&_mutex_slot_links);
-    _cond_render.wait(&_mutex_slot_links, 500);
+    _cond_render.wait(&_mutex_slot_links);
+  }
+
+  //----------------------------------------------------------------------------
+  void GLWidget::paintEvent(QPaintEvent *event)
+  {
+    std::cout << "paint" << std::endl;
+    QPainter painter(this);
+
+    painter.drawImage(QPoint(0,0), _image);
+
+    for( auto popup = _slot_popups->_data->popups.begin();
+              popup != _slot_popups->_data->popups.end();
+            ++popup )
+    {
+      if( popup->region.visible )
+        painter.drawText
+        (
+          popup->region.region.pos.x,
+          popup->region.region.pos.y - popup->region.region.size.y - 8,
+          popup->region.region.size.x,
+          popup->region.region.size.y,
+          Qt::AlignCenter,
+          QString::fromStdString(popup->text)
+        );
+
+      if( !popup->hover_region.visible )
+        continue;
+
+//      const LinksRouting::SlotType::Image* img = _slot_image->_data.get();
+//      const float2& pos = popup->hover_region.region.pos;
+//      if( img->pdata )
+//      {
+//        painter.drawImage(
+//          QRect(pos.x + 8, pos.y - _window_offset.y() + 8, 256, 384),
+//          QImage(img->pdata, img->width, img->height, QImage::Format_ARGB32),
+//          QRect(0, 0, 128, 192)
+//        );
+//      }
+    }
   }
 
   //----------------------------------------------------------------------------
@@ -426,7 +497,7 @@ ShaderPtr loadShader( QString vert, QString frag )
     LOG_ENTER_FUNC() << "(" << w << "|" << h << ")"
                      << static_cast<float>(w)/h << ":" << 1;
 
-    _render_thread.resize(w, h);
+    _render_thread->resize(w, h);
   }
 
   //----------------------------------------------------------------------------
@@ -455,9 +526,68 @@ ShaderPtr loadShader( QString vert, QString frag )
       move( QPoint(0,0) );
     }
   }
+  
+  //----------------------------------------------------------------------------
+  void GLWidget::mouseReleaseEvent(QMouseEvent *event)
+  {
+    if( _do_drag )
+      _do_drag = false;
+    else
+      _slot_mouse->_data->triggerClick(event->globalX(), event->globalY());
+  }
 
   //----------------------------------------------------------------------------
-  void GLWidget::updateScreenShot(QPoint window_offset, QPoint window_end)
+  void GLWidget::mouseMoveEvent(QMouseEvent *event)
+  {
+    if( !event->buttons() )
+      _slot_mouse->_data->triggerMove(event->globalX(), event->globalY());
+    else if( event->buttons() & Qt::LeftButton )
+    {
+      float2 pos(event->globalX(), event->globalY());
+      if( _do_drag )
+        _slot_mouse->_data->triggerDrag(pos - _last_mouse_pos);
+      else
+        _do_drag = true;
+      _last_mouse_pos = pos;
+    }
+  }
+  
+  //----------------------------------------------------------------------------
+  void GLWidget::leaveEvent(QEvent *event)
+  {
+    _slot_mouse->_data->triggerLeave();
+
+    bool change = false;
+#if 0
+    for( auto popup = _slot_popups->_data->popups.begin();
+                  popup != _slot_popups->_data->popups.end();
+                ++popup )
+    {
+      if( popup->visible )
+      {
+        popup->visible = false;
+        change = true;
+      }
+    }
+#endif
+    if( change )
+      _cond_render.wakeAll();
+  }
+
+  //----------------------------------------------------------------------------
+  void GLWidget::wheelEvent(QWheelEvent *event)
+  {
+    _slot_mouse->_data->triggerScroll(
+      event->delta(),
+      float2(event->globalX(), event->globalY()),
+      event->modifiers()
+    );
+  }
+
+  //----------------------------------------------------------------------------
+  void GLWidget::updateScreenShot( QPoint window_offset,
+                                   QPoint window_end,
+                                   QGLPixelBuffer* pbuffer )
   {
     if( _screenshot.isNull() || !_fbo_desktop[0] || !_fbo_desktop[1] )
       return;
@@ -472,7 +602,7 @@ ShaderPtr loadShader( QString vert, QString frag )
     shader->bind();
 
     glActiveTexture(GL_TEXTURE0);
-    GLuint tid = bindTexture(_screenshot, GL_TEXTURE_2D, GL_RGBA, QGLContext::NoBindOption);
+    GLuint tid = pbuffer->bindTexture(_screenshot, GL_TEXTURE_2D);//, GL_RGBA, QGLContext::NoBindOption);
 
     glActiveTexture(GL_TEXTURE1);
     glBindTexture(GL_TEXTURE_2D, _subscribe_links->_data->id);

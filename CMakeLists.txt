@@ -6,7 +6,7 @@ set(LINKS_INCLUDE_DIR ${PROJROOT}/include)
 set(COMPONENTS_DIR ${PROJROOT}/components)
 set(COMPONENTS_INC_DIR )
 set(COMPONENTS_LIBS )
-set(BIN_DIR ${PROJROOT}/bin)
+set(BIN_DIR ${CMAKE_BINARY_DIR}/bin)
 set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} ${PROJROOT}/cmake)
 set(LIBRARY_OUTPUT_PATH ${BIN_DIR}/lib) 
 
@@ -15,7 +15,25 @@ include( cmake/CopyFiles.cmake )
 include( cmake/AddComponent.cmake )
 include( cmake/AddSubdirOption.cmake )
 
+# ------------------------------------------------------------------------------
+# Warning when using in-source build
+# ------------------------------------------------------------------------------
+
+if("${CMAKE_SOURCE_DIR}" STREQUAL "${CMAKE_BINARY_DIR}")
+    message(WARNING  "Avoid building inside the source tree!")
+    message(WARNING  "Create a separate build directory instead (i.e. 'build') and call CMake from there: ")
+    message(WARNING  "  mkdir ../build && cd ../build && cmake ${CMAKE_SOURCE_DIR}")
+endif()
+
+# ------------------------------------------------------------------------------
 # custom options
+# ------------------------------------------------------------------------------
+
+message("--------------------")
+message("Build configuration:")
+message("--------------------")
+
+# direct desktop blending
 set( RenderUseDesktopBlend_desc
      "Use direct alpha blending with desktop (doesn't work on windows)" )
 if(WIN32)
@@ -29,6 +47,7 @@ if(RenderUseDesktopBlend)
   add_definitions(-DUSE_DESKTOP_BLEND)
 endif()
 
+# ------------------------------------------------------------------------------
 
 #set interface files
 set( INTERFACE_FILES
@@ -60,11 +79,11 @@ endif()
 add_subdirectory(${COMPONENTS_DIR}/tools)
 include_directories(
   ${COMPONENTS_DIR}/tools
-  libs/qtwebsocket/QtWebSocket
+  libs/qtwebsocket/QtWebsocket
   libs/libqxt/include
 )
 
-add_subdirectory(libs/qtwebsocket/QtWebSocket)
+add_subdirectory(libs/qtwebsocket/QtWebsocket)
 add_subdirectory(libs/libqxt)
 
 #TODO we should do that in a better way, so we can get the include directories and libs to link out of the subdirectory..
@@ -74,13 +93,21 @@ add_component(xmlconfig)
 add_component(ipc_server)
 add_component(costanalysis)
 add_component(renderer_gl)
-add_component(routing_cpu off)
+add_component(routing_cpu)
 add_component(routing_gpu)
 add_component(transparencyanalysis off)
 #message("comp inc:\n${COMPONENTS_INC_DIR} \ncomp libs:\n${COMPONENTS_LIBS}\ndepeping files:\n${COMPONENTS_DEPENDING_FILES}")
 
+# OpenCL GPU routing
+if(LinksComponent_routing_gpu)
+  add_definitions(-DUSE_GPU_ROUTING)
+endif()
+
+message("--------------------")
+
 #add default applications
 add_subdir_option(qtfullscreensystem QTFullscreenSystem)
+add_subdir_option(qtsearch QtSearch)
 add_subdir_option(qt-ncc QtNormalizedCrossCorrelationTest FALSE EXCLUDE_FROM_ALL)
 add_subdir_option(qt-ocr QtOCRTest FALSE EXCLUDE_FROM_ALL)
 #add_subdirectory(${PROJROOT}/singleimagesystem ${BIN_DIR}/singleimagesystem)

@@ -7,9 +7,25 @@ var last_stamp = null;
 var offset = [0,0];
 var scale = 1;
 var win = null;
-var menu = document.getElementById("vislink_menu");
+var menu = null;
+var items_routing = null;
 var active_routes = new Object();
 var timeout = null;
+var routing = null;
+var tile_requests = null;
+var tile_timeout = false;
+
+var prefs = Components.classes["@mozilla.org/fuel/application;1"]
+                      .getService(Components.interfaces.fuelIApplication)
+                      .prefs;
+
+/**
+ * Get value of a preference
+ */
+function getPref(key)
+{
+  return prefs.get("extensions.vislinks." + key).value;
+}
 
 /**
  * Set status icon
@@ -39,10 +55,56 @@ function send(data)
   }
 }
 
+function removeAllChildren(el)
+{
+  while( el.hasChildNodes() )
+    el.removeChild(el.firstChild);
+}
+
+/**
+ * Update scale factor (CSS pixels to hardware pixels)
+ */
+function updateScale()
+{
+  win = content.document.defaultView;
+  var domWindowUtils =
+    win.QueryInterface(Components.interfaces.nsIInterfaceRequestor)
+       .getInterface(Components.interfaces.nsIDOMWindowUtils);
+  scale = domWindowUtils.screenPixelsPerCSSPixel;
+}
+
+/**
+ * Get the document region relative to the application window
+ */
+function getRegion()
+{
+  updateScale();
+  var win = content.document.defaultView;
+
+  return [
+    Math.round((win.mozInnerScreenX - win.screenX) * scale),
+    Math.round((win.mozInnerScreenY - win.screenY) * scale),
+    Math.round(win.innerWidth * scale),
+    Math.round(win.innerHeight * scale)
+  ];
+}
+
+function getScrollRegion()
+{
+  var doc = content.document;
+  return {
+    x: content.scrollX,
+    y: content.scrollY,
+    width: doc.documentElement.scrollWidth,
+    height: doc.documentElement.scrollHeight
+  };
+}
+
 //------------------------------------------------------------------------------
 function onVisLinkButton()
 {
   menu = document.getElementById("vislink_menu");
+  items_routing = document.getElementById("routing-selector");
 
   if( status == 'active')
     selectVisLink();
@@ -55,7 +117,7 @@ function onVisLinkButton()
       window.addEventListener('unload', stopVisLinks, false);
       window.addEventListener('scroll', windowChanged, false);
       window.addEventListener("DOMAttrModified", attrModified, false);
-  //    window.addEventListener('resize', resize, false);
+      window.addEventListener('resize', resize, false);
 //      window.addEventListener("DOMContentLoaded", windowChanged, false);
     }
   }
@@ -87,7 +149,7 @@ function removeRouteData(id)
 }
 
 //------------------------------------------------------------------------------
-function onAbort(id, stamp)
+function onAbort(id, stamp, send_msg = true)
 {
   // TODO
   last_id = null;
@@ -105,11 +167,18 @@ function onAbort(id, stamp)
     removeRouteData(id);
   }
   
-  send({
-    'task': 'ABORT',
-    'id': id,
-    'stamp': stamp
-  });
+  if( send_msg )
+    send({
+      'task': 'ABORT',
+      'id': id,
+      'stamp': stamp
+    });
+}
+
+//------------------------------------------------------------------------------
+function abortAll()
+{
+  onAbort('', -1);
 }
 
 //------------------------------------------------------------------------------
@@ -126,19 +195,17 @@ function removeAllRouteData()
 //------------------------------------------------------------------------------
 function reportVisLinks(id, found)
 {
-  var doc = content.document;
-  win = doc.defaultView;
-  var domWindowUtils =
-    win.QueryInterface(Components.interfaces.nsIInterfaceRequestor)
-       .getInterface(Components.interfaces.nsIDOMWindowUtils);
-  scale = domWindowUtils.screenPixelsPerCSSPixel;
+  if( !found && getPref("replace-route") )
+    abortAll();
+
+  updateScale();
   
   offset[0] = win.mozInnerScreenX * scale;
   offset[1] = win.mozInnerScreenY * scale;
   
 //  alert(offset[0] + "|" + offset[1]);
 
-  var bbs = searchDocument(doc, id);
+  var bbs = searchDocument(content.document, id);
   
   last_id = id;
   if( !found )
@@ -161,9 +228,11 @@ function reportVisLinks(id, found)
     };
   }
   
+  var reg = getScrollRegion();
   send({
     'task': (found ? 'FOUND' : 'INITIATE'),
     'title': document.title,
+    'scroll-region': [reg.x, reg.y, reg.width, reg.height],
     'id': id,
     'stamp': last_stamp,
     'regions': bbs
@@ -171,6 +240,16 @@ function reportVisLinks(id, found)
 
 // if( found )
 //    alert('send FOUND: '+selectionId);
+}
+
+//------------------------------------------------------------------------------
+function reportSelectRouting(routing)
+{
+  send({
+    'task': 'SET',
+    'id': '/routing',
+    'val': routing
+  });
 }
 
 //------------------------------------------------------------------------------
@@ -198,6 +277,7 @@ function stopVisLinks()
 	window.removeEventListener('unload', stopVisLinks, false);
 	window.removeEventListener('scroll', windowChanged, false);
 	window.removeEventListener("DOMAttrModified", attrModified, false);
+  window.removeEventListener('resize', resize, false);
 }
 
 //------------------------------------------------------------------------------
@@ -205,26 +285,29 @@ function register()
 {
 //	window.lastPointerID = null; 
 //
-//	var win = content.document.defaultView;
-//	var x = win.screenX + (win.outerWidth - win.innerWidth) / 2;
-//	var y = win.screenY + (win.outerHeight - win.innerHeight);
-//	var w = win.innerWidth;
-//	var h = win.innerHeight;
-	
+
 	// Get the box object for the link button to get window handler from the
 	// window at the position of the box
 	var box = document.getElementById("vislink").boxObject;
 
 	try
 	{
+	  tile_requests = new Queue();
+
       socket = new WebSocket('ws://localhost:4487', 'VLP');
+      socket.binaryType = "arraybuffer";
       socket.onopen = function(event)
       {
         setStatus('active');
         send({
-          'task': 'REGISTER',
-          'name': "Firefox",
-          'pos': [box.screenX + box.width / 2, box.screenY + box.height / 2]
+          task: 'REGISTER',
+          name: "Firefox",
+          pos: [box.screenX + box.width / 2, box.screenY + box.height / 2],
+          region: getRegion()
+        });
+        send({
+          task: 'GET',
+          id: '/routing'
         });
       };
       socket.onclose = function(event)
@@ -239,7 +322,7 @@ function register()
       };
       socket.onmessage = function(event)
       {
-        msg = JSON.parse(event.data);
+        var msg = JSON.parse(event.data);
         if( msg.task == 'REQUEST' )
         {
           //alert('id='+last_id+"|"+msg.id+"\nstamp="+last_stamp+"|"+msg.stamp);
@@ -252,6 +335,62 @@ function register()
   
           setTimeout('reportVisLinks("'+msg.id+'", true)',0);
         }
+        else if( msg.task == 'ABORT' )
+        {
+          onAbort(msg.id, msg.stamp, false);
+        }
+        else if( msg.task == 'GET-FOUND' )
+        {
+          if( msg.id == '/routing' )
+          {
+            removeAllChildren(items_routing);
+            routing = msg.val;
+            for(var router in msg.val.available)
+            {
+              var name = msg.val.available[router][0];
+              var valid = msg.val.available[router][1];
+
+              var item = document.createElement("menuitem");
+              item.setAttribute("label", name);
+              item.setAttribute("type", "radio");
+              item.setAttribute("name", "routing-algorithm");
+              item.setAttribute("tooltiptext", "Use '" + name + "' for routing.");
+
+              // Mark available (Routers not able to route are disabled)
+              if( !valid )
+                item.setAttribute("disabled", true);
+              else
+                item.setAttribute("oncommand", "reportSelectRouting('"+name+"')");
+
+              // Mark current router
+              if( msg.val.active == name )
+                item.setAttribute("checked", true);
+
+              items_routing.appendChild(item);
+            }
+          }
+        }
+        else if( msg.task == 'GET' )
+        {
+          if( msg.id == 'preview-tile' )
+          {
+            tile_requests.enqueue(msg);
+            if( !tile_timeout )
+            {
+              setTimeout('handleTileRequest()', 50);
+              tile_timeout = true;
+            }
+          }
+          else
+            Application.console.warn("Unknown GET request: " + event.data);
+        }
+        else if( msg.task == 'SET' )
+        {
+          if( msg.id == 'scroll-y' )
+            content.scrollTo(0, msg.val);
+        }
+        else
+          alert(event.data);
       }
 	}
 	catch (err)
@@ -261,6 +400,23 @@ function register()
 		return false;
 	}
 	return true;
+}
+
+function handleTileRequest()
+{
+  if( tile_requests.isEmpty() )
+  {
+    tile_timeout = false;
+    return;
+  }
+  
+  var req = tile_requests.dequeue();
+  socket.send( grab(req.size, req.src, req.req_id, req.sections) );
+  
+  // We need to wait a bit before sending the next tile to not congest the
+  // receiver queue.
+  setTimeout('handleTileRequest()', 200);
+  tile_timeout = true;
 }
 
 //------------------------------------------------------------------------------
@@ -273,8 +429,9 @@ function attrModified(e)
 //------------------------------------------------------------------------------
 function resize()
 {
-	register();
-	windowChanged();
+  send({task: 'RESIZE', region: getRegion()});
+	//register();
+	//windowChanged();
 }
 
 //------------------------------------------------------------------------------
@@ -485,10 +642,16 @@ function findAreaBoundingBox(doc, img, areaCoords){
 //------------------------------------------------------------------------------
 function findBoundingBox(doc, obj)
 {
-  var w = obj.offsetWidth + 3;
-  var h = obj.offsetHeight + 2;
+  var w = obj.offsetWidth;
+  var h = obj.offsetHeight;
   var curleft = -1;
-  var curtop = -2;
+  var curtop = -1;
+  
+  if( w == 0 || h == 0 )
+    return null;
+  
+  w += 2;
+  h += 1;
   
   if( obj.offsetParent )
   {
@@ -502,10 +665,12 @@ function findBoundingBox(doc, obj)
   x = curleft - win.pageXOffset;     
   y = curtop - win.pageYOffset;
   
+  var outside = false;
+
   // check if	visible
-  if(    (x + w / 2 < 0) || (x + w / 2 > win.innerWidth)
-      || (y + h / 2 < 0) || (y + h / 2 > win.innerHeight) )
-    return null;
+  if(    (x + 0.5 * w < 0) || (x + 0.5 * w > win.innerWidth)
+      || (y + 0.5 * h < 0) || (y + 0.5 * h > win.innerHeight) )
+    outside = true;
   
   x *= scale;
   y *= scale;
@@ -518,5 +683,6 @@ function findBoundingBox(doc, obj)
   return [ [x,     y],
            [x + w, y],
            [x + w, y + h],
-           [x,     y + h] ];
+           [x,     y + h],
+           {outside: outside} ];
 }

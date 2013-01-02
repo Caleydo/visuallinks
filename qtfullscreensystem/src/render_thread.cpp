@@ -9,16 +9,42 @@
 #include "render_thread.hpp"
 #include "qglwidget.hpp"
 
+#include <QGLPixelBuffer>
+
 namespace qtfullscreensystem
 {
 
   //----------------------------------------------------------------------------
-  RenderThread::RenderThread(GLWidget* gl_widget):
+  RenderThread::RenderThread( GLWidget* gl_widget,
+                              int w,
+                              int h ):
     _gl_widget( gl_widget ),
     _do_render( false ),
     _do_resize( false )
   {
+    if( !QGLFormat::hasOpenGL() )
+      qFatal("OpenGL not supported!");
 
+    if( !QGLFramebufferObject::hasOpenGLFramebufferObjects() )
+      qFatal("OpenGL framebufferobjects not supported!");
+
+    if( !QGLPixelBuffer::hasOpenGLPbuffers() )
+      qFatal("OpenGL pbuffer not supported!");
+
+    QGLFormat format;
+    format.setAlpha(true);
+    _pbuffer =
+      QSharedPointer<QGLPixelBuffer>(new QGLPixelBuffer(QSize(w, h), format));
+
+    if( !_pbuffer->isValid() )
+      qFatal("Unable to create OpenGL context (not valid)");
+
+    qDebug
+    (
+      "Created pbuffer with OpenGL %d.%d",
+      _pbuffer->format().majorVersion(),
+      _pbuffer->format().minorVersion()
+    );
   }
 
   //----------------------------------------------------------------------------
@@ -36,7 +62,8 @@ namespace qtfullscreensystem
 
     _do_render = true;
 
-    _gl_widget->makeCurrent();
+    //_gl_widget->makeCurrent();
+    _pbuffer->makeCurrent();
     _gl_widget->setupGL();
 
 //    int screenshot_counter = 0;
@@ -51,16 +78,19 @@ namespace qtfullscreensystem
         _do_resize = false;
       }
 
-      _gl_widget->render();
-      _gl_widget->swapBuffers();
+      _gl_widget->render(0, _pbuffer.data());
+      //std::cout << "done" << _pbuffer->doneCurrent() << std::endl;
+      //_gl_widget->swapBuffers();
+
+      _gl_widget->render(1, _pbuffer.data());
+      //_gl_widget->swapBuffers();
       //_gl_widget->doneCurrent();
-      msleep(20);
+      msleep(10);
       /*if( --screenshot_counter < 0 )
       {*/
         _gl_widget->captureScreen();
         /*screenshot_counter = 5;
       }*/
-      msleep(10);
 
       _gl_widget->waitForData();
       //_gl_widget->makeCurrent();

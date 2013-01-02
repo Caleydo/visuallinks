@@ -2,6 +2,7 @@
 #include "float2.hpp"
 #include "log.hpp"
 
+#include <GL/glu.h>
 #include <iostream>
 
 namespace LinksRouting
@@ -75,8 +76,9 @@ namespace LinksRouting
    */
   template<typename Collection>
   line_borders_t calcLineBorders( const Collection& points,
-                                    float width,
-                                    bool closed = false )
+                                  float width,
+                                  bool closed = false,
+                                  float widen_end = 0.f )
   {
     auto begin = std::begin(points),
          end = std::end(points);
@@ -86,6 +88,8 @@ namespace LinksRouting
 
     if( p0 == end || p1 == end )
       return line_borders_t();
+
+    widen_end = std::min(widen_end, (*(end - 2) - *(end - 1)).length());
 
     line_borders_t ret;
     float w_out = 0.5 * width,
@@ -103,6 +107,8 @@ namespace LinksRouting
         dir = (((closed && p1 == end) ? *begin : *p1) - *p0).normalize();
         float2 mean_dir = 0.5f * (prev_dir + dir);
         normal = float2( mean_dir.y, -mean_dir.x );
+
+        prev_dir = dir;
       }
       else // !closed && p1 == end
       {
@@ -116,8 +122,7 @@ namespace LinksRouting
       ret.first.push_back(  *p0 + offset_out );
       ret.second.push_back( *p0 - offset_in );
 
-      prev_dir = dir;
-      prev_normal = float2( dir.y, -dir.x );
+      prev_normal = prev_dir.normal();
 
       if(p1 != end)
         ++p1;
@@ -128,15 +133,44 @@ namespace LinksRouting
       ret.first.push_back( ret.first.front() );
       ret.second.push_back( ret.second.front() );
     }
+    else if( widen_end > 1.f )
+    {
+      float f = widen_end / 35.f;
+
+      ret.first.back() -= f * 35 * prev_dir;
+      ret.second.back() -= f * 35 * prev_dir;
+
+      const float offsets[][2] = {
+        {16, 1.5},
+        {11, 2},
+        { 8, 2.5}
+      };
+
+      for(size_t i = 0; i < sizeof(offsets)/sizeof(offsets[0]); ++i)
+      {
+        ret.first.push_back( ret.first.back() + f * offsets[i][0] * prev_dir
+                                              + offsets[i][1] * prev_normal );
+        ret.second.push_back( ret.second.back() + f * offsets[i][0] * prev_dir
+                                                - offsets[i][1] * prev_normal );
+      }
+    }
 
     return ret;
   }
 
+  Rect parseRect(const std::string& str)
+  {
+    float l, r, t, b;
+    std::stringstream strm(str);
+    strm >> l >> t >> r >> b;
+    return Rect( float2(l, t), float2(r - l, b - t) );
+  }
+
   //----------------------------------------------------------------------------
   GlRenderer::GlRenderer():
-    myname("GLRenderer")
+    Configurable("GLRenderer")
   {
-    registerArg("enabled", _enabled = true);
+
   }
 
   //----------------------------------------------------------------------------
@@ -157,6 +191,8 @@ namespace LinksRouting
   {
     _subscribe_links =
       slot_subscriber.getSlot<LinkDescription::LinkList>("/links");
+    _subscribe_popups =
+      slot_subscriber.getSlot<SlotType::TextPopup>("/popups");
   }
 
   //----------------------------------------------------------------------------
@@ -172,11 +208,11 @@ namespace LinksRouting
   }
 
   //----------------------------------------------------------------------------
-  void GlRenderer::initGL()
+  bool GlRenderer::initGL()
   {
     static bool init = false;
     if( init )
-      return;
+      return true;
 
     GLint vp[4];
     glGetIntegerv(GL_VIEWPORT, vp);
@@ -188,6 +224,7 @@ namespace LinksRouting
     _blur_y_shader = _shader_manager.loadfromFile(0, "blurY.glsl");
 
     init = true;
+    return true;
   }
 
   //----------------------------------------------------------------------------
@@ -197,11 +234,8 @@ namespace LinksRouting
   }
 
   //----------------------------------------------------------------------------
-  void GlRenderer::process(Type type)
+  void GlRenderer::process(unsigned int type)
   {
-    if( !_enabled )
-      return;
-
     assert( _blur_x_shader );
     assert( _blur_y_shader );
 
@@ -214,42 +248,188 @@ namespace LinksRouting
     if( _subscribe_links->_data->empty() )
       return _links_fbo.unbind();
 
-    renderLinks(*_subscribe_links->_data);
+    bool rendered_anything = false;
+    for(int pass = 0; pass <= 1; ++pass)
+      rendered_anything |= renderLinks(*_subscribe_links->_data, pass);
+
+    if( !_subscribe_popups->_data->popups.empty() )
+    {
+      rendered_anything = true;
+
+      for( auto popup = _subscribe_popups->_data->popups.begin();
+                  popup != _subscribe_popups->_data->popups.end();
+                ++popup )
+      {
+        if( !popup->region.visible )
+          continue;
+
+        renderRect(popup->region.region, popup->region.border);
+        rendered_anything = true;
+
+        if( !popup->hover_region.visible )
+          continue;
+
+        renderRect( popup->hover_region.region,
+                    popup->hover_region.border,
+                    Color(0.3,0.3,0.3) );
+
+
+        const Rect& hover = popup->hover_region.region,
+                  & src = popup->hover_region.src_region,
+                  & scroll = popup->hover_region.scroll_region;
+
+        HierarchicTileMapPtr tile_map = popup->hover_region.tile_map.lock();
+        if( tile_map )
+        {
+          MapRect rect = tile_map->requestRect(src, popup->hover_region.zoom);
+          float2 rect_size = rect.getSize();
+          MapRect::QuadList quads = rect.getQuads();
+          for(auto quad = quads.begin(); quad != quads.end(); ++quad)
+          {
+            if( quad->first->type == Tile::ImageRGBA8 )
+            {
+              std::cout << "load tile to GPU (" << quad->first->width
+                                         << "x" << quad->first->height
+                                         << ")" << std::endl;
+              GLuint tex_id;
+              glGenTextures(1, &tex_id);
+              glBindTexture(GL_TEXTURE_2D, tex_id);
+
+              glTexParameterf( GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR );
+              glTexParameterf( GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR );
+              glTexParameterf( GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP );
+              glTexParameterf( GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP );
+              glPixelStorei(GL_UNPACK_ALIGNMENT, 4);
+
+              glTexImage2D(
+                GL_TEXTURE_2D,
+                0,
+                GL_RGBA,
+                quad->first->width,
+                quad->first->height,
+                0,
+                GL_RGBA,
+                GL_UNSIGNED_BYTE,
+                quad->first->pdata
+              );
+
+              delete[] quad->first->pdata;
+              quad->first->id = tex_id;
+              quad->first->type = Tile::OpenGLTexture;
+            }
+
+            if( quad->first->type != Tile::OpenGLTexture )
+              continue;
+
+            glEnable(GL_TEXTURE_2D);
+            glBindTexture(GL_TEXTURE_2D, quad->first->id);
+
+            float offset_x = 0;
+            if( hover.size.x > rect_size.x )
+              offset_x = (hover.size.x - rect_size.x) / 2;
+
+            glPushMatrix();
+            glTranslatef( popup->hover_region.region.pos.x + offset_x,
+                          popup->hover_region.region.pos.y,
+                          0 );
+
+            glColor4f(1,1,1,1);
+            glBegin(GL_QUADS);
+            for(size_t i = 0; i < quad->second._coords.size(); ++i)
+            {
+              glTexCoord2fv(quad->second._tex_coords[i].ptr());
+              glVertex2fv(quad->second._coords[i].ptr());
+            }
+            glEnd();
+
+            glPopMatrix();
+
+            glDisable(GL_TEXTURE_2D);
+            glBindTexture(GL_TEXTURE_2D, 0);
+          }
+        }
+
+        // ---------
+        // Scrollbar
+
+        if( src.size.y < scroll.size.y )
+        {
+          float bar_height = std::max(src.size.y / scroll.size.y, 0.05f)
+                           * hover.size.y;
+          float rel_pos_y = src.pos.y / (scroll.size.y - src.size.y);
+
+          float2 scroll_pos = hover.pos
+                            + float2( hover.size.x + 4,
+                                      rel_pos_y * (hover.size.y - bar_height) );
+
+          glColor4f(1,0.5,0.25,1);
+          glLineWidth(4);
+          glBegin(GL_LINE_STRIP);
+            glVertex2f(scroll_pos.x, scroll_pos.y);
+            glVertex2f(scroll_pos.x, scroll_pos.y + bar_height);
+          glEnd();
+        }
+
+        glColor3f(1, 0, 0);
+
+        GLdouble proj[16];
+        glGetDoublev(GL_PROJECTION_MATRIX, proj);
+
+        float offset_y = (proj[13] + 1) / proj[5];
+
+        glPushAttrib(GL_VIEWPORT_BIT);
+        glViewport(hover.pos.x, hover.pos.y + offset_y, hover.size.x, hover.size.y);
+
+        glMatrixMode(GL_PROJECTION);
+        glPushMatrix();
+        glLoadIdentity();
+        glOrtho(0, hover.size.x, 0, hover.size.y, -1, 1);
+
+        glMatrixMode(GL_MODELVIEW);
+        glPushMatrix();
+        glLoadIdentity();
+
+        float scale = hover.size.y / src.size.y;
+        glScalef(scale, scale, 0);
+
+        float2 offset = popup->hover_region.offset;
+        if( src.size.x > scroll.size.x )
+          offset.x -= (src.size.x - scroll.size.x) / 2;
+        offset -= scroll.pos - src.pos;
+
+        glTranslatef(-offset.x, -offset.y, 0);
+
+        const float w = 4.f;
+        const float2 vp_pos = popup->hover_region.offset + 0.5f * float2(w, w);
+        const float2 vp_dim = popup->hover_region.dim - 4.f * float2(w, w);
+
+        glLineWidth(w);
+        glBegin(GL_LINE_LOOP);
+          glVertex2f(vp_pos.x, vp_pos.y);
+          glVertex2f(vp_pos.x + vp_dim.x, vp_pos.y);
+          glVertex2f(vp_pos.x + vp_dim.x, vp_pos.y + vp_dim.y);
+          glVertex2f(vp_pos.x, vp_pos.y + vp_dim.y);
+        glEnd();
+
+        renderNodes(popup->nodes, 3.f / scale, 0, 0, true, 1);
+
+        glPopMatrix();
+        glMatrixMode(GL_PROJECTION);
+        glPopMatrix();
+
+        glPopAttrib();
+      }
+    }
     _links_fbo.unbind();
+
+    if( !rendered_anything )
+      return;
 
     glDisable(GL_BLEND);
     glColor4f(1,1,1,1);
 
-    // blur
-    int width = _slot_links->_data->width,
-        height = _slot_links->_data->height;
-for( int i = 0; i < 1; ++i )
-{
-    _links_fbo.swapColorAttachment(1);
-    _links_fbo.bind();
-    _links_fbo.bindTex(0);
-    _blur_x_shader->begin();
-    _blur_x_shader->setUniform1i("inputTex", 0);
-    _blur_x_shader->setUniform1f("scale", 1);
-    _links_fbo.draw(width, height, 0, 0, 0, true, true);
-    _blur_x_shader->end();
-    _links_fbo.unbind();
+    blur(_links_fbo);
 
-    _links_fbo.swapColorAttachment(0);
-    _links_fbo.bind();
-    _links_fbo.bindTex(1);
-    _blur_y_shader->begin();
-    _blur_y_shader->setUniform1i("inputTex", 0);
-    _blur_y_shader->setUniform1f("scale", 1);
-#ifdef USE_DESKTOP_BLEND
-    _blur_y_shader->setUniform1i("normalize_color", 0);
-#else
-    _blur_y_shader->setUniform1i("normalize_color", 1);
-#endif
-    _links_fbo.draw(width, height, 0, 0, 1, true, true);
-    _blur_y_shader->end();
-    _links_fbo.unbind();
-}
     _slot_links->setValid(true);
   }
 
@@ -265,100 +445,269 @@ for( int i = 0; i < 1; ++i )
     color[1] = strtol(end,         &end, 10);
     color[2] = strtol(end,         0,    10);
 
-    _colors.push_back(Color(color[0], color[1], color[2]));
+    _colors.push_back( Color( color[0] / 256.f,
+                              color[1] / 256.f,
+                              color[2] / 256.f,
+                              0.9f ) );
     std::cout << "GlRenderer: Added color (" << val << ")" << std::endl;
 
     return true;
   }
 
   //----------------------------------------------------------------------------
-  void GlRenderer::renderLinks(const LinkDescription::LinkList& links)
+  Color GlRenderer::getCurrentColor() const
   {
-    glColor3f(1.0, 0.2, 0.2);
+    GLfloat cur_color[4];
+    glGetFloatv(GL_CURRENT_COLOR, cur_color);
+    return Color(cur_color[0], cur_color[1], cur_color[2], cur_color[3]);
+  }
+
+  //----------------------------------------------------------------------------
+  void GlRenderer::blur(gl::FBO& fbo)
+  {
+    assert(fbo.colorBuffers.size() >= 2);
+
+    for( int i = 0; i < 1; ++i )
+    {
+      fbo.swapColorAttachment(1);
+      fbo.bind();
+      fbo.bindTex(0);
+      _blur_x_shader->begin();
+      _blur_x_shader->setUniform1i("inputTex", 0);
+      _blur_x_shader->setUniform1f("scale", 1);
+      fbo.draw(fbo.width, fbo.height, 0, 0, 0, true, true);
+      _blur_x_shader->end();
+      fbo.unbind();
+
+      fbo.swapColorAttachment(0);
+      fbo.bind();
+      fbo.bindTex(1);
+      _blur_y_shader->begin();
+      _blur_y_shader->setUniform1i("inputTex", 0);
+      _blur_y_shader->setUniform1f("scale", 1);
+#ifdef USE_DESKTOP_BLEND
+      _blur_y_shader->setUniform1i("normalize_color", 0);
+#else
+      _blur_y_shader->setUniform1i("normalize_color", 1);
+#endif
+      fbo.draw(fbo.width, fbo.height, 0, 0, 1, true, true);
+      _blur_y_shader->end();
+      fbo.unbind();
+    }
+  }
+
+  //----------------------------------------------------------------------------
+  bool GlRenderer::renderLinks( const LinkDescription::LinkList& links,
+                                int pass )
+  {
+    bool rendered_anything = false;
+    Color color(1.0, 0.2, 0.2);
 
     for(auto link = links.begin(); link != links.end(); ++link)
     {
-      const LinkDescription::HyperEdgeDescriptionForkation* fork =
-        link->_link.getHyperEdgeDescription();
+      if( !_colors.empty() )
+        color = _colors[ link->_color_id % _colors.size() ];
+      const Color color_covered = 0.4f * color;
 
-      if( !fork )
+      HyperEdgeQueue hedges_open;
+      HyperEdgeSet   hedges_done;
+
+      hedges_open.push(link->_link.get());
+      do
       {
-        for( auto node = link->_link.getNodes().begin();
-             node != link->_link.getNodes().end();
-             ++node )
+        const LinkDescription::HyperEdge* hedge = hedges_open.front();
+        hedges_open.pop();
+
+        if( hedges_done.find(hedge) != hedges_done.end() )
+          continue;
+
+        if( hedge->get<bool>("covered") )
+          glColor4fv(color_covered);
+        else
+          glColor4fv(color);
+
+        auto fork = hedge->getHyperEdgeDescription();
+        if( !fork )
         {
-          line_borders_t region = calcLineBorders(node->getVertices(), 3, true);
-          glBegin(GL_TRIANGLE_STRIP);
-          for( auto first = std::begin(region.first),
-                    second = std::begin(region.second);
-               first != std::end(region.first);
-               ++first,
-               ++second )
+          if( renderNodes( hedge->getNodes(),
+                           3.f,
+                           &hedges_open,
+                           &hedges_done,
+                           false,
+                           pass ) )
+            rendered_anything = true;
+
+          continue;
+        }
+
+        for( auto segment = fork->outgoing.begin();
+             segment != fork->outgoing.end();
+             ++segment )
+        {
+          if( pass == 1 && !segment->trail.empty() )
           {
-            glVertex2f(first->x, first->y);
-            glVertex2f(second->x, second->y);
+            // Draw path
+            std::vector<float2> points;
+            points.reserve(segment->trail.size() + 1);
+            points.push_back(fork->position);
+            points.insert(points.end(), segment->trail.begin(), segment->trail.end());
+            points = smooth(points, 0.4, 10);
+            float widen_size = 0.f;
+            if( segment->nodes.back()->getChildren().empty() )
+            {
+              if( !segment->nodes.back()->get<std::string>("virtual-outside").empty() )
+                widen_size = 13;
+              else
+                widen_size = 55;
+            }
+            line_borders_t region = calcLineBorders(points, 3, false, widen_size);
+            glBegin(GL_TRIANGLE_STRIP);
+            for( auto first = std::begin(region.first),
+                      second = std::begin(region.second);
+                 first != std::end(region.first);
+                 ++first,
+                 ++second )
+            {
+              glVertex2f(first->x, first->y);
+              glVertex2f(second->x, second->y);
+            }
+            glEnd();
           }
-          glEnd();
+
+          if( renderNodes( segment->nodes,
+                           3.f,
+                           &hedges_open,
+                           &hedges_done,
+                           false,
+                           pass ) )
+            rendered_anything = true;
+        }
+
+        hedges_done.insert(hedge);
+      } while( !hedges_open.empty() );
+    }
+
+    return rendered_anything;
+  }
+
+  //----------------------------------------------------------------------------
+  bool GlRenderer::renderNodes( const LinkDescription::nodes_t& nodes,
+                                float line_width,
+                                HyperEdgeQueue* hedges_open,
+                                HyperEdgeSet* hedges_done,
+                                bool render_all,
+                                int pass )
+  {
+    bool rendered_anything = false;
+    const Color current_color = getCurrentColor();
+
+    for( auto node = nodes.begin(); node != nodes.end(); ++node )
+    {
+      if(    !render_all
+          &&  (*node)->get<bool>("hidden", false)
+          && !(*node)->get<bool>("covered", false) )
+        continue;
+
+      if( hedges_open )
+      {
+        for(auto child = (*node)->getChildren().begin();
+                 child != (*node)->getChildren().end();
+               ++child )
+          hedges_open->push( child->get() );
+      }
+
+      if( (*node)->getVertices().empty() )
+        continue;
+
+      if( pass == 0 )
+      {
+        if(   !render_all
+            && (*node)->get<bool>("hidden")
+            && (*node)->get<bool>("covered")
+            && (*node)->get<bool>("hover") )
+        {
+          const Rect r = parseRect( (*node)->get<std::string>("covered-region") );
+          renderRect(r, 3.f, 0.5 * current_color, 2 * current_color);
+          rendered_anything = true;
         }
         continue;
       }
 
-      if( !_colors.empty() )
-        glColor3fv(_colors[ link->_color_id % _colors.size() ]);
-
-      for( auto segment = fork->outgoing.begin();
-           segment != fork->outgoing.end();
-           ++segment )
+      bool filled = (*node)->get<bool>("filled", false);
+      if( !filled && !render_all )
       {
-        // Draw region
-        for( auto node = segment->nodes.begin();
-             node != segment->nodes.end();
-             ++node )
-        {
-          if( (*node)->getProps().find("hidden") != (*node)->getProps().end() )
-          {
-            if( !_colors.empty() )
-              glColor3fv(_colors[ link->_color_id % _colors.size() ] * 0.3);
-          }
-          line_borders_t region = calcLineBorders((*node)->getVertices(), 3, true);
-          glBegin(GL_TRIANGLE_STRIP);
-          for( auto first = std::begin(region.first),
-                    second = std::begin(region.second);
-               first != std::end(region.first);
-               ++first,
-               ++second )
-          {
-            glVertex2f(first->x, first->y);
-            glVertex2f(second->x, second->y);
-          }
-          glEnd();
-
-          if( !_colors.empty() )
-            glColor3fv(_colors[ link->_color_id % _colors.size() ]);
-        }
-
-        if( segment->trail.empty() )
-          continue;
-
-        // Draw path
-        std::vector<float2> points;
-        points.reserve(segment->trail.size() + 1);
-        points.push_back(fork->position);
-        points.insert(points.end(), segment->trail.begin(), segment->trail.end());
-        points = smooth(points, 0.4, 10);
-        line_borders_t region = calcLineBorders(points, 3);
-        glBegin(GL_TRIANGLE_STRIP);
-        for( auto first = std::begin(region.first),
-                  second = std::begin(region.second);
-             first != std::end(region.first);
-             ++first,
-             ++second )
-        {
-          glVertex2f(first->x, first->y);
-          glVertex2f(second->x, second->y);
-        }
+        Color light = 0.5 * current_color;
+        light.a *= 0.6;
+        glColor4fv(light);
+        glBegin(GL_POLYGON);
+        for( auto vert = std::begin((*node)->getVertices());
+                  vert != std::end((*node)->getVertices());
+                ++vert )
+          glVertex2f(vert->x, vert->y);
         glEnd();
+        glColor4fv(current_color);
       }
+      line_borders_t region = calcLineBorders( (*node)->getVertices(),
+                                               line_width,
+                                               true );
+      glBegin(filled ? GL_POLYGON : GL_TRIANGLE_STRIP);
+      for( auto first = std::begin(region.first),
+                second = std::begin(region.second);
+           first != std::end(region.first);
+           ++first,
+           ++second )
+      {
+        if( !filled )
+          glVertex2f(first->x, first->y);
+        glVertex2f(second->x, second->y);
+      }
+      glEnd();
+      rendered_anything = true;
     }
+
+    return rendered_anything;
   }
-};
+
+  //----------------------------------------------------------------------------
+  bool GlRenderer::renderRect( const Rect& rect,
+                               size_t b,
+                               //GLuint tex,
+                               const Color& fill,
+                               const Color& border )
+  {
+    glColor4fv(border);
+    glBegin(GL_QUADS);
+      glVertex2f(rect.pos.x - b,               rect.pos.y - b);
+      glVertex2f(rect.pos.x + rect.size.x + b, rect.pos.y - b);
+      glVertex2f(rect.pos.x + rect.size.x + b, rect.pos.y + rect.size.y + b);
+      glVertex2f(rect.pos.x - b,               rect.pos.y + rect.size.y + b);
+    glEnd();
+
+//    if( tex )
+//    {
+//      glEnable(GL_TEXTURE_2D);
+//      glBindTexture(GL_TEXTURE_2D, tex);
+//    }
+
+    glColor4fv(fill);
+    glBegin(GL_QUADS);
+      glTexCoord2f(0, 0);
+      glVertex2f(rect.pos.x,               rect.pos.y);
+      glTexCoord2f(1, 0);
+      glVertex2f(rect.pos.x + rect.size.x, rect.pos.y);
+      glTexCoord2f(1, 1);
+      glVertex2f(rect.pos.x + rect.size.x, rect.pos.y + rect.size.y);
+      glTexCoord2f(0, 1);
+      glVertex2f(rect.pos.x,               rect.pos.y + rect.size.y);
+    glEnd();
+
+//    if( tex )
+//    {
+//      glDisable(GL_TEXTURE_2D);
+//      glBindTexture(GL_TEXTURE_2D, 0);
+//    }
+
+    return true;
+  }
+
+}

@@ -27,7 +27,8 @@ namespace SlotType
       OpenCLBufferRGBA8,
       OpenCLBufferGray8,
       OpenCLBufferRGBA32F,
-      OpenCLBufferGray32F
+      OpenCLBufferGray32F,
+      NONE
     } type;
     union
     {
@@ -36,7 +37,12 @@ namespace SlotType
     };
     unsigned int width, height;
     unsigned int layers;
-    Image()
+    Image():
+      type(NONE),
+      pdata(0),
+      width(0),
+      height(0),
+      layers(1)
     { }
     Image(unsigned int w, 
           unsigned int h, 

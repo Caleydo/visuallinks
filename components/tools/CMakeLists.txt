@@ -4,6 +4,7 @@ set(COMPONENTROOT ${CMAKE_CURRENT_SOURCE_DIR})
 include_directories(
   ${LINKS_INCLUDE_DIR}
 )
+message("inc=${LINKS_INCLUDE_DIR}")
 
 if(WIN32)
 find_package(GLEW REQUIRED)
@@ -18,6 +19,10 @@ set(HEADER_FILES
 
 set(SOURCE_FILES
   fbo.cxx
+  HierarchicTileMap.cxx
+  linkdescription.cpp
+  PartitionHelper.cxx
+  Rect.cxx
 )
 
 add_definitions(-DNOMULTISAMPLING)

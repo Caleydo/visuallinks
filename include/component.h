@@ -1,14 +1,15 @@
 #ifndef LR_COMPONENT
 #define LR_COMPONENT
 
+#include "configurable.h"
 #include "slots.hpp"
-#include <string>
 
 namespace LinksRouting
 {
   class Core;
   class SlotCollector;
-  class Component
+  class Component:
+    public virtual Configurable
   {
     public:
 
@@ -73,28 +74,19 @@ namespace LinksRouting
 
       virtual bool startup(Core* core, unsigned int type) { return true; };
       virtual void init() {};
-      virtual void initGL() {};
+      virtual bool initGL() { return true; };
       virtual void shutdown() {};
-      virtual bool supports(Type type) const { return false; };
-      virtual const std::string& name() const = 0;
+      virtual bool supports(unsigned int type) const { return false; };
 
-      virtual void process(Type type = None) {};
+      virtual void process(unsigned int type) {};
 
-      virtual bool setFlag(const std::string& name, bool val) = 0;
-      virtual bool getFlag(const std::string& name, bool& val) const = 0;
-      virtual bool setInteger(const std::string& name, int val) = 0;
-      virtual bool getInteger(const std::string& name, int& val) const = 0;
-      virtual bool setFloat(const std::string& name, double val) = 0;
-      virtual bool getFloat(const std::string& name, double& val) const = 0;
-      virtual bool setString(const std::string& name,
-                             const std::string& val) = 0;
-      virtual bool getString(const std::string& name,
-                             std::string& val) const = 0;
+    protected:
 
-      virtual ~Component()
-      {
-      }
+      Component():
+        Configurable("UnnamedComponent")
+      {}
   };
+
 }
 
 #endif //LR_COMPONENT

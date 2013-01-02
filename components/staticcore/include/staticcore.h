@@ -8,14 +8,16 @@
 #include <routing.h>
 #include <transparencyanalysis.h>
 
-#include "slots.hpp"
+#include <slots.hpp>
+#include <slotdata/component_selection.hpp>
 
 #include <list>
 #include <stdexcept>
 
 namespace LinksRouting
 {
-  class StaticCore: public Core
+  class StaticCore:
+    public Core
   {
       struct ComponentInfo
       {
@@ -43,14 +45,14 @@ namespace LinksRouting
       SlotCollector getSlotCollector();
       SlotSubscriber getSlotSubscriber();
 
-      virtual bool startup(const std::string& startup);
+      virtual bool startup(const std::string& startup = std::string());
       virtual bool attachComponent(Component* comp, unsigned int type =
                                      Component::Any);
       virtual Component* getComponent(Component::Type type);
       virtual bool init();
       virtual bool initGL();
       virtual void shutdown();
-      virtual void process();
+      virtual void process(unsigned int type = Component::Any);
 
       virtual Config* getConfig();
 
@@ -66,7 +68,8 @@ namespace LinksRouting
       slots_t _slots;
 
       /** Config to be used */
-      Config* _config;
+      Config *_config,      ///< From specified file
+             *_user_config; ///< Read/Write config from user directory
 
       /** Requrired components */
       unsigned int _requiredComponents;
@@ -74,8 +77,16 @@ namespace LinksRouting
       /** Command line arguments */
       std::string _startupstr;
 
+      /** For selecting routing component to be used */
+      slot_t<SlotType::ComponentSelection>::type _slot_select_routing;
+
+      slot_t<Config*>::type _slot_user_config;
+
+      std::string _default_routing;
+
+      void initConfig(Config* config);
+
   };
-}
-;
+} // namespace LinksRouting
 
 #endif

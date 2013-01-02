@@ -25,12 +25,10 @@
 
 namespace LinksRouting
 {
-  class GPURouting: public Routing, public ComponentArguments
+  class GPURouting:
+    public Routing,
+    public ComponentArguments
   {
-    protected:
-
-      std::string myname;
-
     public:
 
       GPURouting();
@@ -40,29 +38,14 @@ namespace LinksRouting
 
       bool startup(Core* core, unsigned int type);
       void init();
-      void initGL();
+      bool initGL();
       void shutdown();
-      bool supports(Type type) const
+      bool supports(unsigned int type) const
       {
-        return type == Component::Routing;
-      }
-      const std::string& name() const
-      {
-        return myname;
+        return (type & Component::Routing);
       }
 
-      void process(Type type);
-
-//    bool setCostInput(const Component::MapData& inputmap);
-//    bool setColorCostInput(const Component::MapData& inputmap);
-      void connect(CostAnalysis* costanalysis,
-                   LinksRouting::Renderer *renderer);
-
-      bool addLinkHierarchy(LinkDescription::Node* node, double priority);
-      bool addLinkHierarchy(LinkDescription::HyperEdge* hyperedge,
-                            double priority);
-      bool removeLinkHierarchy(LinkDescription::Node* node);
-      bool removeLinkHierarchy(LinkDescription::HyperEdge* hyperedge);
+      void process(unsigned int type);
 
     private:
 
@@ -132,7 +115,6 @@ namespace LinksRouting
 
       int _blockSize[2];
       int _blocks[2];
-      bool _enabled;
       bool _noQueue;
       int _routingQueueSize;
       int _routingNumLocalWorkers;

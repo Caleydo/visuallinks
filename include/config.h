@@ -6,13 +6,18 @@
 
 namespace LinksRouting
 {
-  class Config : public virtual Component
+  class Config:
+    public virtual Component
   {
-  public:
-    virtual bool initFrom(const std::string& config) = 0;
-    virtual void attach(Component* component, unsigned int type) = 0;
+    public:
+      virtual bool initFrom(const std::string& config) = 0;
+      virtual void attach(Configurable* component, unsigned int type) = 0;
+
+    protected:
+      Config():
+        Configurable("Config")
+      {}
   };
-};
+} // namespace LinksRouting
 
-
-#endif
+#endif /* LR_CONFIG */

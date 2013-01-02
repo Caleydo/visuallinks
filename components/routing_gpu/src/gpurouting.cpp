@@ -34,13 +34,12 @@ namespace LinksRouting
 
   //----------------------------------------------------------------------------
   GPURouting::GPURouting() :
-        myname("GPURouting"),
-        _buffer_width(0),
-        _buffer_height(0)
+    Configurable("GPURouting"),
+    _buffer_width(0),
+    _buffer_height(0)
   {
     registerArg("BlockSizeX", _blockSize[0] = 8);
     registerArg("BlockSizeY", _blockSize[1] = 8);
-    registerArg("enabled", _enabled = true);
     registerArg("QueueSize", _routingQueueSize = 128);
     registerArg("NumLocalWorkers", _routingNumLocalWorkers = 4);
     registerArg("WorkersWarpSize", _routingLocalWorkersWarpSize = 32);
@@ -64,6 +63,7 @@ namespace LinksRouting
       slot_subscriber.getSlot<LinkDescription::LinkList>("/links");
   }
 
+  //----------------------------------------------------------------------------
   bool GPURouting::startup(Core* core, unsigned int type)
   {
     return true;
@@ -76,194 +76,201 @@ namespace LinksRouting
   }
 
   //----------------------------------------------------------------------------
-  void GPURouting::initGL()
+  bool GPURouting::initGL()
   {
-    // -----------------------------
-    // OpenCL platform
-
-    std::vector<cl::Platform> platforms;
-    cl::Platform::get(&platforms);
-    if( platforms.empty() )
-      throw std::runtime_error("Got no OpenCL platform.");
-
-    //TODO: select devices to use
-    cl::Platform use_platform;
-    std::vector<cl::Device> use_devices;
-    //for now:
-    use_platform = platforms.front();
-
-    //for (cl::Platform &tplatform : platforms)
-    for(size_t i = 0; i < platforms.size(); ++i)
+    try
     {
-      cl::Platform &tplatform = platforms[i];
+      // -----------------------------
+      // OpenCL platform
 
-      const std::string extensions =
-        tplatform.getInfo<CL_PLATFORM_EXTENSIONS>();
+      std::vector<cl::Platform> platforms;
+      cl::Platform::get(&platforms);
+      if( platforms.empty() )
+        throw std::runtime_error("Got no OpenCL platform.");
 
-      std::cout << "OpenCL Platform Info:"
-                << "\n -- platform:\t " << tplatform.getInfo<CL_PLATFORM_NAME>()
-                << "\n -- version:\t " << tplatform.getInfo<CL_PLATFORM_VERSION>()
-                << "\n -- vendor:\t " << tplatform.getInfo<CL_PLATFORM_VENDOR>()
-                << "\n -- profile:\t " << tplatform.getInfo<CL_PLATFORM_PROFILE>()
-                << std::endl;
+      //TODO: select devices to use
+      cl::Platform use_platform;
+      std::vector<cl::Device> use_devices;
+      //for now:
+      use_platform = platforms.front();
 
-      std::vector<cl::Device> devices;
-      tplatform.getDevices(CL_DEVICE_TYPE_GPU, &devices);
-      //for (cl::Device &tdevice : devices)
-      for (size_t j = 0; j < devices.size(); ++j)
+      //for (cl::Platform &tplatform : platforms)
+      for(size_t i = 0; i < platforms.size(); ++i)
       {
-         cl::Device &tdevice = devices[j];
-         const std::string dextensions = tdevice.getInfo<CL_DEVICE_EXTENSIONS>();
-         std::cout << "\tDevice Info:"
-                   << "\n\t -- clock freq:\t " << tdevice.getInfo<CL_DEVICE_MAX_CLOCK_FREQUENCY>()
-                   << "\n\t -- mem size:\t " << tdevice.getInfo<CL_DEVICE_GLOBAL_MEM_SIZE>()
-                   << "\n\t -- extensions:\t " << dextensions
-                   << std::endl;
-         //for now (use first only)
+        cl::Platform &tplatform = platforms[i];
+
+        const std::string extensions =
+          tplatform.getInfo<CL_PLATFORM_EXTENSIONS>();
+
+        std::cout << "OpenCL Platform Info:"
+                  << "\n -- platform:\t " << tplatform.getInfo<CL_PLATFORM_NAME>()
+                  << "\n -- version:\t " << tplatform.getInfo<CL_PLATFORM_VERSION>()
+                  << "\n -- vendor:\t " << tplatform.getInfo<CL_PLATFORM_VENDOR>()
+                  << "\n -- profile:\t " << tplatform.getInfo<CL_PLATFORM_PROFILE>()
+                  << std::endl;
+
+        std::vector<cl::Device> devices;
+        tplatform.getDevices(CL_DEVICE_TYPE_GPU, &devices);
+        //for (cl::Device &tdevice : devices)
+        for (size_t j = 0; j < devices.size(); ++j)
+        {
+           cl::Device &tdevice = devices[j];
+           const std::string dextensions = tdevice.getInfo<CL_DEVICE_EXTENSIONS>();
+           std::cout << "\tDevice Info:"
+                     << "\n\t -- clock freq:\t " << tdevice.getInfo<CL_DEVICE_MAX_CLOCK_FREQUENCY>()
+                     << "\n\t -- mem size:\t " << tdevice.getInfo<CL_DEVICE_GLOBAL_MEM_SIZE>()
+                     << "\n\t -- extensions:\t " << dextensions
+                     << std::endl;
+           //for now (use first only)
 #if defined(__APPLE__) || defined(__MACOSX)
-         if( dextensions.find("cl_apple_gl_sharing") != std::string::npos )
+           if( dextensions.find("cl_apple_gl_sharing") != std::string::npos )
 #else
-         if( dextensions.find("cl_khr_gl_sharing") != std::string::npos )
+           if( dextensions.find("cl_khr_gl_sharing") != std::string::npos )
 #endif
-         {
-           use_devices.clear();
-           use_devices.push_back(tdevice);
-           break;
-         }
+           {
+             use_devices.clear();
+             use_devices.push_back(tdevice);
+             break;
+           }
+        }
+
       }
 
-    }
 
+      // -----------------------------
+      // OpenCL context
 
-    // -----------------------------
-    // OpenCL context
-
-    std::vector<cl_context_properties> properties;
+      std::vector<cl_context_properties> properties;
 
 #if defined(__APPLE__) || defined(__MACOSX)
-
 # error "Not implemented yet."
 
-    // TODO check
-    properties.push_back( CL_CONTEXT_PROPERTY_USE_CGL_SHAREGROUP_APPLE );
-    properties.push_back( (cl_context_properties)CGLGetShareGroup(CGLGetCurrentContext()) );
+      // TODO check
+      properties.push_back( CL_CONTEXT_PROPERTY_USE_CGL_SHAREGROUP_APPLE );
+      properties.push_back( (cl_context_properties)CGLGetShareGroup(CGLGetCurrentContext()) );
 #else
 
 # ifdef _WIN32
-    properties.push_back( CL_GL_CONTEXT_KHR );
-    properties.push_back( (cl_context_properties)wglGetCurrentContext() );
+      properties.push_back( CL_GL_CONTEXT_KHR );
+      properties.push_back( (cl_context_properties)wglGetCurrentContext() );
 
-    properties.push_back( CL_WGL_HDC_KHR );
-    properties.push_back( (cl_context_properties)wglGetCurrentDC() );
+      properties.push_back( CL_WGL_HDC_KHR );
+      properties.push_back( (cl_context_properties)wglGetCurrentDC() );
 # else
-    properties.push_back( CL_GLX_DISPLAY_KHR );
-    properties.push_back( (cl_context_properties)glXGetCurrentDisplay() );
+      properties.push_back( CL_GLX_DISPLAY_KHR );
+      properties.push_back( (cl_context_properties)glXGetCurrentDisplay() );
 
-    properties.push_back( CL_GL_CONTEXT_KHR );
-    properties.push_back( cl_context_properties(glXGetCurrentContext()) );
+      properties.push_back( CL_GL_CONTEXT_KHR );
+      properties.push_back( cl_context_properties(glXGetCurrentContext()) );
 # endif
 #endif
 
-    properties.push_back( CL_CONTEXT_PLATFORM );
-    properties.push_back( (cl_context_properties)use_platform() );
-    properties.push_back(0);
+      properties.push_back( CL_CONTEXT_PLATFORM );
+      properties.push_back( (cl_context_properties)use_platform() );
+      properties.push_back(0);
 
-    _cl_context = cl::Context(use_devices, &properties[0]);
+      _cl_context = cl::Context(use_devices, &properties[0]);
 
-    //_cl_context = cl::Context(CL_DEVICE_TYPE_GPU, &properties[0]);
+      //_cl_context = cl::Context(CL_DEVICE_TYPE_GPU, &properties[0]);
 
-    // -----------------------------
-    // OpenCL device
+      // -----------------------------
+      // OpenCL device
 
-    std::vector<cl::Device> devices = _cl_context.getInfo<CL_CONTEXT_DEVICES>();
+      std::vector<cl::Device> devices = _cl_context.getInfo<CL_CONTEXT_DEVICES>();
 
-    if( devices.empty() )
-      throw std::runtime_error("Got no OpenCL device.");
-    _cl_device = devices[0];
+      if( devices.empty() )
+        throw std::runtime_error("Got no OpenCL device.");
+      _cl_device = devices[0];
 
-    std::cout << "OpenCL Device Info:"
-              << "\n -- type:\t " << _cl_device.getInfo<CL_DEVICE_TYPE>()
-              << "\n -- vendor:\t " << _cl_device.getInfo<CL_DEVICE_VENDOR>()
-              << "\n -- name:\t " << _cl_device.getInfo<CL_DEVICE_NAME>()
-              << "\n -- profile:\t " << _cl_device.getInfo<CL_DEVICE_PROFILE>()
-              << "\n -- device version:\t " << _cl_device.getInfo<CL_DEVICE_VERSION>()
-              << "\n -- driver version:\t " << _cl_device.getInfo<CL_DRIVER_VERSION>()
-              << "\n -- compute units:\t " << _cl_device.getInfo<CL_DEVICE_MAX_COMPUTE_UNITS>()
-              << "\n -- workgroup size:\t " << _cl_device.getInfo<CL_DEVICE_MAX_WORK_GROUP_SIZE>()
-              << "\n -- global memory:\t " << (_cl_device.getInfo<CL_DEVICE_GLOBAL_MEM_SIZE>() >> 20) << " MiB"
-              << "\n -- local memory:\t " << (_cl_device.getInfo<CL_DEVICE_LOCAL_MEM_SIZE>() >> 10) << " KiB"
-              << "\n -- clock frequency:\t " << _cl_device.getInfo<CL_DEVICE_MAX_CLOCK_FREQUENCY>()
-              << std::endl;
-
-
-    _cl_command_queue = cl::CommandQueue(_cl_context, _cl_device, CL_QUEUE_PROFILING_ENABLE);
-
-    // -----------------------------
-    // And now the OpenCL program
-
-
-    std::ifstream source_file("routing.cl");
-    if( !source_file )
-      throw std::runtime_error("Failed to open routing.cl");
-    std::string source( std::istreambuf_iterator<char>(source_file),
-                       (std::istreambuf_iterator<char>()) );
-
-    //now handled via include
-    //std::ifstream source_file2("sorting.cl");
-    //if( !source_file2 )
-    //  throw std::runtime_error("Failed to open sorting.cl");
-    //std::string source2( std::istreambuf_iterator<char>(source_file2),
-    //                   (std::istreambuf_iterator<char>()) );
-
-    cl::Program::Sources sources;
-    sources.push_back( std::make_pair(source.c_str(), source.length()) );
-    //sources.push_back( std::make_pair(source2.c_str(), source2.length()) );
-
-    _cl_program = cl::Program(_cl_context, sources);
-
-    char c_cdir[1024];
-    if (!GetCurrentDir(c_cdir, 1024))
-      throw std::runtime_error("Failed to retrieve current working directory");
-    try
-    {
-      std::string buildargs;
-      buildargs += "-cl-fast-relaxed-math";
-      buildargs += " -I ";
-      buildargs += c_cdir;
-      //std::cout << buildargs << std::endl;
-      _cl_program.build(devices, buildargs.c_str());
-    }
-    catch(cl::Error& ex)
-    {
-      std::cerr << "Failed to build OpenCL program: "
-                << " -- Log: " << _cl_program.getBuildInfo<CL_PROGRAM_BUILD_LOG>(_cl_device)
+      std::cout << "OpenCL Device Info:"
+                << "\n -- type:\t " << _cl_device.getInfo<CL_DEVICE_TYPE>()
+                << "\n -- vendor:\t " << _cl_device.getInfo<CL_DEVICE_VENDOR>()
+                << "\n -- name:\t " << _cl_device.getInfo<CL_DEVICE_NAME>()
+                << "\n -- profile:\t " << _cl_device.getInfo<CL_DEVICE_PROFILE>()
+                << "\n -- device version:\t " << _cl_device.getInfo<CL_DEVICE_VERSION>()
+                << "\n -- driver version:\t " << _cl_device.getInfo<CL_DRIVER_VERSION>()
+                << "\n -- compute units:\t " << _cl_device.getInfo<CL_DEVICE_MAX_COMPUTE_UNITS>()
+                << "\n -- workgroup size:\t " << _cl_device.getInfo<CL_DEVICE_MAX_WORK_GROUP_SIZE>()
+                << "\n -- global memory:\t " << (_cl_device.getInfo<CL_DEVICE_GLOBAL_MEM_SIZE>() >> 20) << " MiB"
+                << "\n -- local memory:\t " << (_cl_device.getInfo<CL_DEVICE_LOCAL_MEM_SIZE>() >> 10) << " KiB"
+                << "\n -- clock frequency:\t " << _cl_device.getInfo<CL_DEVICE_MAX_CLOCK_FREQUENCY>()
                 << std::endl;
-      throw;
+
+
+      _cl_command_queue = cl::CommandQueue(_cl_context, _cl_device, CL_QUEUE_PROFILING_ENABLE);
+
+      // -----------------------------
+      // And now the OpenCL program
+
+
+      std::ifstream source_file("routing.cl");
+      if( !source_file )
+        throw std::runtime_error("Failed to open routing.cl");
+      std::string source( std::istreambuf_iterator<char>(source_file),
+                         (std::istreambuf_iterator<char>()) );
+
+      //now handled via include
+      //std::ifstream source_file2("sorting.cl");
+      //if( !source_file2 )
+      //  throw std::runtime_error("Failed to open sorting.cl");
+      //std::string source2( std::istreambuf_iterator<char>(source_file2),
+      //                   (std::istreambuf_iterator<char>()) );
+
+      cl::Program::Sources sources;
+      sources.push_back( std::make_pair(source.c_str(), source.length()) );
+      //sources.push_back( std::make_pair(source2.c_str(), source2.length()) );
+
+      _cl_program = cl::Program(_cl_context, sources);
+
+      char c_cdir[1024];
+      if (!GetCurrentDir(c_cdir, 1024))
+        throw std::runtime_error("Failed to retrieve current working directory");
+      try
+      {
+        std::string buildargs;
+        buildargs += "-cl-fast-relaxed-math";
+        buildargs += " -I ";
+        buildargs += c_cdir;
+        //std::cout << buildargs << std::endl;
+        _cl_program.build(devices, buildargs.c_str());
+      }
+      catch(cl::Error& ex)
+      {
+        std::cerr << "Failed to build OpenCL program: "
+                  << " -- Log: " << _cl_program.getBuildInfo<CL_PROGRAM_BUILD_LOG>(_cl_device)
+                  << std::endl;
+        throw;
+      }
+
+      std::cout << "OpenCL Program Build:"
+                << "\n -- Status:\t" << _cl_program.getBuildInfo<CL_PROGRAM_BUILD_STATUS>(_cl_device)
+                << "\n -- Options:\t" << _cl_program.getBuildInfo<CL_PROGRAM_BUILD_OPTIONS>(_cl_device)
+                << "\n -- Log: " << _cl_program.getBuildInfo<CL_PROGRAM_BUILD_LOG>(_cl_device)
+                << std::endl;
+
+      _cl_initMem_kernel = cl::Kernel(_cl_program, "initMem");
+
+      _cl_updateRouteMap_kernel = cl::Kernel(_cl_program, "updateRouteMap");
+      _cl_prepareBorderCosts_kernel = cl::Kernel(_cl_program, "prepareBorderCosts");
+      _cl_prepareIndividualRouting_kernel = cl::Kernel(_cl_program, "prepareIndividualRouting");
+      _cl_prepareIndividualRoutingParent_kernel = cl::Kernel(_cl_program, "prepareIndividualRoutingParent");
+      _cl_routing_kernel  = cl::Kernel(_cl_program, "routeLocal");
+
+
+      _cl_voteMinimum_kernel = cl::Kernel(_cl_program, "voteMinimum");
+      _cl_getMinimum_kernel = cl::Kernel(_cl_program, "getMinimum");
+      _cl_routeInterBlock_kernel = cl::Kernel(_cl_program, "calcInterBlockRoute");
+      _cl_routeConstruct_kernel = cl::Kernel(_cl_program, "routeConstruct");
+    }
+    catch(std::exception& ex)
+    {
+      std::cerr << "Failed to initialize GPURouting: "
+                << ex.what()
+                << std::endl;
+      return false;
     }
 
-    std::cout << "OpenCL Program Build:"
-              << "\n -- Status:\t" << _cl_program.getBuildInfo<CL_PROGRAM_BUILD_STATUS>(_cl_device)
-              << "\n -- Options:\t" << _cl_program.getBuildInfo<CL_PROGRAM_BUILD_OPTIONS>(_cl_device)
-              << "\n -- Log: " << _cl_program.getBuildInfo<CL_PROGRAM_BUILD_LOG>(_cl_device)
-              << std::endl;
-
-
-
-    _cl_initMem_kernel = cl::Kernel(_cl_program, "initMem");
-
-    _cl_updateRouteMap_kernel = cl::Kernel(_cl_program, "updateRouteMap");
-    _cl_prepareBorderCosts_kernel = cl::Kernel(_cl_program, "prepareBorderCosts");
-    _cl_prepareIndividualRouting_kernel = cl::Kernel(_cl_program, "prepareIndividualRouting");
-    _cl_prepareIndividualRoutingParent_kernel = cl::Kernel(_cl_program, "prepareIndividualRoutingParent");
-    _cl_routing_kernel  = cl::Kernel(_cl_program, "routeLocal");
-
-    
-    _cl_voteMinimum_kernel = cl::Kernel(_cl_program, "voteMinimum");
-    _cl_getMinimum_kernel = cl::Kernel(_cl_program, "getMinimum");
-    _cl_routeInterBlock_kernel = cl::Kernel(_cl_program, "calcInterBlockRoute");
-    _cl_routeConstruct_kernel = cl::Kernel(_cl_program, "routeConstruct");
-    
-
+    return true;
   }
 
   //----------------------------------------------------------------------------
@@ -273,8 +280,6 @@ namespace LinksRouting
   }
 
   //----------------------------------------------------------------------------
-
-
   template<typename T>
   void printfBuffer( cl::CommandQueue& cl_queue,
                      const cl::Buffer& buf,
@@ -287,7 +292,7 @@ namespace LinksRouting
     std::vector<T> mem(width * height);
     cl_queue.enqueueReadBuffer(buf, true, 0, width * height * sizeof(T), &mem[0]);
 
-    if(name) 
+    if(name)
       std::cout << name << ":\n";
     else
       std::cout << "Buffer:\n";
@@ -355,7 +360,7 @@ namespace LinksRouting
 
     std::vector<T> mem(width * height);
     cl::size_t<3> o, r;
-    0[0] = o[1] = o[2] = 0;
+    o[0] = o[1] = o[2] = 0;
     r[0] = width; r[1] = height; r[2] = 1;
     cl_queue.enqueueReadImage(img, true, o, r, width*sizeof(T), 0, &mem[0]);
 
@@ -453,8 +458,9 @@ namespace LinksRouting
   }
 
   //----------------------------------------------------------------------------
-  void GPURouting::process(Type type)
+  void GPURouting::process(unsigned int type)
   {
+
     //----------------------
     // Many sanity checks :)
 
@@ -489,26 +495,20 @@ namespace LinksRouting
       return;
     }
 
-    if( !_enabled ) // This can be set from the config file...
-      return;
-
     try
     {
-
-
-
     updateRouteMap();
 
     // now start analyzing the links
 
     LinkDescription::LinkList& links = *_subscribe_links->_data;
-    unsigned int width = _subscribe_costmap->_data->width,
-              height = _subscribe_costmap->_data->height,
-              num_points = width * height;
-    int dim[] = {width, height, num_points};
-    int downsample = _subscribe_desktop->_data->width / _subscribe_costmap->_data->width;
-    unsigned int numBlocks[2] = {divup<unsigned>(width,_blockSize[0]),divup<unsigned>(height,_blockSize[1])};
-    unsigned int sumBlocks = numBlocks[0]*numBlocks[1];
+//    unsigned int width = _subscribe_costmap->_data->width,
+//              height = _subscribe_costmap->_data->height,
+//              num_points = width * height;
+//    int dim[] = {width, height, num_points};
+//    int downsample = _subscribe_desktop->_data->width / _subscribe_costmap->_data->width;
+//    unsigned int numBlocks[2] = {divup<unsigned>(width,_blockSize[0]),divup<unsigned>(height,_blockSize[1])};
+//    unsigned int sumBlocks = numBlocks[0]*numBlocks[1];
 
     for( auto it = links.begin(); it != links.end(); ++it )
     {
@@ -517,7 +517,7 @@ namespace LinksRouting
 
       if(    info != _link_infos.end()
           && info->second._stamp == it->_stamp
-          && info->second._revision == it->_link.getRevision() )
+          && info->second._revision == it->_link->getRevision() )
         //TODO: check if screen has changed -> update
         continue;
 
@@ -527,8 +527,7 @@ namespace LinksRouting
                << " queue.");
 
       // --------------------------------------------------------
-
-      createRoutes(it->_link);
+      createRoutes(*it->_link.get());
 
 #if 0
       {
@@ -543,7 +542,7 @@ namespace LinksRouting
            node != it->_link.getNodes().end();
            ++node )
       {
-        if( node->getProps().find("hidden") != node->getProps().end() )
+        if( node->get<bool>("hidden", false) )
           continue;
 
         //std::cout << "Polygon: (" << node->getVertices().size() << " points)\n";
@@ -644,7 +643,7 @@ namespace LinksRouting
           0,
           0
         );
-         
+
 
         //insert nodes and prepare data
         _cl_prepare_kernel.setArg(0, memory_gl[0]);
@@ -735,69 +734,72 @@ namespace LinksRouting
 
         dumpBuffer<float>(_cl_command_queue, buf, width, height * numtargets, "shortestpath");
 
-        _cl_command_queue.finish();
-        _cl_command_queue.enqueueReadBuffer(queue_info, true, 0, sizeof(cl_QueueGlobal), &baseQueueInfo);
+        if( !_noQueue )
+        {
+          _cl_command_queue.finish();
+          _cl_command_queue.enqueueReadBuffer(queue_info, true, 0, sizeof(cl_QueueGlobal), &baseQueueInfo);
 
-        std::cout << "front: " << baseQueueInfo.front << " "
-                  << "back: " << baseQueueInfo.back << " "
-                  << "filllevel: " << baseQueueInfo.filllevel << " "
-                  << "activeBlocks: " << baseQueueInfo.activeBlocks << " "
-                  << "processedBlocks: " << baseQueueInfo.processedBlocks << " "
-                  << "debug: " << baseQueueInfo.debug << "\n";
+          std::cout << "front: " << baseQueueInfo.front << " "
+                    << "back: " << baseQueueInfo.back << " "
+                    << "filllevel: " << baseQueueInfo.filllevel << " "
+                    << "activeBlocks: " << baseQueueInfo.activeBlocks << " "
+                    << "processedBlocks: " << baseQueueInfo.processedBlocks << " "
+                    << "debug: " << baseQueueInfo.debug << "\n";
 
 
-        //_cl_command_queue.enqueueReadBuffer(queue_info, true, 0, sizeof(cl_QueueGlobal), &baseQueueInfo);
-        //std::cout << "front: " << baseQueueInfo.front << " "
-        //          << "back: " << baseQueueInfo.back << " "
-        //          << "filllevel: " << baseQueueInfo.filllevel << " "
-        //          << "activeBlocks: " << baseQueueInfo.activeBlocks << " "
-        //          << "processedBlocks: " << baseQueueInfo.processedBlocks << " "
-        //          << "debug: " << baseQueueInfo.debug << "\n";
-        std::cout << "overAllBlocks=" << overAllBlocks << std::endl;
+          //_cl_command_queue.enqueueReadBuffer(queue_info, true, 0, sizeof(cl_QueueGlobal), &baseQueueInfo);
+          //std::cout << "front: " << baseQueueInfo.front << " "
+          //          << "back: " << baseQueueInfo.back << " "
+          //          << "filllevel: " << baseQueueInfo.filllevel << " "
+          //          << "activeBlocks: " << baseQueueInfo.activeBlocks << " "
+          //          << "processedBlocks: " << baseQueueInfo.processedBlocks << " "
+          //          << "debug: " << baseQueueInfo.debug << "\n";
+          std::cout << "overAllBlocks=" << overAllBlocks << std::endl;
 
-        std::vector<cl_QueueElement> queue_data =
-          dumpRingBuffer<cl_QueueElement>
+          std::vector<cl_QueueElement> queue_data =
+            dumpRingBuffer<cl_QueueElement>
+            (
+              _cl_command_queue,
+              queue,
+              baseQueueInfo.front,
+              baseQueueInfo.back,
+              overAllBlocks,
+              "queue.txt"
+            );
+          dumpRingBuffer<cl_float>
           (
             _cl_command_queue,
-            queue,
+            queue_priority,
             baseQueueInfo.front,
             baseQueueInfo.back,
             overAllBlocks,
-            "queue.txt"
+            "queue_priorities.txt"
           );
-        dumpRingBuffer<cl_float>
-        (
-          _cl_command_queue,
-          queue_priority,
-          baseQueueInfo.front,
-          baseQueueInfo.back,
-          overAllBlocks,
-          "queue_priorities.txt"
-        );
-        dumpRingBuffer<cl_float>
-        (
-          _cl_command_queue,
-          queue_priority,
-          0,
-          overAllBlocks - 1,
-          overAllBlocks,
-          "queue_priorities_all.txt"
-        );
+          dumpRingBuffer<cl_float>
+          (
+            _cl_command_queue,
+            queue_priority,
+            0,
+            overAllBlocks - 1,
+            overAllBlocks,
+            "queue_priorities_all.txt"
+          );
 
-        for(size_t i = 0; i < h_targets.size(); ++i)
-          std::cout << h_targets[i].x/_blockSize[0] << "->" <<  h_targets[i].z/_blockSize[0]
-                    << " " << h_targets[i].y/_blockSize[1] << "->" <<  h_targets[i].w/_blockSize[1]
-                    << std::endl;
+          for(size_t i = 0; i < h_targets.size(); ++i)
+            std::cout << h_targets[i].x/_blockSize[0] << "->" <<  h_targets[i].z/_blockSize[0]
+                      << " " << h_targets[i].y/_blockSize[1] << "->" <<  h_targets[i].w/_blockSize[1]
+                      << std::endl;
 
-        std::set<int4> cleanup;
-        for(unsigned int i = 0; i < queue_data.size(); ++i)
-          if(!cleanup.insert(int4(queue_data[i].s[0],queue_data[i].s[1],queue_data[i].s[2],0)).second)
-          {
-            std::cout << "duplicated queue entry: ";
-            for(int j = 0; j < 4; ++j)
-            std::cout << queue_data[i].s[j] << " ";
-            std::cout << "\n";
-          }
+          std::set<int4> cleanup;
+          for(unsigned int i = 0; i < queue_data.size(); ++i)
+            if(!cleanup.insert(int4(queue_data[i].s[0],queue_data[i].s[1],queue_data[i].s[2],0)).second)
+            {
+              std::cout << "duplicated queue entry: ";
+              for(int j = 0; j < 4; ++j)
+              std::cout << queue_data[i].s[j] << " ";
+              std::cout << "\n";
+            }
+        }
 
         //search for minimum
         _cl_command_queue.finish();
@@ -986,11 +988,11 @@ namespace LinksRouting
 
       // set as handled
       if( info == _link_infos.end() )
-        _link_infos[it->_id] = LinkInfo(it->_stamp, it->_link.getRevision());
+        _link_infos[it->_id] = LinkInfo(it->_stamp, it->_link->getRevision());
       else
       {
         info->second._stamp = it->_stamp;
-        info->second._revision = it->_link.getRevision();
+        info->second._revision = it->_link->getRevision();
       }
 
       //throw std::runtime_error("Done routing!");
@@ -1004,35 +1006,6 @@ namespace LinksRouting
       throw;
     }
   }
-
-  void GPURouting::connect(CostAnalysis* costanalysis,
-                           LinksRouting::Renderer *renderer)
-  {
-
-  }
-
-  bool GPURouting::addLinkHierarchy(LinkDescription::Node* node,
-                                    double priority)
-  {
-    return true;
-  }
-  bool GPURouting::addLinkHierarchy(LinkDescription::HyperEdge* hyperedge,
-                                    double priority)
-  {
-    return true;
-  }
-  bool GPURouting::removeLinkHierarchy(LinkDescription::Node* node)
-  {
-    return true;
-  }
-  bool GPURouting::removeLinkHierarchy(LinkDescription::HyperEdge* hyperedge)
-  {
-    return true;
-  }
-
-
-
-
   //kernel test
 
 struct int2
@@ -1200,7 +1173,7 @@ bool route_data(float const * l_cost,
     float* myval = accessLocalCost(l_route, localid);
 
     float lastmyval = *myval;
-    
+
     int2 offset;
     for(offset.y = -1; offset.y  <= 1; ++offset.y)
       for(offset.x = -1; offset.x <= 1; ++offset.x)
@@ -1245,9 +1218,9 @@ void updateRouteMapDummy(float * costmap,
 
   do
   {
-    int2 gid = int2(get_group_id(0)*(get_local_size(0)-1) + get_local_id(0), get_group_id(1)*(get_local_size(1)-1) + get_local_id(1));
+//    int2 gid = int2(get_group_id(0)*(get_local_size(0)-1) + get_local_id(0), get_group_id(1)*(get_local_size(1)-1) + get_local_id(1));
 
-    int lid = get_local_id(0) + get_local_id(1)*get_local_size(0);
+    unsigned int lid = get_local_id(0) + get_local_id(1)*get_local_size(0);
     for(; lid < (get_local_size(0)+2)*(get_local_size(1)+2); lid += get_local_size(0)*get_local_size(1))
     {
       l_cost[lid] = 0.1f*MAXFLOAT;
@@ -1295,7 +1268,7 @@ void updateRouteMapDummy(float * costmap,
     {
       int myBorderId = borderId(int2(get_local_id(0), get_local_id(1)), int2(get_local_size(0),get_local_size(1)));
       //write result
-      if(myBorderId >= i) 
+      if(myBorderId >= i)
         routeMap[boundaryelements*boundaryelements/2*(get_group_id(0)+get_group_id(1)*get_num_groups(0)) +
                  written + myBorderId - i] = *accessLocalCost(l_routing_data, int2(get_local_id(0), get_local_id(1)));
     } while(advanceThread());
@@ -1365,7 +1338,7 @@ int getCostGlobalId(const int lid, const int2 blockId, const int2 blockSize, int
   //  if(lid < 2*blockSize.x + blockSize.y - 2)
   //    return myoffset + full_row_offset+half_row_offset + mycoloffset + 2*blockSize.x + blockSize.y-3 -lid;
   //  else
-  //    return myoffset + full_row_offset + halfcoloffset + lid - 2*blockSize.x; 
+  //    return myoffset + full_row_offset + halfcoloffset + lid - 2*blockSize.x;
   //}
   //else
   //{
@@ -1384,7 +1357,7 @@ int getCostGlobalId(const int lid, const int2 blockId, const int2 blockSize, int
   //    return myoffset + full_row_offset+half_row_offset + mycoloffset + borderElements + 2*blockSize.x+blockSize.y-4 -lid;
   //  if(lid == 2*blockSize.x + blockSize.y - 3)
   //    return myoffset + full_row_offset+half_row_offset + mycoloffset + blockSize.x-1;
-  //  else 
+  //  else
   //    return myoffset + full_row_offset + blockId.x/2*(2*blockSize.y - 4) + borderElements-1 -lid;
   //}
 }
@@ -1400,26 +1373,26 @@ float getRouteMapCost(const float* ourRouteMapBlock, int from, int to, const int
 int dir4FromBorderId(int borderId, int2 lsize)
 {
   if(borderId < 0) return 0;
-  int mask =  (borderId < lsize.x) | 
+  int mask =  (borderId < lsize.x) |
               ((borderId >= lsize.x-1 && borderId < lsize.x+lsize.y-1 ) << 1) |
               ((borderId >= lsize.x+lsize.y-2 && borderId < 2*lsize.x+lsize.y-2 ) << 2) |
               ((borderId >= 2*lsize.x+lsize.y-3 || borderId == 0) << 3);
   return mask;
 }
-int routeBorder(std::vector<float>& routeMap, 
+int routeBorder(std::vector<float>& routeMap,
                 float* routingData,
-                const int2 blockId, 
+                const int2 blockId,
                 const int2 blockSize,
                 const int2 numBlocks,
                  float* routeData,
                  int* changeData)
 {
-  int lsize = get_local_size(0);
+//  int lsize = get_local_size(0);
   int borderElements = 2*(blockSize.x + blockSize.y - 2);
   const float MAXFLOAT = std::numeric_limits<float>::max();
 
   *changeData = 0;
-  
+
   const float* ourRouteMap = &routeMap[0] + borderElements*(borderElements+1)/2*(blockId.x + blockId.y*numBlocks.x);
   do
   {
@@ -1427,7 +1400,7 @@ int routeBorder(std::vector<float>& routeMap,
     int lid = get_local_id(0);
     int gid = getCostGlobalId(lid, blockId, blockSize, numBlocks);
     if(lid < borderElements)
-    {    
+    {
       mycost = routingData[gid];
       routeData[lid] = mycost;
     }
@@ -1439,7 +1412,7 @@ int routeBorder(std::vector<float>& routeMap,
     int gid = getCostGlobalId(lid, blockId, blockSize, numBlocks);
   if(lid < borderElements)
   {
-    
+
     float mycost = 0.1f*MAXFLOAT;
     if(lid < borderElements)
       mycost = routingData[gid];
@@ -1450,7 +1423,7 @@ int routeBorder(std::vector<float>& routeMap,
       float newcost = routeData[i] + getRouteMapCost(ourRouteMap, i, lid, borderElements);
       mycost = std::min(newcost, mycost);
     }
-    
+
     if(mycost + 0.0001f < origCost)
     {
       //atomic as multiple might be working on the same
@@ -1493,12 +1466,12 @@ int2 activeBlockToId(const int2 seedBlock, const int spiralIdIn, const int2 acti
     if(w*h <= spiralId)
     {
       //we are outside of this box
-      
+
       //where do we increase
       uint increase_x = (area_dims.x != spiral_limits.x) + (area_dims.z != spiral_limits.z);
       uint increase_y = (area_dims.y != spiral_limits.y) + (area_dims.w != spiral_limits.w);
 
-      
+
       int outerspirals = 0;
 
       float c = -(spiralId-w*h);
@@ -1514,7 +1487,7 @@ int2 activeBlockToId(const int2 seedBlock, const int spiralIdIn, const int2 acti
         outerspirals = - c / b;
 
       int innerspirals = std::max(1U,std::max(std::max(area_dims.x, area_dims.y),std::max(area_dims.z, area_dims.w)));
-      int4 allspirals = int4(std::max(0,seedAB.x-innerspirals-outerspirals+1), std::max(0,seedAB.y-innerspirals-outerspirals+1), 
+      int4 allspirals = int4(std::max(0,seedAB.x-innerspirals-outerspirals+1), std::max(0,seedAB.y-innerspirals-outerspirals+1),
                              std::min(activeBlocksSize.x-1,seedAB.x+innerspirals+outerspirals-1), std::min(activeBlocksSize.y-1,seedAB.y+innerspirals+outerspirals-1));
       int allspiralelements = (allspirals.z - allspirals.x+1)*(allspirals.w - allspirals.y+1);
       int myoffset = spiralId - allspiralelements;
@@ -1558,7 +1531,7 @@ int2 activeBlockToId(const int2 seedBlock, const int spiralIdIn, const int2 acti
       break;
     }
   }
-  
+
   return int2(resId.x*8, resId.y*8 + (spiralIdIn&1)*4);
 
 }
@@ -1572,7 +1545,7 @@ int2 getActiveBlock(const int2 seedBlock, const int2 blockId, const int2 activeB
 
   uint offset = 0;
   int2 diff = blockAB - seedAB;
-  
+
   //top row
   if(diff.y == -spirals && diff.x > -spirals)
   {
@@ -1670,8 +1643,9 @@ uint scanLocalWorkEfficient(uint* data, size_t linId, size_t elements)
     data[i] = t;
   }
   return data[elements] = v;
-  
+
 }
+#if ROUTING_DEBUG
 void routeLocal( std::vector<float>& routeMap,
                  std::vector<int4>& seed,
                  std::vector<cl_uint>& routingIds,
@@ -1695,7 +1669,7 @@ void routeLocal( std::vector<float>& routeMap,
   //int withinWorkerId = get_local_id(0);
   int elementsPerWorker = borderElements + 1;
   float* routingData = &routingData_in[0] + routeDataPerNode*routingIds[get_group_id(0)];
-  
+
   int2 seedBlock;
   std::vector<int> routed(numBlocks.x*numBlocks.y, 0);
   std::set<uint> activeBufferCheck;
@@ -1718,7 +1692,7 @@ void routeLocal( std::vector<float>& routeMap,
       for(int x = get_local_id(0); x < (ourInit.z - ourInit.x); x += get_local_size(0))
       {
         int pos = posoffset + x;
-        queue[pos] = createQueueEntry(int2(ourInit.x+x, y), 0, 0);       
+        queue[pos] = createQueueEntry(int2(ourInit.x+x, y), 0, 0);
       }
       posoffset += (ourInit.z-ourInit.x);
     }
@@ -1733,15 +1707,15 @@ void routeLocal( std::vector<float>& routeMap,
       int2 blockId;
 
       //todo iterate over workers
-      int workerId = get_local_id(1);
+      unsigned int workerId = get_local_id(1);
       float* l_routeData = ( float*)(data + elementsPerWorker*workerId);
       int* l_changedData = ( int*)(l_routeData + borderElements);
       if(queueElements > workerId)
       {
         //there is work for me to be done
         blockId = readQueueEntry(queue[(queueFront + workerId)%queueSize]);
-        changed = routeBorder(routeMap, 
-                  routingData, 
+        changed = routeBorder(routeMap,
+                  routingData,
                   blockId,
                   blockSize,
                   numBlocks,
@@ -1755,7 +1729,7 @@ void routeLocal( std::vector<float>& routeMap,
         } while(advanceThread());
         if(changed) thisRunChange = true;
       }
-      int nowWorked = std::min(queueElements, workers);
+      uint nowWorked = std::min(queueElements, workers);
       queueFront += nowWorked;
       queueElements -= nowWorked;
 
@@ -1766,12 +1740,12 @@ void routeLocal( std::vector<float>& routeMap,
       {
         do
         {
-          int workerId = get_local_id(1);
+          uint workerId = get_local_id(1);
           changed = changed_data[get_local_id(0) + get_local_size(0)*get_local_id(1)];
           if(w == workerId)
             hasElements = changed;
         } while(advanceThread());
-        
+
         for(int element = 0; element < 4; ++element)
         {
           l_queueElement = 0xFFFFFFFF;
@@ -1780,8 +1754,8 @@ void routeLocal( std::vector<float>& routeMap,
           //generate new entry
           do
           {
-            int workerId = get_local_id(1);
-            int lid = get_local_id(0);
+            uint workerId = get_local_id(1);
+            uint lid = get_local_id(0);
             if(w == workerId && ((1 << element) & dir4FromBorderId(lid,blockSize)))
             {
               int2 offset = int2(element>0?2-element:0, element<3?element-1:0);
@@ -1806,13 +1780,13 @@ void routeLocal( std::vector<float>& routeMap,
             activeBufferCheck.insert((readQueueEntry(queue[queueFront]).y << 16) | readQueueEntry(queue[queueFront]).x);
             setActiveBlock(activeBuffer + 2*activeBufferSize.x*activeBufferSize.y*get_group_id(0), seedBlock, readQueueEntry(queue[queueFront]), activeBufferSize);
           }
-          
+
 
           uint newEntry = l_queueElement;
 
           l_queueElement = queueSize;
           queue[queueFront] = newEntry;
-          
+
           for(int i=0; i < queueElements; i+=get_local_size(0)*get_local_size(1))
           {
             do
@@ -1828,7 +1802,7 @@ void routeLocal( std::vector<float>& routeMap,
                   l_queueElement = tId;
               }
             } while(advanceThread());
-          
+
             do
             {
               const int linId = get_local_id(0) + get_local_size(0)*get_local_id(1);
@@ -1857,9 +1831,9 @@ void routeLocal( std::vector<float>& routeMap,
           }
         }
       }
-      
+
     }
-  
+
 
     queueFront = 0;
     uint pullers = std::min(queueSize/2, (int)(get_local_size(0)*get_local_size(1)) );
@@ -1882,7 +1856,7 @@ void routeLocal( std::vector<float>& routeMap,
           queue[queueSize/2 + linId-1] = canOffer;
         }
       }while(advanceThread());
-      
+
       //run prefix sum
       scanLocalWorkEfficient(queue + queueSize/2-1, 0, pullers);
 
@@ -1923,7 +1897,7 @@ void routeLocal( std::vector<float>& routeMap,
         }
       } while(advanceThread());
       queueElements =  std::min((int)(queueElements + queue[queueSize/2 + pullers-1]), queueSize/4);
-      
+
       pullRun++;
     }
 
@@ -1936,7 +1910,7 @@ void routeLocal( std::vector<float>& routeMap,
       std::cout << "ouch!!!\n";
     else count += *it;
     std::cout << "avg iterations per block: " << (count/routed.size()) << "\n";
- 
+
 }
 
 void validateRouteMap(const float* routeMap, size_t borderElements)
@@ -1973,7 +1947,7 @@ void prepareIndividualRoutingDummy(const float* costmap,
   int4 mapping = blockToDataMapping[get_group_id(0)];
 
 
-  
+
 
   const float MAXFLOAT = std::numeric_limits<float>::max();
 
@@ -1984,7 +1958,7 @@ void prepareIndividualRoutingDummy(const float* costmap,
   //loadCostToLocalAndSetRoute((int2)(mapping.x, mapping.y), gid, dim, costmap, l_cost, l_route);
   do
   {
-      int lid = get_local_id(0) + get_local_id(1)*get_local_size(0);
+    uint lid = get_local_id(0) + get_local_id(1)*get_local_size(0);
     for(; lid < (get_local_size(0)+2)*(get_local_size(1)+2); lid += get_local_size(0)*get_local_size(1))
     {
       l_cost[lid] = 0.1f*MAXFLOAT;
@@ -2017,8 +1991,8 @@ void prepareIndividualRoutingDummy(const float* costmap,
     }
     *accessLocalCost(l_route, int2(get_local_id(0),get_local_id(1))) = startcost;
   } while(advanceThread());
-  
-  
+
+
   //route
   route_data(l_cost, l_route);
 
@@ -2039,7 +2013,7 @@ int dir8FromBorderId(int borderId, int2 lsize)
 {
   int borderElements = 2*(lsize.x+lsize.y-2);
   if(borderId < 0 || borderId >= borderElements) return 0;
-  int mask =  (borderId == 0) | 
+  int mask =  (borderId == 0) |
               ((borderId < lsize.x) << 1) |
               ((borderId == lsize.x-1) << 2) |
               ((borderId >= lsize.x-1 && borderId < lsize.x+lsize.y-1) << 3) |
@@ -2079,7 +2053,7 @@ int writeOutBlock(uint* interblockResult, const int interblockSize, const int la
 
 bool isContainedInBlock(const int4 target, const int2 block, const int2 blockSize)
 {
-  int4 blockBounds = int4(block.x * (blockSize.x -1), block.y * (blockSize.y -1), 
+  int4 blockBounds = int4(block.x * (blockSize.x -1), block.y * (blockSize.y -1),
                             (block.x+1) * (blockSize.x -1), (block.y+1) * (blockSize.y -1));
   bool xoverlap =  target.x <= blockBounds.z && target.z >= blockBounds.x;
   bool yoverlap =  target.y <= blockBounds.w && target.w >= blockBounds.y;
@@ -2094,7 +2068,7 @@ float2 checkRoutes(int2 blockId, int startLid, const float* routecost, const flo
   minresY = 0.1f*MAXFLOAT;
 
   std::vector<float2> newmincosts(get_local_size(0)*get_local_size(1), float2(0.1f*MAXFLOAT,  0.1f*MAXFLOAT));
-  
+
   do
   {
     int linid = get_local_id(0) + get_local_id(1)*get_local_size(0);
@@ -2109,7 +2083,7 @@ float2 checkRoutes(int2 blockId, int startLid, const float* routecost, const flo
       newmincosts[linid].x = routecost[routeDataPerNode*layer + gid];
       //increase value for close neighbours (we want to make progress and not jump between blocks)
       int neg_dist = (borderElements-std::min(abs(lid - startLid) , abs(abs(lid - startLid)-borderElements+2)));
-      newmincosts[linid].y = 0.0001f*neg_dist + newmincosts[linid].x + getRouteMapCost(ourRouteMap, startLid, lid, borderElements); 
+      newmincosts[linid].y = 0.0001f*neg_dist + newmincosts[linid].x + getRouteMapCost(ourRouteMap, startLid, lid, borderElements);
 
       //TODO: reduction..
       minresY = std::min(minresY, newmincosts[linid].y);
@@ -2120,7 +2094,7 @@ float2 checkRoutes(int2 blockId, int startLid, const float* routecost, const flo
   {
   int linid = get_local_id(0) + get_local_id(1)*get_local_size(0);
   if(minresY == newmincosts[linid].y)
-    minresX = newmincosts[linid].x; 
+    minresX = newmincosts[linid].x;
   }while(advanceThread());
 
   return float2(minresX, minresY);
@@ -2142,6 +2116,7 @@ namespace CalcInterBlockRoute
     }
   };
 }
+
 
 void calcInterBlockRouteDummy(const float* routecost,
                               const float* routeMap,
@@ -2177,11 +2152,11 @@ void calcInterBlockRouteDummy(const float* routecost,
       mylocal.written = writeOutBlock(interblockResult, interblockSize, layer, currentBlock, blockSize, numBlocks, int2(froms[layer].x,froms[layer].y) , mylocal.written);
   } while(advanceThread());
 
- 
+
   //early termination
   if(isContainedInBlock(tos[layer], currentBlock, blockSize))
     return;
-  
+
   do
   {
     LocalData& mylocal(locals[LocalData::getOffset()]);
@@ -2198,7 +2173,7 @@ void calcInterBlockRouteDummy(const float* routecost,
 
   do
   {
-    int linid = get_local_id(0) + get_local_id(1)*get_local_size(0);
+    uint linid = get_local_id(0) + get_local_id(1)*get_local_size(0);
     for(; linid < (get_local_size(0)+2)*(get_local_size(1)+2); linid += get_local_size(0)*get_local_size(1))
     {
       l_cost[linid] = 0.1f*MAXFLOAT;
@@ -2225,11 +2200,11 @@ void calcInterBlockRouteDummy(const float* routecost,
     *accessLocalCost(l_route, mylocal.lid2) = myinit;
   } while(advanceThread());
 
-  
+
   //route
   route_data(l_cost, l_route);
 
-  
+
   do
   {
     LocalData& mylocal(locals[LocalData::getOffset()]);
@@ -2248,7 +2223,7 @@ void calcInterBlockRouteDummy(const float* routecost,
 
   incost = MAXFLOAT;
   minvoter = MAXFLOAT;
-  
+
   do
   {
     LocalData& mylocal(locals[LocalData::getOffset()]);
@@ -2265,7 +2240,7 @@ void calcInterBlockRouteDummy(const float* routecost,
     int2 newBlock;
     nextnewminval = newminval = 0.1f*MAXFLOAT;
     newBlock = int2(-1,-1);
-    
+
     for(int outtest = 0; outtest < 8; ++outtest)
     {
       int2 testBlock;
@@ -2280,7 +2255,7 @@ void calcInterBlockRouteDummy(const float* routecost,
       {
         int2 offset = getOffsetFromDir8Element(outtest);
         testBlock = currentBlock + offset;
-        if(testBlock.x >= 0 && testBlock.y >= 0 && 
+        if(testBlock.x >= 0 && testBlock.y >= 0 &&
            testBlock.x < numBlocks.x && testBlock.y < numBlocks.y)
         {
           int2 inLid = mylocal.lid2 - int2(offset.x*(blockSize.x-1), offset.y*(blockSize.y-1));
@@ -2296,7 +2271,7 @@ void calcInterBlockRouteDummy(const float* routecost,
         do
         {
         LocalData& mylocal(locals[LocalData::getOffset()]);
-        if(nextMinval.x < newminval && 
+        if(nextMinval.x < newminval &&
            nextMinval.y <= newminval + 0.000001f &&
            testStart == mylocal.lid)
         {
@@ -2328,7 +2303,7 @@ void calcInterBlockRouteDummy(const float* routecost,
 
   } while( !(isContainedInBlock(tos[layer], currentBlock, blockSize)  || minvoter >= incost ) );
 }
-
+#endif
 ///
 
 
@@ -2338,7 +2313,7 @@ void calcInterBlockRouteDummy(const float* routecost,
   {
     glFinish();
     int computeAll = false;
-    
+
     //update / create buffers
     if(_buffer_width != _subscribe_costmap->_data->width ||
        _buffer_height != _subscribe_costmap->_data->height)
@@ -2349,7 +2324,7 @@ void calcInterBlockRouteDummy(const float* routecost,
       _cl_lastCostMap_buffer = cl::Buffer(_cl_context, CL_MEM_READ_WRITE, _buffer_width*_buffer_height*sizeof(cl_float));
       _blocks[0] = divup<size_t>(_buffer_width, _blockSize[0]-1);
       _blocks[1] = divup<size_t>(_buffer_height, _blockSize[1]-1);
-      
+
       int boundaryElements = 2*(_blockSize[0] + _blockSize[1]-2);
 
       _cl_routeMap_buffer =  cl::Buffer(_cl_context, CL_MEM_READ_WRITE, _blocks[0]*_blocks[1]*boundaryElements*(boundaryElements+1)/2*sizeof(cl_float));
@@ -2376,8 +2351,10 @@ void calcInterBlockRouteDummy(const float* routecost,
 
     _cl_command_queue.enqueueAcquireGLObjects(&memory_gl);
 
-    cl_int bufferDim[2] = { _buffer_width, _buffer_height };
-
+    cl_int bufferDim[2] = {
+      static_cast<cl_int>(_buffer_width),
+      static_cast<cl_int>(_buffer_height)
+    };
 
     //update route map
     //_cl_updateRouteMap_kernel
@@ -2438,15 +2415,15 @@ void calcInterBlockRouteDummy(const float* routecost,
     ////
 
 
-    //static int count = 0;
-    //std::stringstream fname;
-    //fname << "costmap" << count++;
-    //dumpBuffer<float>(_cl_command_queue, _cl_lastCostMap_buffer, _buffer_width, _buffer_height, fname.str());
-    //std::stringstream fname2;
-    //fname2 << "routemap" << count++;
-    //int boundaryElements = 2*(_blockSize[0] + _blockSize[1]-2);
-    //dumpBuffer<float>(_cl_command_queue, _cl_routeMap_buffer, _blocks[0]*boundaryElements, _blocks[1]*boundaryElements/2, fname2.str());
-    
+    static int count = 0;
+    std::stringstream fname;
+    fname << "costmap" << count++;
+    dumpBuffer<float>(_cl_command_queue, _cl_lastCostMap_buffer, _buffer_width, _buffer_height, fname.str());
+    std::stringstream fname2;
+    fname2 << "routemap" << count;
+    int boundaryElements = 2*(_blockSize[0] + _blockSize[1]-2);
+    dumpBuffer<float>(_cl_command_queue, _cl_routeMap_buffer, _blocks[0]*boundaryElements, _blocks[1]*boundaryElements/2, fname2.str());
+
 
     cl_ulong start, end;
     std::cout << "CLInfo:\n";
@@ -2474,33 +2451,7 @@ void calcInterBlockRouteDummy(const float* routecost,
     target.w = std::min(target.w, buffer_height-1);
     return (target.z - target.x > 0 && target.w - target.y > 0);
   }
-            
 
-          
-
-  void checkLevels(std::map<LinkDescription::Node*, size_t>& levelNodeMap, std::map<LinkDescription::HyperEdge*, size_t>& levelHyperEdgeMap, LinkDescription::HyperEdge& hedge, size_t level = 0)
-  {
-    auto found = levelHyperEdgeMap.find(&hedge);
-    if(found != levelHyperEdgeMap.end())
-      found->second = std::max(found->second,level);
-    else
-      levelHyperEdgeMap.insert(std::make_pair(&hedge, level));
-    ++level;
-    for(size_t i = 0; i < hedge.getNodes().size(); ++i)
-    {
-      if( hedge.getNodes()[i].getProps().find("hidden") != hedge.getNodes()[i].getProps().end() )
-        continue;
-      auto found = levelNodeMap.find(&hedge.getNodes()[i]);
-      if(found != levelNodeMap.end())
-        found->second = std::max(found->second,level);
-      else
-        levelNodeMap.insert(std::make_pair(&hedge.getNodes()[i], level));
-      //has child hyperedges
-      for(auto it = hedge.getNodes()[i].getChildren().begin();
-          it != hedge.getNodes()[i].getChildren().end(); ++it)
-        checkLevels(levelNodeMap, levelHyperEdgeMap, *(*it), level + 1);
-    }
-  }
   template<class Vec2>
   float2 idToPos(Vec2 id, int downsample)
   {
@@ -2549,8 +2500,8 @@ void calcInterBlockRouteDummy(const float* routecost,
     //  std::cout << '\n';
     //}
 
-    std::map< LinkDescription::Node*, size_t > levelNodeMap;
-    std::map< LinkDescription::HyperEdge*, size_t > levelHyperEdgeMap;
+    LevelNodeMap levelNodeMap;
+    LevelHyperEdgeMap levelHyperEdgeMap;
 
     std::map< LinkDescription::Node*, size_t > nodeMemMap;
     std::map< LinkDescription::HyperEdge*, size_t > hyperEdgeMemMap;
@@ -2589,12 +2540,15 @@ void calcInterBlockRouteDummy(const float* routecost,
         levelHyperEdges.resize(it->second + 1);
       levelHyperEdges[it->second].push_back(it->first);
     }
-        
+
 
 
 
     //alloc Memory
-    cl_int bufferDim[2] = { _buffer_width, _buffer_height };
+    cl_int bufferDim[2] = {
+      static_cast<cl_int>(_buffer_width),
+      static_cast<cl_int>(_buffer_height)
+    };
     int rowelements = _blocks[0]*(_blockSize[0]-1)+1;
     int colelements = (_blocks[0]+1)*(_blockSize[1]-2);
 
@@ -2602,7 +2556,7 @@ void calcInterBlockRouteDummy(const float* routecost,
     cl::Buffer d_routingData(_cl_context, CL_MEM_READ_WRITE, sizeof(cl_float)*requiredElements*slices);
 
 
-    
+
     //debug
     //std::map<int,int> ids;
     //for(int2 bid(0,0); bid.y < _blocks[1]; ++bid.y)
@@ -2675,7 +2629,7 @@ void calcInterBlockRouteDummy(const float* routecost,
           routingPoints.push_back(target);
           routingIds.push_back(nodeMemMap.find(*nodeit)->second);
           startBlockRange.push_back(int4(std::max(0,target.x/(_blockSize[0]-1)-1),
-                                         std::max(0,target.y/(_blockSize[1]-1)-1),  
+                                         std::max(0,target.y/(_blockSize[1]-1)-1),
                                          std::min(_blocks[0]-1,divup(target.z,_blockSize[0]-1)+1),
                                          std::min(_blocks[1]-1,divup(target.w,_blockSize[1]-1)+1) ) );
         }
@@ -2689,8 +2643,13 @@ void calcInterBlockRouteDummy(const float* routecost,
               childIt != (*nodeit)->getChildren().end();
               ++childIt)
           {
-            thisSources.push_back(hyperEdgeMemMap.find(*childIt)->second);
+            auto found = hyperEdgeMemMap.find(childIt->get());
+             if(found == hyperEdgeMemMap.end())
+              continue;
+            thisSources.push_back(found->second);
           }
+          if(thisSources.size() == 0)
+            continue;
           routingSources.push_back(thisSources);
           routingIds.push_back(nodeMemMap.find(*nodeit)->second);
           startBlockRange.push_back(int4(0,0, _blocks[0], _blocks[1]));
@@ -2703,14 +2662,19 @@ void calcInterBlockRouteDummy(const float* routecost,
               childIt != (*hyperedgeit)->getNodes().end();
               ++childIt)
           {
-            thisSources.push_back(nodeMemMap.find(&(*childIt))->second);
+            auto found = nodeMemMap.find(childIt->get());
+            if(found == nodeMemMap.end())
+              continue;
+            thisSources.push_back(found->second);
           }
+          if(thisSources.size() == 0)
+            continue;
           routingSources.push_back(thisSources);
           routingIds.push_back(hyperEdgeMemMap.find(*hyperedgeit)->second);
           startBlockRange.push_back(int4(0,0, _blocks[0], _blocks[1]));
         }
-      
-        cl::Buffer d_routingIds(_cl_context, CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR, routingIds.size()*sizeof(cl_uint), &routingIds[0]);  
+
+        cl::Buffer d_routingIds(_cl_context, CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR, routingIds.size()*sizeof(cl_uint), &routingIds[0]);
 
         if(routingPoints.size() > 0)
         {
@@ -2718,7 +2682,7 @@ void calcInterBlockRouteDummy(const float* routecost,
           // init all nodes with geometry
           std::vector<cl_int4> startingBlocks;
           //determine requ. blocks
-          for(int i = 0; i < routingPoints.size(); ++i)
+          for(size_t i = 0; i < routingPoints.size(); ++i)
           {
             for(int y = routingPoints[i].y/(_blockSize[1]-1); y < divup(routingPoints[i].w,_blockSize[1]-1); ++y)
             for(int x = routingPoints[i].x/(_blockSize[0]-1); x < divup(routingPoints[i].z,_blockSize[0]-1); ++x)
@@ -2800,7 +2764,7 @@ void calcInterBlockRouteDummy(const float* routecost,
           cl::Buffer d_routingSourcesData(_cl_context, CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR, routingSourcesData.size()*sizeof(cl_uint), &routingSourcesData[0]);
           cl::Buffer d_routingSourcesOffset(_cl_context, CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR, routingSourcesOffset.size()*sizeof(cl_uint), &routingSourcesOffset[0]);
 
-        
+
           _cl_prepareIndividualRoutingParent_kernel.setArg(0, d_routingData);
           _cl_prepareIndividualRoutingParent_kernel.setArg(1, d_routingSourcesOffset);
           _cl_prepareIndividualRoutingParent_kernel.setArg(2, d_routingSourcesData);
@@ -2850,7 +2814,7 @@ void calcInterBlockRouteDummy(const float* routecost,
             }
           }
           cl::Buffer d_startBlockRange(_cl_context, CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR, startBlockRange.size()*sizeof(cl_int4), &startBlockRange[0]);
-        
+
 
           ////debug
           ////dummy call
@@ -2920,7 +2884,7 @@ void calcInterBlockRouteDummy(const float* routecost,
           _cl_routing_kernel.setArg(10, d_routeActive);
           _cl_routing_kernel.setArg(11, 2 * sizeof(cl_int), activeBufferSize);
           _cl_routing_kernel.setArg(12, boundaryElements * sizeof(cl_uint), NULL);
-          
+
           int localWorkerSize = divup(boundaryElements,_routingLocalWorkersWarpSize)*_routingLocalWorkersWarpSize;
 
           cl::Event routingRoutingEvent;
@@ -2945,10 +2909,10 @@ void calcInterBlockRouteDummy(const float* routecost,
 
         ++levelNodesit;
         ++levelHyperEdgesit;
-      }   
+      }
     }
 
-    //top down route reconstruction   
+    //top down route reconstruction
     {
 
       std::map<LinkDescription::HyperEdge*, int2> hyperEdgeCenters;
@@ -2975,7 +2939,11 @@ void calcInterBlockRouteDummy(const float* routecost,
             for(auto childIt = (*nodeit)->getChildren().begin();
               childIt != (*nodeit)->getChildren().end();
               ++childIt)
-              needMinSearchChildren.push_back(hyperEdgeMemMap.find(*childIt)->second);
+            {
+              auto found = hyperEdgeMemMap.find(childIt->get());
+              if(found != hyperEdgeMemMap.end())
+                needMinSearchChildren.push_back(hyperEdgeMemMap.find(childIt->get())->second);
+            }
           }
 
         //for hyperedges with no parents find the minimum
@@ -2989,16 +2957,20 @@ void calcInterBlockRouteDummy(const float* routecost,
             for(auto childIt = (*edgeit)->getNodes().begin();
               childIt != (*edgeit)->getNodes().end();
               ++childIt)
-              needMinSearchChildren.push_back(nodeMemMap.find(&(*childIt))->second);
+            {
+              auto found = nodeMemMap.find(childIt->get());
+              if(found != nodeMemMap.end())
+                needMinSearchChildren.push_back(found->second);
+            }
           }
         needMinSearchOffsets.push_back(needMinSearchChildren.size());
-              
+
         if(needMinSearchIds.size() > 0)
         {
           cl::Buffer d_needMinSearchIds(_cl_context, CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR, needMinSearchIds.size()*sizeof(uint), &needMinSearchIds[0]);
           cl::Buffer d_needMinSearchOffsets(_cl_context, CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR, needMinSearchOffsets.size()*sizeof(uint), &needMinSearchOffsets[0]);
           cl::Buffer d_needMinSearchChildren(_cl_context, CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR, needMinSearchChildren.size()*sizeof(uint), &needMinSearchChildren[0]);
-        
+
           std::vector<float> voteMin(needMinSearchIds.size(), 99999999.f);
           cl::Buffer d_voteMin(_cl_context, CL_MEM_READ_WRITE | CL_MEM_COPY_HOST_PTR, voteMin.size()*sizeof(float), &voteMin[0]);
 
@@ -3009,7 +2981,7 @@ void calcInterBlockRouteDummy(const float* routecost,
           _cl_voteMinimum_kernel.setArg(4, 2 * sizeof(cl_int), _blocks);
           _cl_voteMinimum_kernel.setArg(5, d_voteMin);
           _cl_voteMinimum_kernel.setArg(6, sizeof(float)*boundaryElements, NULL);
-          
+
           cl::Event routingVoteMinEvent;
           _cl_command_queue.enqueueNDRangeKernel
           (
@@ -3031,10 +3003,10 @@ void calcInterBlockRouteDummy(const float* routecost,
 
           int maxResults = 3*32+1;
           std::vector<uint> minSearchResults(needMinSearchIds.size()*maxResults, 0xFFFFFFFF);
-          for(int i = 0; i < needMinSearchIds.size(); ++i)
+          for(size_t i = 0; i < needMinSearchIds.size(); ++i)
             minSearchResults[i*maxResults] = 1;
           cl::Buffer d_minSearchResults(_cl_context, CL_MEM_READ_WRITE | CL_MEM_COPY_HOST_PTR, minSearchResults.size()*sizeof(uint), &minSearchResults[0]);
-          
+
           _cl_getMinimum_kernel.setArg(0, _cl_lastCostMap_buffer);
           _cl_getMinimum_kernel.setArg(1, d_routingData);
           _cl_getMinimum_kernel.setArg(2, d_needMinSearchIds);
@@ -3077,7 +3049,7 @@ void calcInterBlockRouteDummy(const float* routecost,
             auto resContainer = nodePositions.insert(std::pair<LinkDescription::Node*, int2>(*nit, int2(0,0))).first;
             for(++thisdatastart; thisdatastart < thisdataend; thisdatastart+=3)
             {
-              if( *thisdatastart == 0xFFFFFFFF) 
+              if( *thisdatastart == 0xFFFFFFFF)
                 break;
               if(min_cost > *reinterpret_cast<float*>(&(*thisdatastart)))
               {
@@ -3096,7 +3068,7 @@ void calcInterBlockRouteDummy(const float* routecost,
             auto resContainer = hyperEdgeCenters.insert(std::pair<LinkDescription::HyperEdge*, int2>(*eit, int2(0,0))).first;
             for(++thisdatastart; thisdatastart < thisdataend; thisdatastart+=3)
             {
-              if( *thisdatastart == 0xFFFFFFFF) 
+              if( *thisdatastart == 0xFFFFFFFF)
                 break;
               if(min_cost > *reinterpret_cast<float*>(&(*thisdatastart)))
               {
@@ -3106,10 +3078,10 @@ void calcInterBlockRouteDummy(const float* routecost,
               }
             }
             thisdatastart = thisdataend;
-          }        
+          }
         }
 
-        
+
 
 
 
@@ -3136,7 +3108,7 @@ void calcInterBlockRouteDummy(const float* routecost,
             {
               //TODO: remove this for implementing bundling
               needRouteConstructionInfo.push_back(uint4(found->second[0], found->second[1], 0,0));
-              needRouteConstructionElements.push_back(hyperEdgeMemMap.find(*childIt)->second);
+              needRouteConstructionElements.push_back(hyperEdgeMemMap.find(childIt->get())->second);
               needRouteConstructionEndElements.push_back(int4(-1,-1,-1,-1));
             }
           }
@@ -3156,15 +3128,15 @@ void calcInterBlockRouteDummy(const float* routecost,
             {
               //pushback startnodes
               int4 target;
-              if(!getTargetRect(childIt->getVertices(), target, downsample, _buffer_width, _buffer_height))
+              if(!getTargetRect((*childIt)->getVertices(), target, downsample, _buffer_width, _buffer_height))
                 continue;
               //TODO: remove this for implementing bundling
               needRouteConstructionInfo.push_back(uint4(found->second[0], found->second[1], 0,0));
               needRouteConstructionEndElements.push_back(target);
-              needRouteConstructionElements.push_back(nodeMemMap.find(&(*childIt))->second);
+              needRouteConstructionElements.push_back(nodeMemMap.find(childIt->get())->second);
             }
           }
-      
+
         needRouteConstructionInfo.push_back(uint4(0,0, needRouteConstructionElements.size(),0));
 
         if(needRouteConstructionElements.size() > 0)
@@ -3251,7 +3223,7 @@ void calcInterBlockRouteDummy(const float* routecost,
 
           std::vector<uint> blockRoutes(needRouteConstructionElements.size()*maxBlocksForRoute);
           _cl_command_queue.enqueueReadBuffer(d_blockRoutes, true, 0, blockRoutes.size()*sizeof(uint), &blockRoutes[0]);
-          
+
           ////debug
           //uint j = 0;
           //for(auto it = blockRoutes.begin(); it != blockRoutes.end(); it += maxBlocksForRoute, ++j)
@@ -3272,7 +3244,7 @@ void calcInterBlockRouteDummy(const float* routecost,
           //    << needRouteConstructionEndElements[j].y << " - " << needRouteConstructionEndElements[j].w << "]\n";
           //}
           ////
-          
+
           //compute requirements for launch
           uint maxBlocks = 0;
           uint sumBlocks = 0;
@@ -3316,10 +3288,10 @@ void calcInterBlockRouteDummy(const float* routecost,
           routingRouteConstructEvent.getProfilingInfo(CL_PROFILING_COMMAND_END, &end);
           routingRouteConstructEvent.getProfilingInfo(CL_PROFILING_COMMAND_START, &start);
           std::cout << " - routingRouteConstruct: " << (end-start)/1000000.0  << "ms\n";
-          
+
           std::vector<uint> innerBlockRoutes(innerBlockRoutesSize);
           _cl_command_queue.enqueueReadBuffer(d_innerBlockRoutes, true, 0, innerBlockRoutesSize*sizeof(uint), &innerBlockRoutes[0]);
-          
+
 
           std::vector< std::map<uint, uint> > innerBlockRoutesOffsets(needRouteConstructionElements.size());
           auto ibrIt = innerBlockRoutes.begin();
@@ -3341,7 +3313,7 @@ void calcInterBlockRouteDummy(const float* routecost,
           //ibrIt = innerBlockRoutes.begin()+1;
           //while(ibrIt != ibrEnd)
           //{
-          //  
+          //
           //  std::cout << "found route segment:\n";
           //  std::cout << "(edge: " << *ibrIt++;
           //  std::cout << ", offset: " << *ibrIt++;
@@ -3373,8 +3345,11 @@ void calcInterBlockRouteDummy(const float* routecost,
               ++childrenIt)
             {
               if((*childrenIt)->getHyperEdgeDescription() == 0)
-                (*childrenIt)->setHyperEdgeDescription(new LinkDescription::HyperEdgeDescriptionForkation());
-              LinkDescription::HyperEdgeDescriptionForkation *fork = (*childrenIt)->getHyperEdgeDescription();
+                (*childrenIt)->setHyperEdgeDescription
+                (
+                  std::make_shared<LinkDescription::HyperEdgeDescriptionForkation>()
+                );
+              LinkDescription::HyperEdgeDescriptionForkationPtr fork = (*childrenIt)->getHyperEdgeDescription();
               fork->incoming.trail.clear();
 
               float2 startpos = idToPos(nodePositions.find(*needRouteNodesIt)->second, downsample);
@@ -3386,7 +3361,7 @@ void calcInterBlockRouteDummy(const float* routecost,
                 addTrailFor(fork->incoming.trail, iBRBegin + edgesegmentit->second, downsample, _blockSize);
               ++edge;
               fork->position = fork->incoming.trail.back();
-              hyperEdgeCenters.insert(std::make_pair(*childrenIt, posToId(fork->incoming.trail.back(), downsample)));
+              hyperEdgeCenters.insert(std::make_pair(childrenIt->get(), posToId(fork->incoming.trail.back(), downsample)));
             }
           }
           for( auto needRouteEdgesIt = needRouteConstructionEdges.begin();
@@ -3395,8 +3370,11 @@ void calcInterBlockRouteDummy(const float* routecost,
           {
             auto &hyperedgeChildren((*needRouteEdgesIt)->getNodes());
             if((*needRouteEdgesIt)->getHyperEdgeDescription() == 0)
-                (*needRouteEdgesIt)->setHyperEdgeDescription(new LinkDescription::HyperEdgeDescriptionForkation());
-            LinkDescription::HyperEdgeDescriptionForkation *fork = (*needRouteEdgesIt)->getHyperEdgeDescription();
+                (*needRouteEdgesIt)->setHyperEdgeDescription
+                (
+                  std::make_shared<LinkDescription::HyperEdgeDescriptionForkation>()
+                );
+            LinkDescription::HyperEdgeDescriptionForkationPtr fork = (*needRouteEdgesIt)->getHyperEdgeDescription();
             fork->position = idToPos(hyperEdgeCenters.find((*needRouteEdgesIt))->second, downsample);
 
             for(auto childrenIt = hyperedgeChildren.begin();
@@ -3405,7 +3383,7 @@ void calcInterBlockRouteDummy(const float* routecost,
             {
               fork->outgoing.push_back(LinkDescription::HyperEdgeDescriptionSegment());
               LinkDescription::HyperEdgeDescriptionSegment& segment(fork->outgoing.back());
-              segment.nodes.push_back(&(*childrenIt));
+              segment.nodes.push_back(*childrenIt);
               segment.trail.push_back(fork->position);
 
               auto iBRBegin = innerBlockRoutes.begin();
@@ -3414,13 +3392,13 @@ void calcInterBlockRouteDummy(const float* routecost,
                 ++edgesegmentit)
                 addTrailFor(segment.trail, iBRBegin + edgesegmentit->second, downsample, _blockSize);
               ++edge;
-              nodePositions.insert(std::make_pair(&(*childrenIt), posToId(segment.trail.back(), downsample)));
+              nodePositions.insert(std::make_pair(childrenIt->get(), posToId(segment.trail.back(), downsample)));
             }
           }
         }
       }
     }
-    
+
   }
 
 }

@@ -41,7 +41,7 @@ BOOL CALLBACK qxt_EnumWindowsProc(HWND hwnd, LPARAM lParam)
 {
     Q_UNUSED(lParam);
     if (::IsWindowVisible(hwnd))
-        qxt_Windows += hwnd;
+		qxt_Windows.push_front(hwnd);
     return true;
 }
 

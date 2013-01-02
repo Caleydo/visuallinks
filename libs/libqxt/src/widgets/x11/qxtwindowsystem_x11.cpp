@@ -96,13 +96,40 @@ WindowList QxtWindowSystem::windows()
     return qxt_getWindows(net_clients);
 }
 
+static Atom atomNetActive()
+{
+  static Atom net_active = 0;
+  if (!net_active)
+      net_active = XInternAtom(QX11Info::display(), "_NET_ACTIVE_WINDOW", True);
+  return net_active;
+}
+
 WId QxtWindowSystem::activeWindow()
 {
-    static Atom net_active = 0;
-    if (!net_active)
-        net_active = XInternAtom(QX11Info::display(), "_NET_ACTIVE_WINDOW", True);
+    return qxt_getWindows(atomNetActive()).value(0);
+}
 
-    return qxt_getWindows(net_active).value(0);
+int QxtWindowSystem::activeWindow(WId window)
+{
+    XEvent ev;
+    memset(&ev, 0, sizeof(ev));
+    ev.type = ClientMessage;
+    ev.xclient.display = QX11Info::display();
+    ev.xclient.window = window;
+    ev.xclient.message_type = atomNetActive();
+    ev.xclient.format = 32;
+    ev.xclient.data.l[0] = 2L; /* 2 == Message from a window pager */
+    ev.xclient.data.l[1] = CurrentTime;
+
+    XWindowAttributes attr;
+    XGetWindowAttributes(QX11Info::display(), window, &attr);
+    return XSendEvent(
+      QX11Info::display(),
+      attr.screen->root,
+      False,
+      SubstructureNotifyMask | SubstructureRedirectMask,
+      &ev
+    ) == 0;
 }
 
 WId QxtWindowSystem::findWindow(const QString& title)

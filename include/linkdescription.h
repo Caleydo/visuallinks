@@ -4,156 +4,208 @@
 #include "color.h"
 #include "datatypes.h"
 #include "float2.hpp"
+#include "string_utils.h"
 
 #include <list>
+#include <map>
 #include <vector>
+#include <memory>
 
 namespace LinksRouting
 {
 namespace LinkDescription
 {
   class HyperEdge;
+  typedef std::shared_ptr<HyperEdge> HyperEdgePtr;
   struct HyperEdgeDescriptionSegment;
   struct HyperEdgeDescriptionForkation;
+  typedef std::shared_ptr<HyperEdgeDescriptionForkation>
+          HyperEdgeDescriptionForkationPtr;
+  typedef std::shared_ptr<const HyperEdgeDescriptionForkation>
+          HyperEdgeDescriptionForkationConstPtr;
 
+  typedef std::vector<float2> points_t;
   typedef std::map<std::string, std::string> props_t;
+  typedef std::vector<HyperEdgePtr> hedges_t;
 
-  class Node
+  class PropertyElement
+  {
+    public:
+      props_t& getProps() { return _props; }
+      const props_t& getProps() const { return _props; }
+
+      /**
+       * Set a property
+       *
+       * @param key     Property key
+       * @param val     New value
+       */
+      template<typename T>
+      void set(const std::string& key, const T& val)
+      {
+//#if defined(WIN32) || defined(_WIN32)
+        // Use stringstream because visual studio seems do not have the proper
+        // std::to_string overloads.
+		std::stringstream strm;
+		strm << val;
+		_props[ key ] = strm.str();
+//#else
+//		_props[ key ] = std::to_string(val);
+//#endif
+      }
+
+//      void set(const std::string& key, const std::string& val)
+//      {
+//        _props[ key ] = val;
+//      }
+//
+//      void set(const std::string& key, const char* val)
+//      {
+//        _props[ key ] = val;
+//      }
+
+      /**
+       * Get a property
+       *
+       * @param key     Property key
+       * @param def_val Default value if property doesn't exist
+       * @return
+       */
+      template<typename T>
+      T get(const std::string& key, const T& def_val = T()) const
+      {
+        props_t::const_iterator it = _props.find(key);
+        if( it == _props.end() )
+          return def_val;
+
+        return convertFromString(it->second, def_val);
+      }
+
+    protected:
+      props_t   _props;
+
+      PropertyElement( const props_t& props = props_t() ):
+        _props( props )
+      {}
+  };
+
+  class Node:
+    public PropertyElement
   {
     friend class HyperEdge;
     public:
 
-      explicit Node( const std::vector<float2>& points,
-                     const props_t& props = props_t() ):
-        _points( points ),
-        _props( props ),
-        _parent(0)
-      {}
+      Node();
+      explicit Node( const points_t& points,
+                     const props_t& props = props_t() );
+      Node( const points_t& points,
+            const points_t& link_points,
+            const props_t& props = props_t() );
+      Node( const points_t& points,
+            const points_t& link_points,
+            const points_t& link_points_children,
+            const props_t& props = props_t() );
+      explicit Node(HyperEdgePtr hedge);
 
-      const std::vector<float2>& getVertices() const { return _points; }
-      std::vector<float2>& getVertices() { return _points; }
-      const props_t& getProps() const { return _props; }
+      points_t& getVertices();
+      const points_t& getVertices() const;
 
+      points_t& getLinkPoints();
+      const points_t& getLinkPoints() const;
 
-      HyperEdge* getParent()
-      {
-        return _parent;
-      }
-      const HyperEdge* getParent() const
-      {
-        return _parent;
-      }
-      const std::vector<HyperEdge*>& getChildren() const
-      {
-        return _children;
-      }
-      std::vector<HyperEdge*>& getChildren()
-      {
-        return _children;
-      }
-      inline void addChildren(std::vector<HyperEdge*>& edges);
+      points_t& getLinkPointsChildren();
+      const points_t& getLinkPointsChildren() const;
 
+      float2 getCenter() const;
+      Rect getBoundingBox() const;
 
-//        virtual float positionDistancePenalty() const = 0;
-//        virtual bool hasFixedColor(Color &color) const = 0;
-//
-//        virtual void setComputedPosition(const float2& pos) = 0;
-//        virtual float2 getComputedPosition() const = 0;
+      HyperEdge* getParent();
+      const HyperEdge* getParent() const;
+
+      const hedges_t& getChildren() const;
+      hedges_t& getChildren();
+
+      void addChildren(const hedges_t& edges);
+      void addChild(const HyperEdgePtr& hedge);
 
     private:
 
-      std::vector<float2>  _points;
-      std::map<std::string, std::string> _props;
+      points_t _points;
+      points_t _link_points;
+      points_t _link_points_children;
       HyperEdge* _parent;
-      std::vector<HyperEdge*> _children;
+      hedges_t _children;
   };
 
-  class HyperEdge
+  typedef std::shared_ptr<Node> NodePtr;
+  typedef std::list<NodePtr> nodes_t;
+
+  class HyperEdge:
+    public PropertyElement
   {
     friend class Node;
     public:
 
-      explicit HyperEdge( const std::vector<Node>& nodes,
-                          const props_t& props = props_t() ):
-        _parent(0),
-        _nodes( nodes ),
-        _props( props ),
-        _revision( 0 ),
-        _fork( 0 )
-      {}
+      HyperEdge();
+      explicit HyperEdge( const nodes_t& nodes,
+                          const props_t& props = props_t() );
 
-      const std::vector<Node>& getNodes() const { return _nodes; }
-      std::vector<Node>& getNodes()  { return _nodes; }
-      const props_t& getProps() const { return _props; }
-      uint32_t getRevision() const { return _revision; }
+      nodes_t& getNodes();
+      const nodes_t& getNodes() const;
 
-      void addNodes( std::vector<Node>& nodes )
-      {
-        if( nodes.empty() )
-          return;
-        for(auto it = nodes.begin(); it != nodes.end(); ++it)
-          it->_parent = this;
-        _nodes.insert(_nodes.end(), nodes.begin(), nodes.end());
-        ++_revision;
-      }
+      void setCenter(const float2& center);
+      const float2& getCenter() const;
 
-      const Node* getParent() const
-      {
-        return _parent;
-      }
+      uint32_t getRevision() const;
 
-//      virtual bool hasFixedColor(Color &color) const = 0;
-//      virtual const std::vector<Node*>& getConnections() const = 0;
-//
-        void setHyperEdgeDescription(HyperEdgeDescriptionForkation* desc)
-        {
-          _fork = desc;
-        }
-        HyperEdgeDescriptionForkation* getHyperEdgeDescription()
-        {
-          return _fork;
-        }
-        const HyperEdgeDescriptionForkation* getHyperEdgeDescription() const
-        {
-          return _fork;
-        }
+      void addNodes(const nodes_t& nodes);
+      void addNode(const NodePtr& node);
+      void resetNodeParents();
 
-        inline void removeRoutingInformation();
+      const Node* getParent() const;
+
+      void setHyperEdgeDescription(HyperEdgeDescriptionForkationPtr desc);
+      HyperEdgeDescriptionForkationPtr getHyperEdgeDescription();
+      HyperEdgeDescriptionForkationConstPtr getHyperEdgeDescription() const;
+
+      void removeRoutingInformation();
 
     private:
 
+      HyperEdge(const HyperEdge&) /* = delete */;
+      HyperEdge& operator=(const HyperEdge&) /* = delete */;
+
       Node* _parent;
-      std::vector<Node> _nodes;
-      props_t _props;
+      nodes_t _nodes;
+      float2 _center;     ///!< Estimated center
       uint32_t _revision; ///!< Track modifications
-      HyperEdgeDescriptionForkation *_fork;
+      HyperEdgeDescriptionForkationPtr _fork;
   };
 
 
   struct HyperEdgeDescriptionSegment
   {
-      std::vector<const Node*> nodes;
-      std::vector<float2> trail;
+      nodes_t nodes;
+      points_t trail;
   };
 
   struct HyperEdgeDescriptionForkation
   {
-      HyperEdgeDescriptionForkation()
-      {
-      }
+    HyperEdgeDescriptionForkation()
+    {
+    }
 
-      float2 position;
+    float2 position;
 
-      HyperEdgeDescriptionSegment incoming;
-      std::list<HyperEdgeDescriptionSegment> outgoing;
+    HyperEdgeDescriptionSegment incoming;
+    std::list<HyperEdgeDescriptionSegment> outgoing;
   };
-
 
   struct LinkDescription
   {
     LinkDescription( const std::string& id,
                      uint32_t stamp,
-                     const HyperEdge& link,
+                     const HyperEdgePtr& link,
                      uint32_t color_id ):
       _id( id ),
       _stamp( stamp ),
@@ -163,25 +215,11 @@ namespace LinkDescription
 
     const std::string   _id;
     uint32_t            _stamp;
-    HyperEdge           _link;
+    HyperEdgePtr        _link;
     uint32_t            _color_id;
   };
 
   typedef std::list<LinkDescription> LinkList;
-
-
-  void Node::addChildren(std::vector<HyperEdge*>& edges)
-  {
-    for(auto it = edges.begin(); it != edges.end(); ++it)
-      (*it)->_parent = this;
-    _children.insert(_children.end(), edges.begin(), edges.end());
-  }
-
-  void HyperEdge::removeRoutingInformation()
-  {
-    if(_fork) delete _fork;
-    _fork = 0;
-  }
 
 } // namespace LinkDescription
 } // namespace LinksRouting

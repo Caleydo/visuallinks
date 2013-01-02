@@ -22,34 +22,12 @@ namespace qtfullscreensystem
   {
 	_gl_widget.show();
 	_gl_widget.startRender();
-
-    //connect(&_timer, SIGNAL(timeout()), this, SLOT(timeOut()));
-    //_timer.start(100);
   }
 
   //----------------------------------------------------------------------------
   Application::~Application()
   {
 
-  }
-
-  //----------------------------------------------------------------------------
-  void Application::timeOut()
-  {
-    static int capture = 2;
-
-    switch( capture )
-    {
-      case 0:
-        _gl_widget.captureScreen();
-        capture = 3;
-        break;
-      case 2:
-        _gl_widget.updateGL();
-        break;
-    }
-
-    --capture;
   }
 
 } // namespace qtfullscreensystem

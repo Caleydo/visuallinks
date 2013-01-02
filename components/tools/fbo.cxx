@@ -317,21 +317,21 @@ namespace gl
     glGetIntegerv(GL_FRAMEBUFFER_BINDING, &last);
     glBindFramebuffer(GL_FRAMEBUFFER, fbo);
     //bind all
-    if( attachment == -1 )
+    if( attachment < 0 )
     {
       for( size_t i = 0; i < colorBuffers.size(); ++i )
         glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0 + i,
                                GL_TEXTURE_2D, colorBuffers[i], 0);
       return;
     }
-    if( attachment >= colorBuffers.size() )
+    else if( static_cast<size_t>(attachment) >= colorBuffers.size() )
     {
       std::cerr
           << "dktSwapColorAttachment - color attachment id out of range, using attachment 0"
           << std::endl;
       attachment = 0;
     }
-    for( int i = 0; i < colorBuffers.size(); ++i )
+    for( size_t i = 0; i < colorBuffers.size(); ++i )
       glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0 + i,
                              GL_TEXTURE_2D, 0, 0);
     glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D,
@@ -349,12 +349,12 @@ namespace gl
     GLint last;
     glGetIntegerv(GL_FRAMEBUFFER_BINDING, &last);
     glBindFramebuffer(GL_FRAMEBUFFER, fbo);
-    for( int i = 0; i < colorBuffers.size(); ++i )
+    for( size_t i = 0; i < colorBuffers.size(); ++i )
       glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0 + i,
                              GL_TEXTURE_2D, 0, 0);
-    for( int i = 0; i < attachments.size(); ++i )
+    for( size_t i = 0; i < attachments.size(); ++i )
     {
-      if( attachments[i] < 0 || attachments[i] >= colorBuffers.size() )
+      if( attachments[i] < 0 || static_cast<size_t>(attachments[i]) >= colorBuffers.size() )
       {
         std::cerr << "dktSwapColorAttachment - color attachment id ("
                   << attachments[i] << ") out of range, skipping" << std::endl;
@@ -389,7 +389,7 @@ namespace gl
       glBindTexture(target, 0);
     else
     {
-      if( i >= colorBuffers.size() )
+      if( static_cast<size_t>(i) >= colorBuffers.size() )
       {
         std::cerr
             << "dktDrawFramebufferX - texture id out of range, using texture 0"

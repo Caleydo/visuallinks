@@ -2,6 +2,7 @@
 #define LR_XMLCONFIG
 
 #include <list>
+#include <memory>
 #include <string>
 #include <sstream>
 #include <iomanip>
@@ -13,145 +14,132 @@
 
 namespace LinksRouting
 {
-  class XmlConfig : public Config
+  class XmlConfig:
+    public Config
   {
-    TiXmlNode* parseIdentifier(const std::string& identifier, size_t pos, TiXmlNode* container, std::string& valname, bool create)
-    {
-      size_t p = identifier.find_first_of(':', pos);
-      if(p == std::string::npos)
-      {
-        valname = identifier.substr(pos);
-        return container;
-      }
-      std::string containername = identifier.substr(pos, p-pos);
-      TiXmlElement * child = container->FirstChild(containername)->ToElement();
-      if(!child && !create)
-        return 0;
-      else if(!child)
-      {
-        child = new TiXmlElement( containername );
-        container->LinkEndChild(child);
-      }
-      return parseIdentifier(identifier, p+1, child, valname, create);
-    }
-    TiXmlNode* parseIdentifier(const std::string& identifier, std::string& valname, bool create = false)
-    {
-      return parseIdentifier(identifier, 0, config, valname, create);
-    }
+    static int checkTypeMatch( const std::string& identifier,
+                               TiXmlElement* arg,
+                               const std::string& type );
 
-    template<class Type>
+    template<class T>
     static int checkTypeMatch(const std::string& identifier, TiXmlElement* arg)
     {
-        const std::string * typestr;
-        if(!(typestr = arg->Attribute(std::string("type"))))
-        {
-          std::cout << "LinksSystem XmlConfig Warning: no type specified for \"" << identifier << "\"" << std::endl;
-          return 1;
-        }
-        else if(typestr->compare(getTypeString<Type>()) != 0)
-        {
-          std::cout << "LinksSystem XmlConfig Warning: types do not match for \"" << identifier << "\":" << std::endl;
-          std::cout << "  " << typestr << " != " << getTypeString<Type>() << std::endl;
-          return 0;
-        }
-        return 2;
+        return checkTypeMatch(identifier, arg, getDataTypeString<T>());
     }
 
-    template<class Type>
-    inline static std::string getTypeString();
 
     template<class Type>
-    bool setParameter(const std::string& identifier, Type val)
+    bool setParameterHelper(const std::string& identifier, const Type val)
     {
-      if(!isInit)
-        return false;
-      //resolve parts of identifier (Renderer:FeatureX) and find in config
-      std::string valname;
-      TiXmlNode* container = parseIdentifier(identifier, valname, true);
-      
-      //check if exists
-      TiXmlElement* arg = container->FirstChild(valname)->ToElement();
       std::stringstream argstr;
       argstr.precision(64);
       argstr << val;
-      if(arg)
-      {
-        //check if it matches
-        int res = checkTypeMatch<Type>(identifier, arg);
-        if(res == 1)
-          arg->SetAttribute("type", getTypeString<Type>());
-        else if(res == 0)
-          return false;
-        arg->SetAttribute("val", argstr.str());
-      }
-      else
-      {
-        //create new one
-        arg = new TiXmlElement( valname );
-        container->LinkEndChild(arg);
-        arg->SetAttribute("type", getTypeString<Type>());
-        arg->SetAttribute("val", argstr.str());
-      }
-      return true;
+
+      return setParameter(identifier, argstr.str(), getDataTypeString<Type>());
     }
-    template<class Type>
-    bool getParameter(const std::string& identifier, Type& val) const
+
+    template<class T>
+    bool getParameter(const std::string& identifier, T& val) const
     {
-      if(!isInit)
+      if( !_config )
         return false;
 
       //resolve parts of identifier (Renderer:FeatureX) and find in config
       std::string valname;
       TiXmlNode* container = const_cast<XmlConfig*>(this)->parseIdentifier(identifier, valname, false);
-      
+      if( !container )
+        return false;
+
       //check if exists
-      TiXmlElement* arg = container->FirstChild(valname)->ToElement();
-      if(!arg)
+      TiXmlNode* arg_node = container->FirstChild(valname);
+      if( !arg_node )
         return false;
+      TiXmlElement* arg = arg_node->ToElement();
+
       //check if types match
-      if(checkTypeMatch<Type>(identifier, arg) < 2)
+      if(checkTypeMatch<T>(identifier, arg) < 2)
         return false;
-      const std::string* valstr = arg->Attribute(valname);
-      std::stringstream argvalstr(*valstr);
+
+      const char* valstr = arg->Attribute("val");
+      if( !valstr )
+        return false;
+
+      std::stringstream argvalstr(valstr);
       argvalstr >> val;
+
       return true;
     }
 
-
     struct CompInfo
     {
-      Component* comp;
+      Configurable* comp;
       unsigned int is;
-      CompInfo(Component* c, unsigned int types) : comp(c), is(types) { }
+      CompInfo(Configurable* c, unsigned int types):
+        comp(c),
+        is(types)
+      {}
+
+      bool match(const std::string& name, Type type)
+      {
+        if(type != None && (is & type) != 0)
+          //type based
+          return true;
+        else if( comp->name() == name )
+          //string based
+          return true;
+
+        return false;
+      }
     };
     typedef std::list<CompInfo> CompInfoList;
 
-    bool isInit;
-    TiXmlDocument *doc;
-    TiXmlNode *config;
+    typedef std::unique_ptr<TiXmlDocument> DocumentPtr;
+    typedef TiXmlNode* NodePtr;
+
+    DocumentPtr _doc;
+    NodePtr     _config;
+
+    bool _dirty_read,
+         _dirty_write;
+
     CompInfoList compInfoList;
-    const std::string myname;
-    
+
+    bool saveFile() const;
+    bool loadFile();
+
+    NodePtr parseIdentifier( const std::string& identifier,
+                             size_t pos,
+                             NodePtr container,
+                             std::string& valname,
+                             bool create );
+    NodePtr parseIdentifier( const std::string& identifier,
+                             std::string& valname,
+                             bool create = false );
+    /**
+     * @param identifier    Type or name of component
+     */
+    Configurable* findComponent(const std::string& identifier);
+
   public:
     XmlConfig();
 
-    bool initFrom(const std::string& config);
-    void attach(Component* component, unsigned int type);
+    virtual bool initFrom(const std::string& config);
+    virtual void attach(Configurable* component, unsigned int type);
 
     bool startup(Core* core, unsigned int type);
     void init();
     void shutdown();
-    bool supports(Type type) const;
-    const std::string& name() const
-    {
-      return myname;
-    }
+    bool supports(unsigned int type) const;
 
-    void process(Type type);
+    void process(unsigned int type);
+
+    virtual bool setParameter( const std::string& key,
+                               const std::string& val,
+                               const std::string& type );
 
     bool setFlag(const std::string& name, bool val)
     {
-      return setParameter(name, val);
+      return setParameterHelper(name, val);
     }
     bool getFlag(const std::string& name, bool& val) const
     {
@@ -159,7 +147,7 @@ namespace LinksRouting
     }
     bool setInteger(const std::string& name, int val)
     {
-      return setParameter(name, val);
+      return setParameterHelper(name, val);
     }
     bool getInteger(const std::string& name, int& val) const
     {
@@ -167,7 +155,7 @@ namespace LinksRouting
     }
     bool setFloat(const std::string& name, double val)
     {
-      return setParameter(name, val);
+      return setParameterHelper(name, val);
     }
     bool getFloat(const std::string& name, double& val) const
     {
@@ -175,7 +163,7 @@ namespace LinksRouting
     }
     bool setString(const std::string& name, const std::string& val)
     {
-      return setParameter(name, val);
+      return setParameterHelper(name, val);
     }
     bool getString(const std::string& name, std::string& val) const
     {
@@ -183,28 +171,6 @@ namespace LinksRouting
     }
   };
 
-  template<>
-  inline std::string XmlConfig::getTypeString<bool>()
-  {
-    return "Bool";
-  }
-  template<>
-  inline std::string XmlConfig::getTypeString<int>()
-  {
-    return "Integer";
-  }
-  template<>
-  inline std::string XmlConfig::getTypeString<double>()
-  {
-    return "Float";
-  }
-  template<>
-  inline std::string XmlConfig::getTypeString<std::string>()
-  {
-    return "String";
-  }
-
-
 }
 
-#endif
+#endif /* LR_XMLCONFIG */

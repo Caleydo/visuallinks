@@ -8,7 +8,7 @@ namespace LinksRouting
 
   //----------------------------------------------------------------------------
   GlCostAnalysis::GlCostAnalysis():
-    myname("GLCostAnalysis")
+    Configurable("GLCostAnalysis")
   {
     registerArg("DownsampleSaliency", _downsampleSaliency = 2);
     registerArg("DownsampleCost", _downsampleCost = 4);
@@ -46,7 +46,7 @@ namespace LinksRouting
   }
 
   //----------------------------------------------------------------------------
-  void GlCostAnalysis::initGL()
+  bool GlCostAnalysis::initGL()
   {
     size_t widthSaliency = _subscribe_desktop->_data->width / _downsampleSaliency,
            heightSaliency = _subscribe_desktop->_data->height / _downsampleSaliency;
@@ -71,6 +71,8 @@ namespace LinksRouting
     _feature_map_shader = _shader_manager.loadfromFile(0, "featureMap.glsl");
     _saliency_map_shader = _shader_manager.loadfromFile(0, "saliencyFilter.glsl");
     _downsample_shader = _shader_manager.loadfromFile(0, "downSample.glsl");
+    
+    return true;
   }
 
   void GlCostAnalysis::shutdown()
@@ -78,7 +80,8 @@ namespace LinksRouting
 
   }
 
-  void GlCostAnalysis::process(Type type)
+  //----------------------------------------------------------------------------
+  void GlCostAnalysis::process(unsigned int type)
   {
     _slot_costmap->setValid(false);
 

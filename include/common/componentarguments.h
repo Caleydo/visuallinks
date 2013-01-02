@@ -1,13 +1,14 @@
 #ifndef LR_COMPONENTARGUMENTS
 #define LR_COMPONENTARGUMENTS
-#include <component.h>
+
+#include <configurable.h>
 #include <common/hashedmap.h>
-#include <string>
 
 namespace LinksRouting
 {
 
-  class ComponentArguments : public virtual Component
+  class ComponentArguments:
+    public virtual Configurable
   {
   protected:
     typedef void(*ComponentArgumentChangedCallbackBool)(const std::string& name, bool& val, void* arg);
@@ -55,6 +56,10 @@ namespace LinksRouting
         return 0;
     }
   protected:
+
+    ComponentArguments():
+      Configurable("ComponentArguments")
+    {}
 
     bool registerArg(const std::string& name, bool& val, ComponentArgumentChangedCallbackBool changeNotify = 0, void* cbArgument = 0)
     {

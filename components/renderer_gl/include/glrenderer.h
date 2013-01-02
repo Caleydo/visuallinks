@@ -8,13 +8,17 @@
 #include "glsl/glsl.h"
 #include "slots.hpp"
 #include "slotdata/image.hpp"
+#include "slotdata/text_popup.hpp"
+
+#include <queue>
+#include <set>
 
 namespace LinksRouting
 {
-  class GlRenderer: public Renderer, public ComponentArguments
+  class GlRenderer:
+    public Renderer,
+    public ComponentArguments
   {
-    protected:
-      std::string myname;
     public:
 
       GlRenderer();
@@ -25,52 +29,24 @@ namespace LinksRouting
 
       bool startup(Core* core, unsigned int type);
       void init();
-      void initGL();
+      bool initGL();
       void shutdown();
-      bool supports(Type type) const
+      bool supports(unsigned int type) const
       {
-        return type == Component::Renderer;
-      }
-      const std::string& name() const
-      {
-        return myname;
+        return (type & Component::Renderer);
       }
 
-      void process(Type type);
+      void process(unsigned int type);
 
       virtual bool setString(const std::string& name, const std::string& val);
 
     protected:
 
-      bool  _enabled;
-
-      struct Color
-      {
-        float r, g, b;
-
-        Color(){};
-        Color(int r, int g, int b):
-          r(r/256.f),
-          g(g/256.f),
-          b(b/256.f)
-        {}
-        operator const float*()
-        {
-          return &r;
-        }
-        Color operator*(float rhs) const
-        {
-          Color ret;
-          ret.r = rhs * r;
-          ret.g = rhs * g;
-          ret.b = rhs * b;
-          return ret;
-        }
-      };
       std::vector<Color> _colors;
 
       /** Subscribe to the routed links */
       slot_t<LinkDescription::LinkList>::type _subscribe_links;
+      slot_t<LinksRouting::SlotType::TextPopup>::type _subscribe_popups;
 
       /** Publish the links rendered to fbo */
       slot_t<SlotType::Image>::type _slot_links;
@@ -79,10 +55,29 @@ namespace LinksRouting
       gl::FBO   _links_fbo;
 
       cwc::glShaderManager  _shader_manager;
-      cwc::glShader*    _blur_x_shader;
-      cwc::glShader*    _blur_y_shader;
+      cwc::glShader*        _blur_x_shader;
+      cwc::glShader*        _blur_y_shader;
 
-      void renderLinks(const LinkDescription::LinkList& links);
+      typedef std::queue<const LinkDescription::HyperEdge*> HyperEdgeQueue;
+      typedef std::set<const LinkDescription::HyperEdge*> HyperEdgeSet;
+
+      Color getCurrentColor() const;
+
+      void blur(gl::FBO& fbo);
+
+      bool renderLinks( const LinkDescription::LinkList& links,
+                        int pass = 0 );
+      bool renderNodes( const LinkDescription::nodes_t& nodes,
+                        float line_width = 3,
+                        HyperEdgeQueue* hedges_open = NULL,
+                        HyperEdgeSet* hedges_done = NULL,
+                        bool render_all = false,
+                        int pass = 0 );
+      bool renderRect( const Rect& rect,
+                       size_t margin = 2,
+                       //GLuint tex = 0,
+                       const Color& fill = Color(1, 1, 1, 1),
+                       const Color& border = Color(0.3, 0.3, 0.3, 0.8) );
   };
 }
 
