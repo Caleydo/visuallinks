@@ -76,7 +76,8 @@ namespace LinksRouting
         WId     wid;
         QRect   region;
         QRect   scroll_region;
-        Partitions           partitions;
+        Partitions           partitions_src,
+                             partitions_dest;
         HierarchicTileMapPtr tile_map;
       };
       typedef std::map<QWsSocket*, ClientInfo> ClientInfos;

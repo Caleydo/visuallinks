@@ -168,7 +168,10 @@ namespace LinksRouting
 
   //----------------------------------------------------------------------------
   GlRenderer::GlRenderer():
-    Configurable("GLRenderer")
+    Configurable("GLRenderer"),
+    _partitions_src(0),
+    _partitions_dest(0),
+    _offset_y(0)
   {
 
   }
@@ -248,6 +251,10 @@ namespace LinksRouting
     if( _subscribe_links->_data->empty() )
       return _links_fbo.unbind();
 
+    _partitions_src = 0;
+    _partitions_dest = 0;
+    _offset_y = 0;
+
     bool rendered_anything = false;
     for(int pass = 0; pass <= 1; ++pass)
       rendered_anything |= renderLinks(*_subscribe_links->_data, pass);
@@ -262,6 +269,10 @@ namespace LinksRouting
       {
         if( !popup->region.visible )
           continue;
+
+        _partitions_src = 0;
+        _partitions_dest = 0;
+        _offset_y = 0;
 
         renderRect(popup->region.region, popup->region.border);
         rendered_anything = true;
@@ -402,6 +413,13 @@ namespace LinksRouting
         const float w = 4.f;
         const float2 vp_pos = popup->hover_region.offset + 0.5f * float2(w, w);
         const float2 vp_dim = popup->hover_region.dim - 4.f * float2(w, w);
+
+        if( tile_map )
+        {
+          _partitions_src = &tile_map->partitions_src;
+          _partitions_dest = &tile_map->partitions_dest;
+          _offset_y = offset.y;
+        }
 
         glLineWidth(w);
         glBegin(GL_LINE_LOOP);
@@ -708,6 +726,31 @@ namespace LinksRouting
 //    }
 
     return true;
+  }
+
+  void GlRenderer::glVertex2f(float x, float y)
+  {
+    if( _partitions_dest && _partitions_src )
+    {
+      float last_src = 0,
+            last_dest = 0;
+      for( auto src = _partitions_src->begin(),
+                dest = _partitions_dest->begin();
+                src != _partitions_src->end() &&
+                dest != _partitions_dest->end();
+              ++src,
+              ++dest )
+      {
+        if( y - _offset_y <= src->y )
+          y -= src->x - dest->x;
+        else
+          continue;
+        break;
+          //y = (y - last_dest);
+      }
+    }
+
+    ::glVertex2f(x, y);
   }
 
 }

@@ -200,6 +200,20 @@ float HierarchicTileMap::getLayerScale(size_t level) const
 }
 
 //------------------------------------------------------------------------------
+void HierarchicTileMap::setWidth(size_t width)
+{
+  _layers.clear();
+  _width = width;
+}
+
+//------------------------------------------------------------------------------
+void HierarchicTileMap::setHeight(size_t height)
+{
+  _layers.clear();
+  _height = height;
+}
+
+//------------------------------------------------------------------------------
 Layer& HierarchicTileMap::getLayer(size_t level)
 {
   if( level >= _layers.size() )

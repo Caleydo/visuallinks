@@ -1372,26 +1372,13 @@ namespace LinksRouting
     LinkDescription::HyperEdgePtr hedge =
       std::make_shared<LinkDescription::HyperEdge>(nodes);
     hedge->set("client_wid", WIdtoStr(client_info.wid));
+
+    hedge->set("partitions_src", to_string(client_info.tile_map->partitions_src));
+    hedge->set("partitions_dest", to_string(client_info.tile_map->partitions_dest));
+    client_info.partitions_src = client_info.tile_map->partitions_src;
+    client_info.partitions_dest = client_info.tile_map->partitions_dest;
+
     updateHedge(windows, hedge.get());
-
-    std::cout << "avg_height = " << avg_height << std::endl;
-
-    float offset = client_info.scroll_region.top() - top_left.y;
-
-    PartitionHelper part;
-    for(auto node = nodes.begin(); node != nodes.end(); ++node)
-    {
-      const Rect& bb = (*node)->getBoundingBox();
-      part.add( float2( offset + bb.t() - 3 * avg_height,
-                        offset + bb.b() + 3 * avg_height ) );
-    }
-    part.clip(0, client_info.scroll_region.height(), 2 * avg_height);
-    Partitions partitions = part.getPartitions();
-
-    hedge->set("partitions", to_string(partitions));
-    std::cout << to_string(partitions) << std::endl;
-    client_info.partitions = partitions;
-
     return std::make_shared<LinkDescription::Node>(hedge);
   }
 
@@ -1404,11 +1391,163 @@ namespace LinksRouting
     else
       client_info.scroll_region = client_info.region;
 
+    const WindowRegions windows = _window_monitor.getWindows();
+    auto window_info = std::find_if
+    (
+      windows.begin(),
+      windows.end(),
+      [&client_info](const WindowInfo& winfo)
+      {
+        return winfo.id == client_info.wid;
+      }
+    );
+    float2 top_left( client_info.region.left(),
+                     client_info.region.top() );
+    if( window_info == windows.end() )
+    {
+      LOG_WARN("No such window!");
+    }
+    else
+    {
+      top_left.x += window_info->region.left();
+      top_left.y += window_info->region.top();
+    }
+
+    LinkDescription::nodes_t nodes;
+    float avg_height = 0;
+
+    QVariantList regions = msg.getValue<QVariantList>("regions");
+    for(auto region = regions.begin(); region != regions.end(); ++region)
+    {
+      LinkDescription::points_t points;
+      LinkDescription::props_t props;
+
+      float min_y = 0,
+            max_y = 0;
+
+      //for(QVariant point: region.toList())
+      auto regionlist = region->toList();
+      for(auto point = regionlist.begin(); point != regionlist.end(); ++point)
+      {
+        if( point->type() == QVariant::List )
+        {
+          QVariantList coords = point->toList();
+          if( coords.size() != 2 )
+          {
+            LOG_WARN("Wrong coord count for point.");
+            continue;
+          }
+
+          points.push_back(float2(
+            coords.at(0).toInt(),
+            coords.at(1).toInt()
+          ));
+
+          if( points.size() == 1 )
+          {
+            min_y = max_y = points.back().y;
+          }
+          else
+          {
+            if( points.back().y > max_y )
+              max_y = points.back().y;
+            else if( points.back().y < min_y )
+              min_y = points.back().y;
+          }
+        }
+        else if( point->type() == QVariant::Map )
+        {
+          auto map = point->toMap();
+          for( auto it = map.constBegin(); it != map.constEnd(); ++it )
+            props[ it.key().toStdString() ] = it->toString().toStdString();
+        }
+        else
+          LOG_WARN("Wrong data type: " << point->typeName());
+      }
+
+      if( points.empty() )
+        continue;
+
+      avg_height += max_y - min_y;
+      float2 center;
+
+      auto rel = props.find("rel");
+      if( rel != props.end() && rel->second == "true" )
+      {
+        for(size_t i = 0; i < points.size(); ++i)
+          center += (points[i] += top_left);
+      }
+      else
+      {
+        for(size_t i = 0; i < points.size(); ++i)
+          center += points[i];
+      }
+
+      center /= points.size();
+      LinkDescription::points_t link_points;
+      link_points.push_back(center);
+
+      nodes.push_back( std::make_shared<LinkDescription::Node>(points, link_points, props) );
+    }
+
+    if( !nodes.empty() )
+      avg_height /= nodes.size();
+
+    const bool do_partitions = true;
+
+    float offset = client_info.scroll_region.top() - top_left.y;
+    Partitions partitions_src,
+               partitions_dest;
+
+    if( do_partitions )
+    {
+      PartitionHelper part;
+      for(auto node = nodes.begin(); node != nodes.end(); ++node)
+      {
+        const Rect& bb = (*node)->getBoundingBox();
+        part.add( float2( offset + bb.t() - 3 * avg_height,
+                          offset + bb.b() + 3 * avg_height ) );
+      }
+      part.clip(0, client_info.scroll_region.height(), 2 * avg_height);
+      partitions_src = part.getPartitions();
+
+      const int compress_size = avg_height * 1.5;
+      float cur_pos = 0;
+      for( auto part = partitions_src.begin();
+                part != partitions_src.end();
+              ++part )
+      {
+        if( part->x > cur_pos )
+          cur_pos += compress_size;
+
+        float2 target_part;
+        target_part.x = cur_pos;
+
+        cur_pos += part->y - part->x;
+        target_part.y = cur_pos;
+
+        partitions_dest.push_back(target_part);
+      }
+
+      if( partitions_src.back().y + 0.5 < client_info.scroll_region.height() )
+        cur_pos += compress_size;
+
+      client_info.scroll_region.setHeight(cur_pos);
+    }
+    else
+    {
+      partitions_src.push_back(float2(0, client_info.scroll_region.height()));
+      partitions_dest.push_back(partitions_src.back());
+    }
+
     client_info.tile_map =
       std::make_shared<HierarchicTileMap>( client_info.scroll_region.width(),
                                            client_info.scroll_region.height(),
                                            _preview_width,
                                            _preview_height );
+
+    client_info.tile_map->partitions_src = partitions_src;
+    client_info.tile_map->partitions_dest = partitions_dest;
   }
 
   //----------------------------------------------------------------------------
@@ -1500,7 +1639,8 @@ namespace LinksRouting
           "\"size\": [" + QString::number(tile.width)
                   + "," + QString::number(tile.height)
                   + "],"
-          "\"sections\":" + to_string(client_info.second.partitions).c_str() + ","
+          "\"sections_src\":" + to_string(client_info.second.partitions_src).c_str() + ","
+          "\"sections_dest\":" + to_string(client_info.second.partitions_dest).c_str() + ","
           "\"src\": " + src.toString(true).c_str() + ","
           "\"req_id\": " + QString::number(req_id) +
         "}"));
