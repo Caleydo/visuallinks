@@ -13,23 +13,32 @@ function grab(size, region, req_id, sections)
   canvas.style.height = canvas.style.maxheight = canvas.height + "px";
 
   var context = canvas.getContext("2d");
-  context.fillStyle = "#555";
+  context.fillStyle = "#755";
   context.fillRect(0, 0, size[0], size[1]);
   context.scale( canvas.width / region.width,
                  canvas.height / region.height );
 
-  for( var i = 0; i < sections.length; ++i )
+  for( var i = 0; i < sections[1].length; ++i )
   {
-    if(    sections[i][1] <= region.y
-        || sections[i][0] >= region.y + region.height )
+    if(    sections[1][i][1] <= region.y
+        || sections[1][i][0] >= region.y + region.height )
       continue;
 
-    var top = Math.max(region.y, sections[i][0]);
-    var bottom = Math.min(region.y + region.height, sections[i][1]);
+    var top = Math.max(region.y, sections[1][i][0]);
+    var bottom = Math.min(region.y + region.height, sections[1][i][1]);
+    var offset = Math.max(region.y - sections[1][i][0], 0);
 
     context.save();
     context.translate(0, top - region.y);
-    context.drawWindow(content.window, region.x, top, region.width, bottom - top, "#fff");
+    context.drawWindow
+    (
+      content.window,
+      region.x,
+      sections[0][i][0] + offset,
+      region.width,
+      bottom - top,
+      "#fff"
+    );
     context.restore();
   }
 

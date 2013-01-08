@@ -3,6 +3,7 @@
 
 #include "float2.hpp"
 #include "slotdata/image.hpp"
+#include "PartitionHelper.hxx"
 
 #include <cmath>
 #include <cstring>
@@ -79,8 +80,16 @@ class HierarchicTileMap
 
     float getLayerScale(size_t level) const;
 
+    void setWidth(size_t width);
+    void setHeight(size_t height);
+
+    size_t getWidth() const { return _width; }
+    size_t getHeight() const { return _height; }
+
     size_t getTileWidth() const { return _tile_width; }
     size_t getTileHeight() const { return _tile_height; }
+
+    Partitions partitions_src, partitions_dest;
   
   private:
     unsigned int _width,

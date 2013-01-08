@@ -43,6 +43,9 @@ namespace LinksRouting
     protected:
 
       std::vector<Color> _colors;
+      Partitions *_partitions_src,
+                 *_partitions_dest;
+      float       _offset_y;
 
       /** Subscribe to the routed links */
       slot_t<LinkDescription::LinkList>::type _subscribe_links;
@@ -78,6 +81,8 @@ namespace LinksRouting
                        //GLuint tex = 0,
                        const Color& fill = Color(1, 1, 1, 1),
                        const Color& border = Color(0.3, 0.3, 0.3, 0.8) );
+
+      void glVertex2f(float x, float y);
   };
 }
 
