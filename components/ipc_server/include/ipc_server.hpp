@@ -28,6 +28,7 @@
 #include "QWsSocket.h"
 
 #include "datatypes.h"
+#include <stdint.h>
 
 class QMutex;
 class JSONParser;

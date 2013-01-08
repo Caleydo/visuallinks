@@ -56,9 +56,8 @@ bool Rect::contains(float x, float y, float margin) const
 std::string Rect::toString(bool round) const
 {
   std::stringstream strm;
-  auto do_round = round
-                ? [](float num) { return static_cast<float>(std::floor(num + 0.5)); }
-                : [](float num) { return num; };
+  auto do_round =  [round](float num)->float{ if(round) return static_cast<float>(std::floor(num + 0.5)); else return num; };
+
   strm << "{\"x\":" << do_round(pos.x) << ","
            "\"y\":" << do_round(pos.y) << ","
            "\"width\":" << do_round(size.x) << ","

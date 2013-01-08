@@ -7,6 +7,7 @@
 
 #include "HierarchicTileMap.hpp"
 #include <cassert>
+#include <stdint.h>
 
 //----------------------------------------------------------------------------
 Layer::Layer(HierarchicTileMap* map):
@@ -150,7 +151,7 @@ HierarchicTileMap::HierarchicTileMap( unsigned int width,
 MapRect HierarchicTileMap::requestRect(const Rect& rect, size_t zoom)
 {
   Layer& layer = getLayer(zoom);
-  float scale = (std::pow(2, zoom) * _tile_height) / _height;
+  float scale = (std::pow(2.0f, static_cast<float>(zoom)) * _tile_height) / _height;
 
   Rect layer_rect = scale * rect;
   size_t min_tile_x = std::floor((layer_rect.l() + 1) / _tile_width),
@@ -195,7 +196,7 @@ void HierarchicTileMap::setTileData( size_t x, size_t y, size_t zoom,
 //------------------------------------------------------------------------------
 float HierarchicTileMap::getLayerScale(size_t level) const
 {
-  return std::pow(2, level) * _tile_height / static_cast<float>(_height);
+  return std::pow(2.0f, static_cast<float>(level) ) * _tile_height / static_cast<float>(_height);
 }
 
 //------------------------------------------------------------------------------
@@ -207,7 +208,7 @@ Layer& HierarchicTileMap::getLayer(size_t level)
   Layer& layer = _layers[level];
   if( !layer.isInit() )
   {
-    unsigned int num_tiles_y = std::pow(2, level);
+    unsigned int num_tiles_y = 1 << level;
     float scale = getLayerScale(level);
     unsigned int num_tiles_x = std::ceil(scale * _width / _tile_width);
 

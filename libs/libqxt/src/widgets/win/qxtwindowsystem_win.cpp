@@ -34,6 +34,7 @@
 #endif
 #include <qt_windows.h>
 #include <qglobal.h> // QT_WA
+#include <iostream>
 
 static WindowList qxt_Windows;
 
@@ -57,6 +58,13 @@ WindowList QxtWindowSystem::windows()
 WId QxtWindowSystem::activeWindow()
 {
     return ::GetForegroundWindow();
+}
+
+int QxtWindowSystem::activeWindow(WId window)
+{
+  //TODO !!!
+  std::cerr << "int QxtWindowSystem::activeWindow(WId window) NOT IMPLEMENTED\n";
+  return 0;
 }
 
 WId QxtWindowSystem::findWindow(const QString& title)

@@ -973,7 +973,7 @@ namespace LinksRouting
           popup.hover_region.visible = false;
 
           QRect reg = client_info->second.scroll_region;
-          float scale = (reg.height() / pow(2, popup.hover_region.zoom))
+          float scale = (reg.height() / pow(2.0f, static_cast<float>(popup.hover_region.zoom)))
                       / _preview_height;
           float dy = y - popup.hover_region.region.pos.y,
                 scroll_y = scale * dy + popup.hover_region.src_region.pos.y;
@@ -1000,18 +1000,18 @@ namespace LinksRouting
               return;
 
           QRect reg = client_info->second.scroll_region;
-          float step_y = reg.height() / pow(2, popup.hover_region.zoom)
+          float step_y = reg.height() / pow(2.0f, static_cast<float>(popup.hover_region.zoom))
                        / _preview_height;
 
           if( mod & SlotType::MouseEvent::ShiftModifier )
           {
-            popup.hover_region.src_region.pos.y -= delta / fabs(delta) * 20 * step_y;
+            popup.hover_region.src_region.pos.y -= delta / fabs(static_cast<float>(delta)) * 20 * step_y;
             _interaction_handler.updateRegion(*client_info, popup);
           }
           else if( mod & SlotType::MouseEvent::ControlModifier )
           {
             float step_x = step_y * preview_aspect;
-            popup.hover_region.src_region.pos.x -= delta / fabs(delta) * 20 * step_x;
+            popup.hover_region.src_region.pos.x -= delta / fabs(static_cast<float>(delta)) * 20 * step_x;
             _interaction_handler.updateRegion(*client_info, popup);
           }
           else
@@ -1021,7 +1021,7 @@ namespace LinksRouting
 
             if( popup.hover_region.zoom != old_zoom )
             {
-              float scale = (reg.height() / pow(2, old_zoom))
+              float scale = (reg.height() / pow(2.0f, static_cast<float>(old_zoom)))
                           / _preview_height;
 
               float2 d = pos - popup.hover_region.region.pos,
@@ -1048,7 +1048,7 @@ namespace LinksRouting
               return;
 
           QRect reg = client_info->second.scroll_region;
-          float step_y = reg.height() / pow(2, popup.hover_region.zoom)
+          float step_y = reg.height() / pow(2.0f, static_cast<float>(popup.hover_region.zoom))
                        / _preview_height;
 
           popup.hover_region.src_region.pos.y -= delta.y * step_y;
@@ -1429,7 +1429,7 @@ namespace LinksRouting
     float preview_aspect = _server->_preview_width
                          / static_cast<float>(_server->_preview_height);
     const QRect& reg = client_info.second.scroll_region;
-    int h = reg.height() / pow(2, popup.hover_region.zoom) + 0.5,
+    int h = reg.height() / pow(2.0f, static_cast<float>(popup.hover_region.zoom)) + 0.5f,
         w = h * preview_aspect + 0.5;
 
     Rect& src = popup.hover_region.src_region;
@@ -1454,6 +1454,7 @@ namespace LinksRouting
     const HierarchicTileMapPtr& tile_map = client_info.second.tile_map;
     bool sent = false;
 
+
     float scale = 1/tile_map->getLayerScale(popup.hover_region.zoom);
     MapRect rect = tile_map->requestRect(src, popup.hover_region.zoom);
     rect.foreachTile([&](Tile& tile, size_t x, size_t y)
@@ -1464,7 +1465,9 @@ namespace LinksRouting
         (
           _tile_requests.begin(),
           _tile_requests.end(),
-          [&](const TileRequests::value_type& tile_req)
+          //TODO VS FIX
+          [&](const std::map<uint8_t, TileRequest>::value_type& tile_req)
+          //[&](const TileRequests::value_type& tile_req)
           {
             return (tile_req.second.tile_map.lock() == tile_map)
                 && (tile_req.second.zoom == popup.hover_region.zoom)
