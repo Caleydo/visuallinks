@@ -1493,7 +1493,8 @@ namespace LinksRouting
     if( !nodes.empty() )
       avg_height /= nodes.size();
 
-    const bool do_partitions = true;
+    const bool do_partitions = false;
+    const bool partition_compress = false;
 
     float offset = client_info.scroll_region.top() - top_left.y;
     Partitions partitions_src,
@@ -1511,28 +1512,33 @@ namespace LinksRouting
       part.clip(0, client_info.scroll_region.height(), 2 * avg_height);
       partitions_src = part.getPartitions();
 
-      const int compress_size = avg_height * 1.5;
-      float cur_pos = 0;
-      for( auto part = partitions_src.begin();
-                part != partitions_src.end();
-              ++part )
+      if( partition_compress )
       {
-        if( part->x > cur_pos )
+        const int compress_size = avg_height * 1.5;
+        float cur_pos = 0;
+        for( auto part = partitions_src.begin();
+                  part != partitions_src.end();
+                ++part )
+        {
+          if( part->x > cur_pos )
+            cur_pos += compress_size;
+
+          float2 target_part;
+          target_part.x = cur_pos;
+
+          cur_pos += part->y - part->x;
+          target_part.y = cur_pos;
+
+          partitions_dest.push_back(target_part);
+        }
+
+        if( partitions_src.back().y + 0.5 < client_info.scroll_region.height() )
           cur_pos += compress_size;
 
-        float2 target_part;
-        target_part.x = cur_pos;
-
-        cur_pos += part->y - part->x;
-        target_part.y = cur_pos;
-
-        partitions_dest.push_back(target_part);
+        client_info.scroll_region.setHeight(cur_pos);
       }
-
-      if( partitions_src.back().y + 0.5 < client_info.scroll_region.height() )
-        cur_pos += compress_size;
-
-      client_info.scroll_region.setHeight(cur_pos);
+      else
+        partitions_dest = partitions_src;
     }
     else
     {
