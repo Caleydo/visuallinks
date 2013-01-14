@@ -418,7 +418,7 @@ namespace LinksRouting
         {
           _partitions_src = &tile_map->partitions_src;
           _partitions_dest = &tile_map->partitions_dest;
-          _offset_y = offset.y;
+          _offset_y = popup->nodes.front()->getParent()->get<int>("offset");
         }
 
         glLineWidth(w);
@@ -608,6 +608,19 @@ namespace LinksRouting
     return rendered_anything;
   }
 
+  std::ostream& operator<<(std::ostream& s, const std::vector<float2>& verts)
+  {
+    s << "[";
+    for(size_t i = 0; i < verts.size(); ++i)
+    {
+      if( i )
+        s << ", ";
+      s << verts[i];
+    }
+    s << "]";
+    return s;
+  }
+
   //----------------------------------------------------------------------------
   bool GlRenderer::renderNodes( const LinkDescription::nodes_t& nodes,
                                 float line_width,
@@ -728,12 +741,14 @@ namespace LinksRouting
     return true;
   }
 
-  void GlRenderer::glVertex2f(float x, float y)
+  float2 GlRenderer::glVertex2f(float x, float y)
   {
+#if 1
     if( _partitions_dest && _partitions_src )
     {
       float last_src = 0,
-            last_dest = 0;
+            last_dest = 0,
+            ref_y = y + _offset_y;
       for( auto src = _partitions_src->begin(),
                 dest = _partitions_dest->begin();
                 src != _partitions_src->end() &&
@@ -741,16 +756,27 @@ namespace LinksRouting
               ++src,
               ++dest )
       {
-        if( y - _offset_y <= src->y )
+        if( ref_y <= src->x )
+        {
+          float t = (ref_y - last_src) / (src->x - last_src);
+          y = (1 - t) * last_dest + t * dest->x - _offset_y;
+        }
+        else if( ref_y <= src->y )
+        {
           y -= src->x - dest->x;
+        }
         else
+        {
+          last_src = src->y;
+          last_dest = dest->y;
           continue;
+        }
         break;
-          //y = (y - last_dest);
       }
     }
-
+#endif
     ::glVertex2f(x, y);
+    return float2(x, y);
   }
 
 }

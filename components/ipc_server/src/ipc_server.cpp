@@ -373,14 +373,21 @@ namespace LinksRouting
       return;
     }
 
-    std::cout << "request #" << (int)seq_id << std::endl;
-
     auto request = _interaction_handler._tile_requests.find(seq_id);
     if( request == _interaction_handler._tile_requests.end() )
     {
       LOG_WARN("Received unknown tile request.");
       return;
     }
+
+    auto req_ms =
+      std::chrono::duration_cast<std::chrono::milliseconds>
+      (
+        clock::now() - request->second.time_stamp
+      ).count();
+
+    std::cout << "request #" << (int)seq_id << " " << req_ms << "ms"
+              << std::endl;
 
     HierarchicTileMapPtr tile_map = request->second.tile_map.lock();
     if( !tile_map )
@@ -1372,6 +1379,7 @@ namespace LinksRouting
     LinkDescription::HyperEdgePtr hedge =
       std::make_shared<LinkDescription::HyperEdge>(nodes);
     hedge->set("client_wid", WIdtoStr(client_info.wid));
+    hedge->set("offset", client_info.scroll_region.top() - top_left.y);
 
     hedge->set("partitions_src", to_string(client_info.tile_map->partitions_src));
     hedge->set("partitions_dest", to_string(client_info.tile_map->partitions_dest));
@@ -1493,12 +1501,14 @@ namespace LinksRouting
     if( !nodes.empty() )
       avg_height /= nodes.size();
 
-    const bool do_partitions = false;
-    const bool partition_compress = false;
+    const bool do_partitions = true;
+    const bool partition_compress = true;
 
     float offset = client_info.scroll_region.top() - top_left.y;
     Partitions partitions_src,
                partitions_dest;
+
+    std::cout << "offset1 = " << offset << std::endl;
 
     if( do_partitions )
     {
@@ -1633,7 +1643,8 @@ namespace LinksRouting
         TileRequest tile_req = {
           tile_map,
           popup.hover_region.zoom,
-          x, y
+          x, y,
+          clock::now()
         };
         uint8_t req_id = ++_tile_request_id;
         _tile_requests[req_id] = tile_req;

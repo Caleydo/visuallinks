@@ -452,7 +452,6 @@ ShaderPtr loadShader( QString vert, QString frag )
   //----------------------------------------------------------------------------
   void GLWidget::paintEvent(QPaintEvent *event)
   {
-    std::cout << "paint" << std::endl;
     QPainter painter(this);
 
     painter.drawImage(QPoint(0,0), _image);

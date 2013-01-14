@@ -82,8 +82,8 @@ MapRect::QuadList MapRect::getQuads() const
            tex_max( float(max_x - x * tile_width) / tile.width,
                     float(max_y - y * tile_height) / tile.height );
                     
-    std::cout << float2(min_x, min_y) << " => " << float2(max_x, max_y)
-              << ", tex: " << tex_min << " => " << tex_max << std::endl;
+//    std::cout << float2(min_x, min_y) << " => " << float2(max_x, max_y)
+//              << ", tex: " << tex_min << " => " << tex_max << std::endl;
 
     size_t left = min_x - min[0],
            top = min_y - min[1],

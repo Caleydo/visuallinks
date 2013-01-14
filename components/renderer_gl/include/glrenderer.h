@@ -82,7 +82,7 @@ namespace LinksRouting
                        const Color& fill = Color(1, 1, 1, 1),
                        const Color& border = Color(0.3, 0.3, 0.3, 0.8) );
 
-      void glVertex2f(float x, float y);
+      float2 glVertex2f(float x, float y);
   };
 }
 

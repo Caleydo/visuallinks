@@ -30,11 +30,15 @@
 #include "datatypes.h"
 #include <stdint.h>
 
+#include <chrono>
+
 class QMutex;
 class JSONParser;
 
 namespace LinksRouting
 {
+  typedef std::chrono::high_resolution_clock clock;
+
   class IPCServer:
     public QObject,
     public Component,
@@ -136,6 +140,7 @@ namespace LinksRouting
           HierarchicTileMapWeakPtr tile_map;
           int zoom;
           size_t x, y;
+          clock::time_point time_stamp;
         };
 
         typedef std::map<uint8_t, TileRequest> TileRequests;

@@ -89,8 +89,9 @@ class HierarchicTileMap
     size_t getTileWidth() const { return _tile_width; }
     size_t getTileHeight() const { return _tile_height; }
 
-    Partitions partitions_src, partitions_dest;
-  
+    Partitions partitions_src,
+               partitions_dest;
+
   private:
     unsigned int _width,
                  _height,

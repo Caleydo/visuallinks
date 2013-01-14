@@ -1,3 +1,5 @@
+var debug = false;
+
 var stopped = true;
 var socket = null;
 var status = '';
@@ -195,6 +197,9 @@ function removeAllRouteData()
 //------------------------------------------------------------------------------
 function reportVisLinks(id, found)
 {
+  if( debug )
+    var start = Date.now();
+
   if( !found && getPref("replace-route") )
     abortAll();
 
@@ -207,6 +212,13 @@ function reportVisLinks(id, found)
 
   var bbs = searchDocument(content.document, id);
   
+  if( debug )
+  {
+    for(var i = 1; i < 10; i += 1)
+      searchDocument(content.document, id);
+    alert("time = " + (Date.now() - start) / 10);
+  }
+
   last_id = id;
   if( !found )
   {
@@ -237,7 +249,7 @@ function reportVisLinks(id, found)
     'stamp': last_stamp,
     'regions': bbs
   });
-
+  //alert("time = " + (Date.now() - start) / 10);
 // if( found )
 //    alert('send FOUND: '+selectionId);
 }
