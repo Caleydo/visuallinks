@@ -7,6 +7,7 @@
 #endif
 
 #include "qglwidget.hpp"
+#include "clock.hxx"
 #include "log.hpp"
 
 #include <cmath>
@@ -171,9 +172,11 @@ ShaderPtr loadShader( QString vert, QString frag )
     _core.attachComponent(&_config);
     _core.attachComponent(&_user_config);
     _core.attachComponent(&_server);
+#ifdef USE_GPU_ROUTING
     _core.attachComponent(&_cost_analysis);
+#endif
     _core.attachComponent(&_routing_cpu);
-#if USE_GPU_ROUTING
+#ifdef USE_GPU_ROUTING
     _core.attachComponent(&_routing_gpu);
 #endif
     _core.attachComponent(&_renderer);
@@ -233,8 +236,10 @@ ShaderPtr loadShader( QString vert, QString frag )
   {
     _subscribe_links =
       slot_subscriber.getSlot<LinksRouting::SlotType::Image>("/rendered-links");
+#ifdef USE_GPU_ROUTING
     _subscribe_costmap =
       slot_subscriber.getSlot<LinksRouting::SlotType::Image>("/costmap");
+#endif
     _subscribe_routed_links =
       slot_subscriber.getSlot<LinksRouting::LinkDescription::LinkList>("/links");
   }
@@ -299,8 +304,13 @@ ShaderPtr loadShader( QString vert, QString frag )
   //----------------------------------------------------------------------------
   void GLWidget::render(int pass, QGLPixelBuffer* pbuffer)
   {
+    PROFILE_START()
+
+#ifdef USE_GPU_ROUTING
     if( pass == 0 )
       updateScreenShot(_window_offset, _window_end, pbuffer);
+    PROFILE_RESULT("  updateScreenshot")
+#endif
 
     float x = _window_offset.x(),
           y = _window_offset.y(),
@@ -314,6 +324,8 @@ ShaderPtr loadShader( QString vert, QString frag )
       QMutexLocker lock_links(&_mutex_slot_links);
       _core.process(pass == 0 ? (Component::Renderer | 64) : Component::Any);
     }
+
+    PROFILE_RESULT("  core")
 
     glMatrixMode(GL_PROJECTION);
     glLoadIdentity();
@@ -384,6 +396,9 @@ ShaderPtr loadShader( QString vert, QString frag )
     static int counter = 0;
 
     glFinish();
+
+    PROFILE_RESULT("  GL wait")
+
     QImage links = pbuffer->toImage();
     //--------------------------------------------------------------------------
     auto writeTexture = []
@@ -428,7 +443,12 @@ ShaderPtr loadShader( QString vert, QString frag )
 
     ++counter;
     _image = links;
+
+    PROFILE_RESULT("  updateMask")
+
     update();
+
+    PROFILE_RESULT("  update")
 	/*
 	QPixmap screen = QPixmap::fromImage( grabFrameBuffer(true) );
 	screen.save(QString("links%1.png").arg(counter));*/

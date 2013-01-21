@@ -7,6 +7,7 @@
  */
 
 #include "render_thread.hpp"
+#include "clock.hxx"
 #include "qglwidget.hpp"
 
 #include <QGLPixelBuffer>
@@ -69,7 +70,8 @@ namespace qtfullscreensystem
 //    int screenshot_counter = 0;
     do
     {
-      //std::cout << "render" << std::endl;
+      std::cout << "--- FRAME --- ----------------------------------" << std::endl;
+      PROFILE_START()
 
       if( _do_resize )
       {
@@ -78,11 +80,19 @@ namespace qtfullscreensystem
         _do_resize = false;
       }
 
+#ifdef USE_GPU_ROUTING
       _gl_widget->render(0, _pbuffer.data());
       //std::cout << "done" << _pbuffer->doneCurrent() << std::endl;
       //_gl_widget->swapBuffers();
 
+      PROFILE_LAP("* pass #0")
+#endif
+
       _gl_widget->render(1, _pbuffer.data());
+
+      PROFILE_LAP("* pass #1")
+
+#ifdef USE_GPU_ROUTING
       //_gl_widget->swapBuffers();
       //_gl_widget->doneCurrent();
       msleep(10);
@@ -91,6 +101,9 @@ namespace qtfullscreensystem
         _gl_widget->captureScreen();
         /*screenshot_counter = 5;
       }*/
+#endif
+
+      PROFILE_LAP("* total")
 
       _gl_widget->waitForData();
       //_gl_widget->makeCurrent();

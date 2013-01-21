@@ -1,8 +1,6 @@
 #include "staticcore.h"
 #include "log.hpp"
 
-#include <chrono>
-
 namespace LinksRouting
 {
   StaticCore::StaticCore():
@@ -184,19 +182,6 @@ namespace LinksRouting
       }
   }
 
-  template <typename V, typename R>
-  std::ostream& operator << (std::ostream& s, const std::chrono::duration<V,R>& d)
-  {
-    auto dur_us =
-      std::chrono::duration_cast<std::chrono::microseconds>(d).count();
-
-    if( dur_us < 1000 )
-      s << dur_us << "us";
-    else
-      s << (dur_us / 1000.f) << "ms";
-    return s;
-  }
-
   //----------------------------------------------------------------------------
   void StaticCore::process(unsigned int type)
   {
@@ -231,9 +216,6 @@ namespace LinksRouting
       _slot_select_routing->_data->request.clear();
     }
 
-    typedef std::chrono::high_resolution_clock clock;
-    clock::time_point start = clock::now();
-
     for( auto c = _components.begin(); c != _components.end(); ++c )
     {
       if( c->is && c->comp->supports(type) )
@@ -246,8 +228,6 @@ namespace LinksRouting
 //      else
 //        std::cout << "!->" << c->comp->name() << std::endl;
     }
-
-    std::cout << "total = " << (clock::now() - start) << std::endl;
   }
 
   //----------------------------------------------------------------------------
