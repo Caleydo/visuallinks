@@ -308,8 +308,10 @@ ShaderPtr loadShader( QString vert, QString frag )
 
 #ifdef USE_GPU_ROUTING
     if( pass == 0 )
+    {
       updateScreenShot(_window_offset, _window_end, pbuffer);
-    PROFILE_RESULT("  updateScreenshot")
+      PROFILE_RESULT("  updateScreenshot")
+    }
 #endif
 
     float x = _window_offset.x(),

@@ -5,6 +5,19 @@
 #include <GL/glu.h>
 #include <iostream>
 
+std::ostream& operator<<(std::ostream& s, const std::vector<float2>& verts)
+{
+  s << "[";
+  for(size_t i = 0; i < verts.size(); ++i)
+  {
+    if( i )
+      s << ", ";
+    s << verts[i];
+  }
+  s << "]";
+  return s;
+}
+
 namespace LinksRouting
 {
   // internal helper...
@@ -562,14 +575,15 @@ namespace LinksRouting
              segment != fork->outgoing.end();
              ++segment )
         {
-          if( pass == 1 && !segment->trail.empty() )
+          if( pass == 1 && !segment->trail.empty() && segment->trail.front().x >= 0 && segment->trail.front().y >= 24 )
           {
             // Draw path
             std::vector<float2> points;
             points.reserve(segment->trail.size() + 1);
             points.push_back(fork->position);
             points.insert(points.end(), segment->trail.begin(), segment->trail.end());
-            points = smooth(points, 0.4, 10);
+            std::cout << "path: " << points << ", " << fork->position << std::endl;
+            //points = smooth(points, 0.4, 10);
             float widen_size = 0.f;
             if( segment->nodes.back()->getChildren().empty() )
             {
@@ -606,19 +620,6 @@ namespace LinksRouting
     }
 
     return rendered_anything;
-  }
-
-  std::ostream& operator<<(std::ostream& s, const std::vector<float2>& verts)
-  {
-    s << "[";
-    for(size_t i = 0; i < verts.size(); ++i)
-    {
-      if( i )
-        s << ", ";
-      s << verts[i];
-    }
-    s << "]";
-    return s;
   }
 
   //----------------------------------------------------------------------------
