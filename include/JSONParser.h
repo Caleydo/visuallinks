@@ -11,6 +11,7 @@
 #include <QScriptEngine>
 #include <QScriptValueIterator>
 
+#include <cstdint>
 #include <stdexcept>
 
 /**
