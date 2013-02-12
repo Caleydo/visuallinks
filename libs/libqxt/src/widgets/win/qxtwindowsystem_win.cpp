@@ -41,7 +41,7 @@ static WindowList qxt_Windows;
 BOOL CALLBACK qxt_EnumWindowsProc(HWND hwnd, LPARAM lParam)
 {
     Q_UNUSED(lParam);
-    if (::IsWindowVisible(hwnd))
+    if( ::IsWindowVisible(hwnd) && ::GetParent(hwnd) == 0 )
 		qxt_Windows.push_front(hwnd);
     return true;
 }
@@ -92,11 +92,11 @@ QString QxtWindowSystem::windowTitle(WId window)
     {
         TCHAR* buf = new TCHAR[len+1];
         len = ::GetWindowText(window, buf, len+1);
-        QT_WA({
+        /*QT_WA({
             title = QString::fromUtf16((const ushort*)buf, len);
-        }, {
+        }, {*/
             title = QString::fromLocal8Bit((const char*)buf, len);
-        });
+        //});
         delete[] buf;
     }
     return title;
