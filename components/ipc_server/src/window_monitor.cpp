@@ -7,6 +7,7 @@
 
 #include "window_monitor.hpp"
 #include "log.hpp"
+#include "qt_helper.hxx"
 
 #include <QApplication>
 #include <QDesktopWidget>
@@ -52,7 +53,7 @@ namespace LinksRouting
       regions.push_back(WindowInfo(
         id,
         region,
-        QxtWindowSystem::windowTitle(id).toStdString()
+        to_string(QxtWindowSystem::windowTitle(id))
       ));
     }
     return regions;

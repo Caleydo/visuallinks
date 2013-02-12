@@ -14,6 +14,8 @@
 #include <cstdint>
 #include <stdexcept>
 
+#include "qt_helper.hxx"
+
 /**
  * Helper for handling json messages
  */
@@ -30,7 +32,7 @@ class JSONParser
 
       if( _engine.hasUncaughtException() )
         throw std::runtime_error("Failed to evaluted received data: "
-                                 + _json.toString().toStdString());
+                                 + to_string(_json.toString()));
 
       if( _json.isArray() || !_json.isObject() )
         throw std::runtime_error("Received data is no JSON object.");
@@ -42,7 +44,7 @@ class JSONParser
       QScriptValue prop = _json.property(key);
 
       if( !prop.isValid() || prop.isUndefined() )
-        throw std::runtime_error("No such property ("+key.toStdString()+")");
+        throw std::runtime_error("No such property ("+to_string(key)+")");
 
       return extractValue<T>(prop);
     }
@@ -78,6 +80,12 @@ QString JSONParser::extractValue(QScriptValue& val) const
   if( !val.isString() )
     throw std::runtime_error("Not a string");
   return val.toString();
+}
+
+template<>
+std::string JSONParser::extractValue(QScriptValue& val) const
+{
+  return to_string(extractValue<QString>(val));
 }
 
 template<>

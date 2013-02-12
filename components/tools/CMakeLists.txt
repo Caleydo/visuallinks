@@ -25,7 +25,20 @@ set(SOURCE_FILES
   Rect.cxx
 )
 
+set(HEADER_FILES_QT
+)
+
+set(SOURCE_FILES_QT
+  qt_helper.cxx
+)
+
+add_subdirectory(glsl)
+
 add_definitions(-DNOMULTISAMPLING)
 add_library(tools ${HEADER_FILES} ${SOURCE_FILES})
-add_subdirectory(glsl)
+
+find_package(Qt4 REQUIRED)
+include_directories(${QT_INCLUDES})
+add_library(tools-qt ${HEADER_FILES_QT} ${SOURCE_FILES_QT})
+
 

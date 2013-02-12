@@ -118,7 +118,7 @@ namespace LinksRouting
     if( !_server->listen(QHostAddress::Any, port) )
     {
       LOG_ERROR("Failed to start WebSocket server on port " << port << ": "
-                << _server->errorString().toStdString() );
+                << _server->errorString() );
     }
     else
       LOG_INFO("WebSocket server listening on port " << port);
@@ -156,7 +156,7 @@ namespace LinksRouting
     _clients[ client_socket ] = ClientInfo();
 
     LOG_INFO(   "Client connected: "
-             << client_socket->peerAddress().toString().toStdString()
+             << client_socket->peerAddress().toString()
              << ":" << client_socket->peerPort() );
   }
 
@@ -166,16 +166,14 @@ namespace LinksRouting
     auto client = _clients.find(qobject_cast<QWsSocket*>(sender()));
     if( client == _clients.end() )
     {
-      LOG_WARN("Received message from unknown client: " << data.toStdString());
+      LOG_WARN("Received message from unknown client: " << data);
       return;
     }
 
     ClientInfo& client_info = client->second;
     WId& client_wid = client_info.wid;
 
-    std::cout << "Received (" << client_wid << "): "
-              << data.toStdString()
-              << std::endl;
+    std::cout << "Received (" << client_wid << "): " << data << std::endl;
 
     try
     {
@@ -204,7 +202,7 @@ namespace LinksRouting
 
       QString id = msg.getValue<QString>("id").toLower(),
               title = msg.getValue<QString>("title", "");
-      const std::string& id_str = id.toStdString();
+      const std::string& id_str = to_string(id);
 
       if( task == "GET" )
       {
@@ -256,8 +254,7 @@ namespace LinksRouting
       {
         if( id == "/routing" )
         {
-          _subscribe_routing->_data->request =
-            msg.getValue<QString>("val").toStdString();
+          _subscribe_routing->_data->request = msg.getValue<std::string>("val");
           for( auto link = _slot_links->_data->begin();
                    link != _slot_links->_data->end();
                    ++link )
@@ -269,9 +266,9 @@ namespace LinksRouting
         {
           (*_subscribe_user_config->_data)->setParameter
           (
-            msg.getValue<QString>("var").toStdString(),
-            msg.getValue<QString>("val").toStdString(),
-            msg.getValue<QString>("type").toStdString()
+            msg.getValue<std::string>("var"),
+            msg.getValue<std::string>("val"),
+            msg.getValue<std::string>("type")
           );
         }
         else
@@ -330,7 +327,7 @@ namespace LinksRouting
       }
       else
       {
-        LOG_WARN("Unknown task: " << task.toStdString());
+        LOG_WARN("Unknown task: " << task);
         return;
       }
     }
@@ -432,7 +429,7 @@ namespace LinksRouting
                               const JSONParser& msg,
                               ClientInfo& client_info )
   {
-    const std::string id_str = id.toStdString();
+    const std::string id_str = to_string(id);
     LOG_INFO("Received INITIATE: " << id_str);
     uint32_t color_id = 0;
 
@@ -443,8 +440,8 @@ namespace LinksRouting
     QString new_history = clean_id
                         + QString::fromStdString(history).replace(clean_id, "");
 
-    (*_subscribe_user_config->_data)->setString("QtWebsocketServer:SearchHistory",
-                                                new_history.toStdString());
+    (*_subscribe_user_config->_data)
+      ->setString("QtWebsocketServer:SearchHistory", to_string(new_history));
 
     updateScrollRegion(msg, client_info);
 
@@ -485,7 +482,7 @@ namespace LinksRouting
     _slot_links->_data->push_back(
       LinkDescription::LinkDescription
       (
-        id.toStdString(),
+        to_string(id),
         stamp,
         hedge, // TODO add props?
         color_id
@@ -1342,7 +1339,7 @@ namespace LinksRouting
         {
           auto map = point->toMap();
           for( auto it = map.constBegin(); it != map.constEnd(); ++it )
-            props[ it.key().toStdString() ] = it->toString().toStdString();
+            props[ to_string(it.key()) ] = to_string(it->toString());
         }
         else
           LOG_WARN("Wrong data type: " << point->typeName());
@@ -1467,7 +1464,7 @@ namespace LinksRouting
         {
           auto map = point->toMap();
           for( auto it = map.constBegin(); it != map.constEnd(); ++it )
-            props[ it.key().toStdString() ] = it->toString().toStdString();
+            props[ to_string(it.key()) ] = to_string(it->toString());
         }
         else
           LOG_WARN("Wrong data type: " << point->typeName());

@@ -9,6 +9,7 @@
 #include "qglwidget.hpp"
 #include "clock.hxx"
 #include "log.hpp"
+#include "qt_helper.hxx"
 
 #include <cmath>
 #include <cstddef>
@@ -104,14 +105,14 @@ ShaderPtr loadShader( QString vert, QString frag )
     QApplication::setOrganizationName("icg.tugraz.at");
     QApplication::setApplicationName("VisLinks");
 
-    const QString config_dir =
+    const QDir config_dir =
       QDesktopServices::storageLocation(QDesktopServices::DataLocation);
-    const std::string user_config = config_dir.toStdString() + "/config.xml";
+    const QString user_config = config_dir.filePath("config.xml");
 
     {
       // Ensure config path and user config file exist
-      QDir().mkpath(config_dir);
-      QFile file( QString::fromStdString(user_config) );
+      QDir().mkpath(config_dir.path());
+      QFile file( user_config );
       if( !file.open(QIODevice::ReadWrite | QIODevice::Text) )
         LOG_ERROR("Failed to open user config!");
       else if( !file.size() )
@@ -166,7 +167,7 @@ ShaderPtr loadShader( QString vert, QString frag )
     publishSlots(_core.getSlotCollector());
 
     _config.initFrom(argv[1]);
-    _user_config.initFrom(user_config);
+    _user_config.initFrom( to_string(user_config) );
 
     _core.startup();
     _core.attachComponent(&_config);
