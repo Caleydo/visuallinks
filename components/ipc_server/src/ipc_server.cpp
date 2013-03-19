@@ -429,6 +429,12 @@ namespace LinksRouting
                               const JSONParser& msg,
                               ClientInfo& client_info )
   {
+    if( id.length() > 256 )
+    {
+      LOG_WARN("Search identifier too long!");
+      return;
+    }
+
     const std::string id_str = to_string(id);
     LOG_INFO("Received INITIATE: " << id_str);
     uint32_t color_id = 0;
@@ -981,12 +987,26 @@ namespace LinksRouting
                       / _preview_height;
           float dy = y - popup.hover_region.region.pos.y,
                 scroll_y = scale * dy + popup.hover_region.src_region.pos.y;
+            
+          for( auto part_src = client_info->second.partitions_src.begin(),
+                    part_dst = client_info->second.partitions_dest.begin();
+                    part_src != client_info->second.partitions_src.end()
+                 && part_dst != client_info->second.partitions_dest.end();
+                  ++part_src,
+                  ++part_dst )
+          {
+            if( scroll_y <= part_dst->y )
+            {
+              scroll_y = part_src->x + (scroll_y - part_dst->x);
+              break;
+            }
+          }
 
           client_info->first->write(QString(
           "{"
             "\"task\": \"SET\","
             "\"id\": \"scroll-y\","
-            "\"val\": " + QString("%1").arg(scroll_y - 15) +
+            "\"val\": " + QString("%1").arg(scroll_y - 35) +
           "}"));
 
           _cond_data_ready->wakeAll();
