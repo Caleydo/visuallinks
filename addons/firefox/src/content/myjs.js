@@ -127,10 +127,15 @@ function onVisLinkButton()
 
 function getSelectionId()
 {
-	var	selid =	content.getSelection().toString();
-	return ("" + selid +	"")//.replace( /\s+/g, ' ' )
-                           .trim()
-                           .toLowerCase();
+  var txt = document.getElementById("vislink-search-text");
+  var selid = txt.value.trim();
+  if( selid == "" )
+    selid =	content.getSelection().toString().trim();
+  else
+    txt.reset();
+
+	return selid//.replace( /\s+/g, ' ' )
+              .toLowerCase();
 }
 
 function onStandardSearchButton(backwards = false)
@@ -419,7 +424,7 @@ function register()
         else if( msg.task == 'SET' )
         {
           if( msg.id == 'scroll-y' )
-            content.scrollTo(0, msg.val);
+            content.scrollTo(content.scrollX, msg.val);
         }
         else
           alert(event.data);

@@ -29,6 +29,7 @@
                  id="vislink-search-prev"
                  tooltiptext="Find Previous"
                  oncommand="onStandardSearchButton(true)"/>
+  <textbox id="vislink-search-text" value=""/>
   <toolbarbutton type="button"
                  id="vislink-search-next"
                  tooltiptext="Find Next"
