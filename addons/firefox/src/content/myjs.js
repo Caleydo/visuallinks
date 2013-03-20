@@ -125,16 +125,34 @@ function onVisLinkButton()
   }
 }
 
+function getSelectionId()
+{
+	var	selid =	content.getSelection().toString();
+	return ("" + selid +	"")//.replace( /\s+/g, ' ' )
+                           .trim()
+                           .toLowerCase();
+}
+
+function onStandardSearchButton(backwards = false)
+{
+	window.content.find(
+	  getSelectionId(),
+	  false, // aCaseSensitive
+	  backwards, // aBackwards
+	  true,  // aWrapAround,
+    false, // aWholeWord,
+    true,  // aSearchInFrames
+    false  // aShowDialog
+  );
+}
+
 //------------------------------------------------------------------------------
 // This function is triggered by the user if he want's to get something linked
 function selectVisLink()
 {
-	var	selid =	content.getSelection().toString();
-	var	selectionId	= ("" + selid +	"")//.replace( /\s+/g, ' ' )
-	                                   .trim()
-	                                   .toLowerCase();
-
-	if (selectionId	== null	|| selectionId == "") return;
+  var	selectionId = getSelectionId();
+	if( selectionId == null || selectionId == "" )
+	  return;
 	window.localSelectionId = selectionId;
 
 	reportVisLinks(selectionId);

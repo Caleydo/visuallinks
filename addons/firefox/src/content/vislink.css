@@ -12,3 +12,13 @@
 {
   list-style-image: url("chrome://mypl/content/icon-error-16.png");
 }
+
+#vislink-search-next
+{
+  list-style-image: url("chrome://mypl/content/search-next-16.png");
+}
+
+#vislink-search-prev
+{
+  list-style-image: url("chrome://mypl/content/search-prev-16.png");
+}

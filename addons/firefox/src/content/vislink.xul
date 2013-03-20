@@ -24,6 +24,16 @@
       <menuseparator />
     </menupopup>
   </toolbarbutton>
+  
+  <toolbarbutton type="button"
+                 id="vislink-search-prev"
+                 tooltiptext="Find Previous"
+                 oncommand="onStandardSearchButton(true)"/>
+  <toolbarbutton type="button"
+                 id="vislink-search-next"
+                 tooltiptext="Find Next"
+                 oncommand="onStandardSearchButton()"/>
+
 </toolbarpalette>
 
 </overlay>
