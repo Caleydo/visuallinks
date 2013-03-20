@@ -69,7 +69,7 @@ namespace LinksRouting
   {
     assert(widget);
     registerArg("DebugRegions", _debug_regions);
-    registerArg("PreviewWidth", _preview_width = 320);
+    registerArg("PreviewWidth", _preview_width = 420);
     registerArg("PreviewHeight", _preview_height = 384);
 
 //    qRegisterMetaType<WindowRegions>("WindowRegions");
@@ -200,7 +200,7 @@ namespace LinksRouting
         return;
       }
 
-      QString id = msg.getValue<QString>("id").toLower(),
+      QString id = msg.getValue<QString>("id").trimmed().toLower(),
               title = msg.getValue<QString>("title", "");
       const std::string& id_str = to_string(id);
 
@@ -1561,6 +1561,11 @@ namespace LinksRouting
 
         if( partitions_src.back().y + 0.5 < client_info.scroll_region.height() )
           cur_pos += compress_size;
+
+        int min_height = static_cast<float>(_preview_height)
+                       / _preview_width
+                       * client_info.scroll_region.width() + 0.5;
+        cur_pos = std::max<int>(min_height, cur_pos);
 
         client_info.scroll_region.setHeight(cur_pos);
       }

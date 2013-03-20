@@ -130,7 +130,9 @@ function onVisLinkButton()
 function selectVisLink()
 {
 	var	selid =	content.getSelection().toString();
-	var	selectionId	= ("" + selid +	"").toLowerCase();
+	var	selectionId	= ("" + selid +	"")//.replace( /\s+/g, ' ' )
+	                                   .trim()
+	                                   .toLowerCase();
 
 	if (selectionId	== null	|| selectionId == "") return;
 	window.localSelectionId = selectionId;
