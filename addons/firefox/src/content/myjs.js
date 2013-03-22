@@ -128,7 +128,7 @@ function onVisLinkButton()
 function getSelectionId()
 {
   var txt = document.getElementById("vislink-search-text");
-  var selid = txt.value.trim();
+  var selid = txt != null ? txt.value.trim() : "";
   if( selid == "" )
     selid =	content.getSelection().toString().trim();
   else

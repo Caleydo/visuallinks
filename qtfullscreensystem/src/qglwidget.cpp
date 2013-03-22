@@ -469,7 +469,7 @@ ShaderPtr loadShader( QString vert, QString frag )
   void GLWidget::waitForData()
   {
     QMutexLocker lock(&_mutex_slot_links);
-    _cond_render.wait(&_mutex_slot_links);
+    _cond_render.wait(&_mutex_slot_links, 200);
   }
 
   //----------------------------------------------------------------------------
