@@ -69,8 +69,8 @@ namespace LinksRouting
   {
     assert(widget);
     registerArg("DebugRegions", _debug_regions);
-    registerArg("PreviewWidth", _preview_width = 420);
-    registerArg("PreviewHeight", _preview_height = 384);
+    registerArg("PreviewWidth", _preview_width = 500);
+    registerArg("PreviewHeight", _preview_height = 400);
 
 //    qRegisterMetaType<WindowRegions>("WindowRegions");
 //    assert( connect( &_window_monitor, SIGNAL(regionsChanged(WindowRegions)),
@@ -1041,7 +1041,7 @@ namespace LinksRouting
           else
           {
             int old_zoom = popup.hover_region.zoom;
-            clampedStep(popup.hover_region.zoom, delta, 0, 6, 1);
+            clampedStep(popup.hover_region.zoom, delta, 0, 3, 1);
 
             if( popup.hover_region.zoom != old_zoom )
             {

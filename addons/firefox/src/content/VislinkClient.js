@@ -118,12 +118,13 @@ function VislinkClient(application_name)
   
   this.reportLink = function(id, stamp, regions)
   {
-    this.send({
-      'task': 'FOUND',
-      'title': document.title,
-      'id': id,
-      'stamp': stamp,
-      'regions': regions
-    });
+    if( regions.length > 0 )
+      this.send({
+        'task': 'FOUND',
+        'title': document.title,
+        'id': id,
+        'stamp': stamp,
+        'regions': regions
+      });
   };
 }

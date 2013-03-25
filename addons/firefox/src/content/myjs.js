@@ -264,6 +264,9 @@ function reportVisLinks(id, found)
       menu_item: item
     };
   }
+
+  if( bbs.length == 0 )
+    return;
   
   var reg = getScrollRegion();
   send({

@@ -121,7 +121,12 @@ namespace LinksRouting
     {
       auto p = hedge->getParent()->getParent();
       if( p )
-        fork->position = 0.5 * (fork->position + p->getCenter());
+      {
+        if( fork->position == float2(0,0) )
+          fork->position = p->getCenter();
+        else
+          fork->position = 0.5 * (fork->position + p->getCenter());
+      }
     }
 
     //copy routes to hyperedge

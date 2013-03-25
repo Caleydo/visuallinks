@@ -70,7 +70,7 @@ namespace qtfullscreensystem
 //    int screenshot_counter = 0;
     do
     {
-      std::cout << "--- FRAME --- ----------------------------------" << std::endl;
+      //std::cout << "--- FRAME --- ----------------------------------" << std::endl;
       PROFILE_START()
 
       if( _do_resize )

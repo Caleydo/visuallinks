@@ -29,6 +29,7 @@ namespace LinksRouting
   typedef std::chrono::high_resolution_clock clock;
 } // namespace LinksRouting
 
+#if 0
 #define PROFILE_START() \
   LinksRouting::clock::time_point profile_start = LinksRouting::clock::now();
 
@@ -40,5 +41,9 @@ namespace LinksRouting
 #define PROFILE_RESULT(name) \
   PROFILE_LAP(name) \
   profile_start = LinksRouting::clock::now();
-
+#else
+# define PROFILE_START()
+# define PROFILE_LAP(name)
+# define PROFILE_RESULT(name)
+#endif
 #endif /* CLOCK_HXX_ */
