@@ -438,7 +438,7 @@ namespace LinksRouting
     const std::string id_str = to_string(id);
     LOG_INFO("Received INITIATE: " << id_str);
     uint32_t color_id = 0;
-
+#if 0
     std::string history;
     (*_subscribe_user_config->_data)->getString("QtWebsocketServer:SearchHistory", history);
 
@@ -448,7 +448,7 @@ namespace LinksRouting
 
     (*_subscribe_user_config->_data)
       ->setString("QtWebsocketServer:SearchHistory", to_string(new_history));
-
+#endif
     updateScrollRegion(msg, client_info);
 
     // TODO keep working for multiple links at the same time
