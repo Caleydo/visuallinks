@@ -582,7 +582,7 @@ namespace LinksRouting
             points.reserve(segment->trail.size() + 1);
             points.push_back(fork->position);
             points.insert(points.end(), segment->trail.begin(), segment->trail.end());
-            std::cout << "path: " << points << ", " << fork->position << std::endl;
+//            std::cout << "path: " << points << ", " << fork->position << std::endl;
             //points = smooth(points, 0.4, 10);
             float widen_size = 0.f;
             if( segment->nodes.back()->getChildren().empty() )

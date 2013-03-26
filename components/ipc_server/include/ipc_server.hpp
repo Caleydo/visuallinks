@@ -100,6 +100,10 @@ namespace LinksRouting
                          LinkDescription::Node* node,
                          WId client_wid );
 
+      void addCoveredPreview( const LinkDescription::NodePtr& node,
+                              const QRect& region,
+                              LinkDescription::nodes_t& covered_nodes );
+
     private:
 
       QWsServer          *_server;

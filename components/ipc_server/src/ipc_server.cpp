@@ -621,7 +621,7 @@ namespace LinksRouting
                                                     const float2& p_cov,
                                                     bool triangle = false )
       {
-        const QRect reg = getCoverRegion(p_cov);
+        const QRect& reg = getCoverRegion(p_cov);
         float2 dir = (p_out - p_cov).normalize();
 
         float2 normal;
@@ -661,6 +661,61 @@ namespace LinksRouting
           else
           {
             fac = (reg.bottom() - p_cov.y) / dir.y;
+            normal.y = 1;
+          }
+        }
+
+        float2 new_center = p_cov + fac * dir;
+        return buildIcon(new_center, normal, triangle);
+      }
+
+      /**
+       * Get intersection/hide behind icon from inside to outside
+       */
+      LinkDescription::NodePtr getInsideIntersect( const float2& p_out,
+                                                   const float2& p_cov,
+                                                   const QRect& reg,
+                                                   bool triangle = false )
+      {
+        float2 dir = (p_out - p_cov).normalize();
+
+        float2 normal;
+        float fac = -1;
+
+        if( std::fabs(dir.x) > 0.01 )
+        {
+          // if not too close to vertical try intersecting left or right
+          if( dir.x > 0 )
+          {
+            fac = (reg.left() - p_cov.x) / dir.x;
+            normal.x = 1;
+          }
+          else
+          {
+            fac = (reg.right() - p_cov.x) / dir.x;
+            normal.x = -1;
+          }
+
+          // check if vertically inside the region
+          float y = p_cov.y + fac * dir.y;
+          if( y < reg.top() || y > reg.bottom() )
+            fac = -1;
+        }
+
+        if( fac < 0 )
+        {
+          // nearly vertical or horizontal hit outside of vertical region
+          // boundaries -> intersect with top or bottom
+          normal.x = 0;
+
+          if( dir.y < 0 )
+          {
+            fac = (reg.bottom() - p_cov.y) / dir.y;
+            normal.y = -1;
+          }
+          else
+          {
+            fac = (reg.top() - p_cov.y) / dir.y;
             normal.y = 1;
           }
         }
@@ -768,6 +823,7 @@ namespace LinksRouting
 
     bool modified = false;
 
+    LinkDescription::nodes_t covered_nodes;
     struct OutsideScroll
     {
       float2 pos;
@@ -794,6 +850,7 @@ namespace LinksRouting
     float2 hedge_center;
     size_t num_visible = 0;
 
+    QRect desktop_rect = regions.front().region;
     const LinkDescription::nodes_t nodes = hedge->getNodes();
     for( auto node = hedge->getNodes().begin();
               node != hedge->getNodes().end();
@@ -810,24 +867,27 @@ namespace LinksRouting
 
       if( (*node)->get<bool>("outside", false) )
       {
-        (*node)->set("hidden", true);
-
         float2 center = (*node)->getCenter();
         if( center != float2(0,0) )
         {
-          for( size_t i = 0; i < num_outside_scroll; ++i )
-          {
-            OutsideScroll& out = outside_scroll[i];
-            if( (center - out.pos) * out.normal > 0 )
-              continue;
+          if( desktop_rect.contains(center.x, center.y) )
+            addCoveredPreview(*node, region, covered_nodes);
+          else
+            for( size_t i = 0; i < num_outside_scroll; ++i )
+            {
+              OutsideScroll& out = outside_scroll[i];
+              if( (center - out.pos) * out.normal > 0 )
+                continue;
 
-            if( out.normal.x == 0 )
-              out.pos.x += center.x;
-            else
-              out.pos.y += center.y;
-            out.num_outside += 1;
-          }
+              if( out.normal.x == 0 )
+                out.pos.x += center.x;
+              else
+                out.pos.y += center.y;
+              out.num_outside += 1;
+            }
         }
+
+        (*node)->set("hidden", true);
         continue;
       }
 
@@ -1086,7 +1146,6 @@ namespace LinksRouting
       hedge->addNode( node );
     }
 
-    LinkDescription::nodes_t covered_nodes;
     for( auto node = hedge->getNodes().begin();
               node != hedge->getNodes().end();
             ++node )
@@ -1111,41 +1170,7 @@ namespace LinksRouting
           continue;
         }
 
-        (*node)->set("covered-region", to_string(region));
-        (*node)->set("hover", false);
-
-        Rect bb;
-        for( auto vert = (*node)->getVertices().begin();
-                  vert != (*node)->getVertices().end();
-                ++vert )
-          bb.expand(*vert);
-
-        /**
-         * Mouse move callback
-         */
-        _subscribe_mouse->_data->_move_callbacks.push_back(
-          [&,bb,node](int x, int y)
-          {
-            bool hover = (*node)->get<bool>("hover");
-            if( bb.contains(x, y) )
-            {
-              if( hover )
-                return;
-              hover = true;
-            }
-            else if( hover )
-            {
-              hover = false;
-            }
-            else
-              return;
-
-            (*node)->set("hover", hover);
-            _cond_data_ready->wakeAll();
-          }
-        );
-
-        covered_nodes.push_back(*node);
+        addCoveredPreview(*node, region, covered_nodes);
 
 //        hedge->getNodes().push_back(
 //          cover_windows.getNearestVisible((*node)->getCenter())
@@ -1172,39 +1197,85 @@ namespace LinksRouting
 
     hedge->setCenter(hedge_center);
 
-    if( cover_windows.valid() )
+    for( auto node = covered_nodes.begin();
+              node != covered_nodes.end();
+            ++node )
     {
-      for( auto node = covered_nodes.begin();
-                node != covered_nodes.end();
-              ++node )
-      {
-        LinkDescription::NodePtr new_node =
-          cover_windows.getVisibleIntersect(hedge_center, (*node)->getCenter());
-        auto new_hedge = std::make_shared<LinkDescription::HyperEdge>();
-        new_hedge->set("client_wid", WIdtoStr(client_wid));
-        new_hedge->set("no-parent-route", true);
-        new_hedge->set("covered", true);
-        new_hedge->addNode(*node);
-        new_hedge->setCenter(new_node->getLinkPointsChildren().front());
-        new_node->getChildren().push_back(new_hedge);
-        hedge->addNode(new_node);
+      LinkDescription::NodePtr new_node;
+      if( (*node)->get<bool>("outside") && (*node)->get<bool>("covered") )
+        new_node = cover_windows.getInsideIntersect(hedge_center, (*node)->getCenter(), region);
+      else if( cover_windows.valid() )
+        new_node = cover_windows.getVisibleIntersect(hedge_center, (*node)->getCenter());
+      else
+        continue;
 
-        float2 center = new_hedge->getCenter();
+      auto new_hedge = std::make_shared<LinkDescription::HyperEdge>();
+      new_hedge->set("client_wid", WIdtoStr(client_wid));
+      new_hedge->set("no-parent-route", true);
+      new_hedge->set("covered", true);
+      new_hedge->addNode(*node);
+      new_hedge->setCenter(new_node->getLinkPointsChildren().front());
+      new_node->getChildren().push_back(new_hedge);
+      hedge->addNode(new_node);
+      bool is_outside = (*node)->get<bool>("outside");
 
-        /**
-         * Mouse click callback
-         */
-        _subscribe_mouse->_data->_click_callbacks.push_back(
-        [center,client_wid](int x, int y)
+      float2 center = new_hedge->getCenter();
+      auto client_info = std::find_if
+      (
+        _clients.begin(),
+        _clients.end(),
+        [&client_wid](const ClientInfos::value_type& it)
         {
+          return it.second.wid == client_wid;
+        }
+      );
+
+      assert( client_info != _clients.end() );
+      QRect client_region = client_info->second.region;
+      auto window_info = std::find_if
+      (
+        regions.begin(),
+        regions.end(),
+        [&client_wid](const WindowInfo& winfo)
+        {
+          return winfo.id == client_wid;
+        }
+      );
+      client_region.translate( window_info->region.topLeft() );
+
+      /**
+       * Mouse click callback
+       */
+      _subscribe_mouse->_data->_click_callbacks.push_back(
+      [center,client_info,client_region,is_outside](int x, int y)
+      {
 //          if( (center - float2(x,y)).length() > 10 )
 //            return;
 
-          std::cout << "raise: "
-                    << QxtWindowSystem::activeWindow(client_wid)
-                    << std::endl;
-        });
-      }
+        std::cout << "raise: "
+                  << QxtWindowSystem::activeWindow(client_info->second.wid)
+                  << std::endl;
+
+        if( !is_outside )
+          return;
+
+        int scroll_y = y - client_region.top();
+        if( scroll_y > 0 )
+          // if below scroll up until region is visible
+          scroll_y = y - client_region.bottom() + 35;
+        else
+          // if above scroll down until region is visible
+          scroll_y -= 35;
+
+        scroll_y += client_info->second.scroll_region.top();
+
+        client_info->first->write(QString(
+          "{"
+            "\"task\": \"SET\","
+            "\"id\": \"scroll-y\","
+            "\"val\": " + QString("%1").arg(scroll_y) +
+          "}"));
+      });
     }
 
     return modified;
@@ -1280,6 +1351,49 @@ namespace LinksRouting
       }
     }
     return false;
+  }
+
+  //----------------------------------------------------------------------------
+  void IPCServer::addCoveredPreview( const LinkDescription::NodePtr& node,
+                                     const QRect& region,
+                                     LinkDescription::nodes_t& covered_nodes )
+  {
+    node->set("covered", true);
+    node->set("covered-region", to_string(region));
+    node->set("hover", false);
+
+    Rect bb;
+    for( auto vert = node->getVertices().begin();
+              vert != node->getVertices().end();
+            ++vert )
+      bb.expand(*vert);
+
+    /**
+     * Mouse move callback
+     */
+    _subscribe_mouse->_data->_move_callbacks.push_back(
+      [&,bb,node](int x, int y)
+      {
+        bool hover = node->get<bool>("hover");
+        if( bb.contains(x, y) )
+        {
+          if( hover )
+            return;
+          hover = true;
+        }
+        else if( hover )
+        {
+          hover = false;
+        }
+        else
+          return;
+
+        node->set("hover", hover);
+        _cond_data_ready->wakeAll();
+      }
+    );
+
+    covered_nodes.push_back(node);
   }
 
   //----------------------------------------------------------------------------
