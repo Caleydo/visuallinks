@@ -69,8 +69,9 @@ namespace LinksRouting
   {
     assert(widget);
     registerArg("DebugRegions", _debug_regions);
-    registerArg("PreviewWidth", _preview_width = 500);
+    registerArg("PreviewWidth", _preview_width = 700);
     registerArg("PreviewHeight", _preview_height = 400);
+    registerArg("PreviewAutoWidth", _preview_auto_width = true);
 
 //    qRegisterMetaType<WindowRegions>("WindowRegions");
 //    assert( connect( &_window_monitor, SIGNAL(regionsChanged(WindowRegions)),
@@ -987,7 +988,8 @@ namespace LinksRouting
           text,
           nodes,
           TextPopup::HoverRect(popup_pos, popup_size, border_text, true),
-          TextPopup::HoverRect(hover_pos, hover_size, border_preview, false)
+          TextPopup::HoverRect(hover_pos, hover_size, border_preview, false),
+          _preview_auto_width
         };
         popup.hover_region.offset.x = region.left();
         popup.hover_region.offset.y = region.top();
@@ -1259,13 +1261,23 @@ namespace LinksRouting
         if( !is_outside )
           return;
 
-        int scroll_y = y - client_region.top();
-        if( scroll_y > 0 )
-          // if below scroll up until region is visible
-          scroll_y = y - client_region.bottom() + 35;
+        const bool scroll_center = true;
+        int scroll_y = y;
+
+        if( scroll_center )
+        {
+          scroll_y -= (client_region.top() + client_region.bottom()) / 2;
+        }
         else
-          // if above scroll down until region is visible
-          scroll_y -= 35;
+        {
+          scroll_y -= client_region.top();
+          if( scroll_y > 0 )
+            // if below scroll up until region is visible
+            scroll_y = y - client_region.bottom() + 35;
+          else
+            // if above scroll down until region is visible
+            scroll_y -= 35;
+        }
 
         scroll_y += client_info->second.scroll_region.top();
 
@@ -1720,10 +1732,14 @@ namespace LinksRouting
     float2 center,
     float2 rel_pos )
   {
+    const HierarchicTileMapPtr& tile_map = client_info.second.tile_map;
+    float scale = 1/tile_map->getLayerScale(popup.hover_region.zoom);
+
     float preview_aspect = _server->_preview_width
                          / static_cast<float>(_server->_preview_height);
     const QRect& reg = client_info.second.scroll_region;
-    int h = reg.height() / pow(2.0f, static_cast<float>(popup.hover_region.zoom)) + 0.5f,
+    float zoom_scale = pow(2.0f, static_cast<float>(popup.hover_region.zoom));
+    int h = reg.height() / zoom_scale + 0.5f,
         w = h * preview_aspect + 0.5;
 
     Rect& src = popup.hover_region.src_region;
@@ -1731,6 +1747,17 @@ namespace LinksRouting
 
     src.size.x = w;
     src.size.y = h;
+
+    if( popup.auto_resize )
+    {
+      int real_width = reg.width() / scale + 0.5f,
+          popup_width = std::min(_server->_preview_width, real_width);
+
+      Rect& popup_region = popup.hover_region.region;
+      int center_x = popup_region.pos.x + 0.5 * popup_region.size.x;
+      popup_region.size.x = popup_width;
+      popup_region.pos.x = center_x - popup_width / 2;
+    }
 
     if( center.x > -9999 && center.y > -9999 )
     {
@@ -1745,11 +1772,8 @@ namespace LinksRouting
 //    if( old_pos == src.pos )
 //      return;
 
-    const HierarchicTileMapPtr& tile_map = client_info.second.tile_map;
+
     bool sent = false;
-
-
-    float scale = 1/tile_map->getLayerScale(popup.hover_region.zoom);
     MapRect rect = tile_map->requestRect(src, popup.hover_region.zoom);
     rect.foreachTile([&](Tile& tile, size_t x, size_t y)
     {

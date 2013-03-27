@@ -277,8 +277,8 @@ namespace LinksRouting
       rendered_anything = true;
 
       for( auto popup = _subscribe_popups->_data->popups.begin();
-                  popup != _subscribe_popups->_data->popups.end();
-                ++popup )
+                popup != _subscribe_popups->_data->popups.end();
+              ++popup )
       {
         if( !popup->region.visible )
           continue;
@@ -349,7 +349,7 @@ namespace LinksRouting
             glBindTexture(GL_TEXTURE_2D, quad->first->id);
 
             float offset_x = 0;
-            if( hover.size.x > rect_size.x )
+            if( !popup->auto_resize && hover.size.x > rect_size.x )
               offset_x = (hover.size.x - rect_size.x) / 2;
 
             glPushMatrix();
@@ -417,7 +417,7 @@ namespace LinksRouting
         glScalef(scale, scale, 0);
 
         float2 offset = popup->hover_region.offset;
-        if( src.size.x > scroll.size.x )
+        if( !popup->auto_resize && src.size.x > scroll.size.x )
           offset.x -= (src.size.x - scroll.size.x) / 2;
         offset -= scroll.pos - src.pos;
 

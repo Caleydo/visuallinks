@@ -134,6 +134,7 @@ namespace LinksRouting
       std::string   _debug_regions;
       int           _preview_width,
                     _preview_height;
+      bool          _preview_auto_width;
 
       struct InteractionHandler
       {

@@ -53,6 +53,7 @@ namespace SlotType
       LinkDescription::nodes_t nodes;
       HoverRect region;
       HoverRect hover_region;
+      bool auto_resize;
     };
 
     typedef std::vector<Popup> Popups;
