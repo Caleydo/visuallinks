@@ -1552,6 +1552,9 @@ namespace LinksRouting
       top_left.y += window_info->region.top();
     }
 
+    if( !msg.isSet("regions") )
+      return;
+
     LinkDescription::nodes_t nodes;
     float avg_height = 0;
 

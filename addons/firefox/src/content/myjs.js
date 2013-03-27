@@ -102,6 +102,44 @@ function getScrollRegion()
   };
 }
 
+/**
+ * Page/Tab load hook
+ */
+function onPageLoad(event)
+{
+  var doc = event.originalTarget;
+  var loc = doc.defaultView.location;
+
+  // Match google desktop search
+  if( loc.host != "127.0.0.1:30828" || loc.pathname != "/search" )
+    return;
+
+  alert("search...");
+
+  var results = doc.getElementsByClassName("searchresult");
+  for(var i = 0; i < results.length; i += 1)
+  {
+    var afterresult = results[i].getElementsByClassName("afterresult")[0];
+    var url = results[i].getElementsByClassName("url")[0];
+
+    afterresult.innerHTML = url.innerHTML;
+  };
+
+  var myDiv = doc.getElementById("myDiv");
+}
+
+/**
+ * Load window hook
+ */
+window.addEventListener("load", function window_load()
+{
+  //gBrowser.addTab("http://127.0.0.1:30828/search?flags=8&num=10&q=america&start=0&s=yksDNyehVZo2SvO2BRHGoLhH26k");
+
+  var appcontent = document.getElementById("appcontent");  
+  if( appcontent )
+      appcontent.addEventListener("DOMContentLoaded", onPageLoad, true);  
+});
+
 //------------------------------------------------------------------------------
 function onVisLinkButton()
 {
@@ -265,18 +303,19 @@ function reportVisLinks(id, found)
     };
   }
 
-  if( bbs.length == 0 )
-    return;
-  
   var reg = getScrollRegion();
-  send({
+  var msg = {
     'task': (found ? 'FOUND' : 'INITIATE'),
     'title': document.title,
     'scroll-region': [reg.x, reg.y, reg.width, reg.height],
     'id': id,
     'stamp': last_stamp,
-    'regions': bbs
-  });
+  };
+
+  if( bbs.length > 0 )
+    msg['regions'] = bbs;
+  
+  send(msg);
   //alert("time = " + (Date.now() - start) / 10);
 // if( found )
 //    alert('send FOUND: '+selectionId);
