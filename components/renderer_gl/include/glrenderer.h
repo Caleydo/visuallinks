@@ -78,7 +78,7 @@ namespace LinksRouting
                         int pass = 0 );
       bool renderRect( const Rect& rect,
                        size_t margin = 2,
-                       //GLuint tex = 0,
+                       GLuint tex = 0,
                        const Color& fill = Color(1, 1, 1, 1),
                        const Color& border = Color(0.3, 0.3, 0.3, 0.8) );
 

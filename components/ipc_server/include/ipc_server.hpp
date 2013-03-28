@@ -10,6 +10,7 @@
 #define _IPC_SERVER_HPP_
 
 #include <QtCore>
+#include <QtOpenGL/qgl.h>
 #include <qwindowdefs.h>
 
 #include "common/componentarguments.h"
@@ -79,10 +80,11 @@ namespace LinksRouting
       {
         WId     wid;
         QRect   region;
-        QRect   scroll_region;
+        QRect   scroll_region, scroll_region_uncompressed;
         Partitions           partitions_src,
                              partitions_dest;
-        HierarchicTileMapPtr tile_map;
+        HierarchicTileMapPtr tile_map,
+                             tile_map_uncompressed;
       };
       typedef std::map<QWsSocket*, ClientInfo> ClientInfos;
 
@@ -102,6 +104,7 @@ namespace LinksRouting
 
       void addCoveredPreview( const LinkDescription::NodePtr& node,
                               const QRect& region,
+                              const QRect& scroll_region,
                               LinkDescription::nodes_t& covered_nodes );
 
     private:
@@ -109,6 +112,7 @@ namespace LinksRouting
       QWsServer          *_server;
       ClientInfos         _clients;
       WindowMonitor       _window_monitor;
+      QRect               _desktop_rect;
 
       QMutex             *_mutex_slot_links;
       QWaitCondition     *_cond_data_ready;
@@ -131,7 +135,9 @@ namespace LinksRouting
       void updateScrollRegion( const JSONParser& json,
                                ClientInfo& client_info );
 
-      std::string   _debug_regions;
+      std::string   _debug_regions,
+                    _debug_full_preview_path;
+      GLuint        _full_preview_img;
       int           _preview_width,
                     _preview_height;
       bool          _preview_auto_width;

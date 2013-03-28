@@ -65,10 +65,12 @@ namespace LinksRouting
     _window_monitor(widget, std::bind(&IPCServer::regionsChanged, this, _1)),
     _mutex_slot_links(mutex),
     _cond_data_ready(cond_data),
+    _full_preview_img(0),
     _interaction_handler(this)
   {
     assert(widget);
     registerArg("DebugRegions", _debug_regions);
+    registerArg("DebugFullPreview", _debug_full_preview_path);
     registerArg("PreviewWidth", _preview_width = 700);
     registerArg("PreviewHeight", _preview_height = 400);
     registerArg("PreviewAutoWidth", _preview_auto_width = true);
@@ -140,6 +142,27 @@ namespace LinksRouting
     {
       onTextReceived( QString::fromStdString(_debug_regions) );
       _debug_regions.clear();
+    }
+
+    if( !_debug_full_preview_path.empty() )
+    {
+      QImage img =
+        QGLWidget::convertToGLFormat
+        (
+          QImage( _debug_full_preview_path.c_str() )
+        );
+      _debug_full_preview_path.clear();
+
+      if( !_full_preview_img )
+        glGenTextures(1, &_full_preview_img);
+
+      glBindTexture(GL_TEXTURE_2D, _full_preview_img);
+      glTexImage2D( GL_TEXTURE_2D, 0, GL_RGBA,
+                    img.width(), img.height(),
+                    0, GL_RGBA, GL_UNSIGNED_BYTE, img.bits() );
+      glTexParameteri( GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR );
+      glTexParameteri( GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR );
+      glBindTexture(GL_TEXTURE_2D, 0);
     }
   }
 
@@ -519,6 +542,8 @@ namespace LinksRouting
     _subscribe_mouse->_data->clear();
     _subscribe_popups->_data->popups.clear();
 
+    _desktop_rect = regions.front().region;
+
     bool need_update = false;
     for( auto link = _slot_links->_data->begin();
          link != _slot_links->_data->end();
@@ -800,11 +825,12 @@ namespace LinksRouting
         return it.second.wid == client_wid;
       }
     );
-    QRect region;
+    QRect region, scroll_region;
     WindowRegions::const_iterator first_above = regions.end();
     if( client_info != _clients.end() )
     {
       region = client_info->second.region;
+      scroll_region = client_info->second.scroll_region_uncompressed;
 
       if( client_wid )
       {
@@ -818,6 +844,9 @@ namespace LinksRouting
           }
         );
         region.translate( window_info->region.topLeft() );
+        scroll_region.translate( -2 * scroll_region.topLeft() );
+        scroll_region.translate(region.topLeft() );
+
         first_above = window_info + 1;
       }
     }
@@ -851,7 +880,6 @@ namespace LinksRouting
     float2 hedge_center;
     size_t num_visible = 0;
 
-    QRect desktop_rect = regions.front().region;
     const LinkDescription::nodes_t nodes = hedge->getNodes();
     for( auto node = hedge->getNodes().begin();
               node != hedge->getNodes().end();
@@ -871,8 +899,8 @@ namespace LinksRouting
         float2 center = (*node)->getCenter();
         if( center != float2(0,0) )
         {
-          if( desktop_rect.contains(center.x, center.y) )
-            addCoveredPreview(*node, region, covered_nodes);
+          if( _desktop_rect.contains(center.x, center.y) )
+            addCoveredPreview(*node, region, scroll_region, covered_nodes);
           else
             for( size_t i = 0; i < num_outside_scroll; ++i )
             {
@@ -1169,10 +1197,11 @@ namespace LinksRouting
         if( !covered )
         {
           (*node)->set("covered-region", std::string());
+          (*node)->set("covered-preview-region", std::string());
           continue;
         }
 
-        addCoveredPreview(*node, region, covered_nodes);
+        addCoveredPreview(*node, region, scroll_region, covered_nodes);
 
 //        hedge->getNodes().push_back(
 //          cover_windows.getNearestVisible((*node)->getCenter())
@@ -1368,10 +1397,13 @@ namespace LinksRouting
   //----------------------------------------------------------------------------
   void IPCServer::addCoveredPreview( const LinkDescription::NodePtr& node,
                                      const QRect& region,
+                                     const QRect& scroll_region,
                                      LinkDescription::nodes_t& covered_nodes )
   {
     node->set("covered", true);
     node->set("covered-region", to_string(region));
+    node->set("covered-preview-region", to_string(_desktop_rect.intersect( scroll_region )));
+    node->set("covered-preview-texture", _full_preview_img);
     node->set("hover", false);
 
     Rect bb;
@@ -1541,6 +1573,7 @@ namespace LinksRouting
       client_info.scroll_region = msg.getValue<QRect>("scroll-region");
     else
       client_info.scroll_region = client_info.region;
+    client_info.scroll_region_uncompressed = client_info.scroll_region;
 
     const WindowRegions windows = _window_monitor.getWindows();
     auto window_info = std::find_if

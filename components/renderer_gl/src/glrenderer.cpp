@@ -295,6 +295,7 @@ namespace LinksRouting
 
         renderRect( popup->hover_region.region,
                     popup->hover_region.border,
+                    0,
                     Color(0.3,0.3,0.3) );
 
 
@@ -659,7 +660,10 @@ namespace LinksRouting
             && (*node)->get<bool>("hover") )
         {
           const Rect r = parseRect( (*node)->get<std::string>("covered-region") );
-          renderRect(r, 3.f, 0.5 * current_color, 2 * current_color);
+          renderRect(r, 3.f, 0, 0.5 * current_color, 2 * current_color);
+          const Rect rp = parseRect( (*node)->get<std::string>("covered-preview-region") );
+          Color preview_color(0.5, 1.0, 0.5, 1.0);
+          renderRect(rp, 2.f, (*node)->get<GLuint>("covered-preview-texture"), 0.5 * preview_color, preview_color);
           rendered_anything = true;
         }
         continue;
@@ -703,7 +707,7 @@ namespace LinksRouting
   //----------------------------------------------------------------------------
   bool GlRenderer::renderRect( const Rect& rect,
                                size_t b,
-                               //GLuint tex,
+                               GLuint tex,
                                const Color& fill,
                                const Color& border )
   {
@@ -715,11 +719,11 @@ namespace LinksRouting
       glVertex2f(rect.pos.x - b,               rect.pos.y + rect.size.y + b);
     glEnd();
 
-//    if( tex )
-//    {
-//      glEnable(GL_TEXTURE_2D);
-//      glBindTexture(GL_TEXTURE_2D, tex);
-//    }
+    if( tex )
+    {
+      glEnable(GL_TEXTURE_2D);
+      glBindTexture(GL_TEXTURE_2D, tex);
+    }
 
     glColor4fv(fill);
     glBegin(GL_QUADS);
@@ -733,11 +737,11 @@ namespace LinksRouting
       glVertex2f(rect.pos.x,               rect.pos.y + rect.size.y);
     glEnd();
 
-//    if( tex )
-//    {
-//      glDisable(GL_TEXTURE_2D);
-//      glBindTexture(GL_TEXTURE_2D, 0);
-//    }
+    if( tex )
+    {
+      glDisable(GL_TEXTURE_2D);
+      glBindTexture(GL_TEXTURE_2D, 0);
+    }
 
     return true;
   }
