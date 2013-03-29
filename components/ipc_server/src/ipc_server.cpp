@@ -65,7 +65,6 @@ namespace LinksRouting
     _window_monitor(widget, std::bind(&IPCServer::regionsChanged, this, _1)),
     _mutex_slot_links(mutex),
     _cond_data_ready(cond_data),
-    _full_preview_img(0),
     _interaction_handler(this)
   {
     assert(widget);
@@ -90,6 +89,7 @@ namespace LinksRouting
   void IPCServer::publishSlots(SlotCollector& slot_collector)
   {
     _slot_links = slot_collector.create<LinkDescription::LinkList>("/links");
+    _slot_xray = slot_collector.create<SlotType::XRayPopup>("/x-ray");
   }
 
   //----------------------------------------------------------------------------
@@ -146,23 +146,24 @@ namespace LinksRouting
 
     if( !_debug_full_preview_path.empty() )
     {
-      QImage img =
+//      QImage img =
+      _full_preview_img =
         QGLWidget::convertToGLFormat
         (
           QImage( _debug_full_preview_path.c_str() )
         );
       _debug_full_preview_path.clear();
 
-      if( !_full_preview_img )
-        glGenTextures(1, &_full_preview_img);
-
-      glBindTexture(GL_TEXTURE_2D, _full_preview_img);
-      glTexImage2D( GL_TEXTURE_2D, 0, GL_RGBA,
-                    img.width(), img.height(),
-                    0, GL_RGBA, GL_UNSIGNED_BYTE, img.bits() );
-      glTexParameteri( GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR );
-      glTexParameteri( GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR );
-      glBindTexture(GL_TEXTURE_2D, 0);
+//      if( !_full_preview_img )
+//        glGenTextures(1, &_full_preview_img);
+//
+//      glBindTexture(GL_TEXTURE_2D, _full_preview_img);
+//      glTexImage2D( GL_TEXTURE_2D, 0, GL_RGBA,
+//                    img.width(), img.height(),
+//                    0, GL_RGBA, GL_UNSIGNED_BYTE, img.bits() );
+//      glTexParameteri( GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR );
+//      glTexParameteri( GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR );
+//      glBindTexture(GL_TEXTURE_2D, 0);
     }
   }
 
@@ -1400,10 +1401,11 @@ namespace LinksRouting
                                      const QRect& scroll_region,
                                      LinkDescription::nodes_t& covered_nodes )
   {
+    Rect preview_region = Rect(_desktop_rect.intersect( scroll_region ));
     node->set("covered", true);
     node->set("covered-region", to_string(region));
     node->set("covered-preview-region", to_string(_desktop_rect.intersect( scroll_region )));
-    node->set("covered-preview-texture", _full_preview_img);
+//    node->set("covered-preview-texture", _full_preview_img);
     node->set("hover", false);
 
     Rect bb;
@@ -1416,7 +1418,7 @@ namespace LinksRouting
      * Mouse move callback
      */
     _subscribe_mouse->_data->_move_callbacks.push_back(
-      [&,bb,node](int x, int y)
+      [&,bb,node,preview_region](int x, int y)
       {
         bool hover = node->get<bool>("hover");
         if( bb.contains(x, y) )
@@ -1424,10 +1426,15 @@ namespace LinksRouting
           if( hover )
             return;
           hover = true;
+          _slot_xray->_data->img = &_full_preview_img;
+//          _slot_xray->_data->tex_id =
+//            node->get<unsigned int>("covered-preview-texture");
+          _slot_xray->_data->region = preview_region;
         }
         else if( hover )
         {
           hover = false;
+          _slot_xray->_data->img = 0;
         }
         else
           return;

@@ -15,6 +15,8 @@
 #include <string>
 #include <vector>
 
+class QImage;
+
 namespace LinksRouting
 {
 namespace SlotType
@@ -58,6 +60,12 @@ namespace SlotType
 
     typedef std::vector<Popup> Popups;
     Popups popups;
+  };
+
+  struct XRayPopup
+  {
+    QImage* img;
+    Rect region;
   };
 
 } // namespace SlotType

@@ -120,6 +120,9 @@ namespace LinksRouting
       /* List of all open searches */
       slot_t<LinkDescription::LinkList>::type _slot_links;
 
+      /* Outside x-ray popup */
+      slot_t<SlotType::XRayPopup>::type _slot_xray;
+
       /* List of available routing components */
       slot_t<SlotType::ComponentSelection>::type _subscribe_routing;
 
@@ -128,7 +131,7 @@ namespace LinksRouting
 
       /* Slot for registering mouse callback */
       slot_t<SlotType::MouseEvent>::type _subscribe_mouse;
-      slot_t<LinksRouting::SlotType::TextPopup>::type _subscribe_popups;
+      slot_t<SlotType::TextPopup>::type _subscribe_popups;
 
       LinkDescription::NodePtr parseRegions( const JSONParser& json,
                                              ClientInfo& client_info );
@@ -137,7 +140,7 @@ namespace LinksRouting
 
       std::string   _debug_regions,
                     _debug_full_preview_path;
-      GLuint        _full_preview_img;
+      QImage        _full_preview_img;
       int           _preview_width,
                     _preview_height;
       bool          _preview_auto_width;

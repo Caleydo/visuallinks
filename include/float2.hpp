@@ -206,6 +206,11 @@ struct Rect
     pos(r.left(), r.top()),
     size(r.width(), r.height())
   {}
+
+  QRect toQRect() const
+  {
+    return QRect(pos.x, pos.y, size.x, size.y);
+  }
 #endif
 
   float l() const { return pos.x; }

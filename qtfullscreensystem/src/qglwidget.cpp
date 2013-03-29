@@ -6,6 +6,7 @@
 #include <gl/gl.h>
 #endif
 
+#include <QRect>
 #include "qglwidget.hpp"
 #include "clock.hxx"
 #include "log.hpp"
@@ -237,6 +238,8 @@ ShaderPtr loadShader( QString vert, QString frag )
   {
     _subscribe_links =
       slot_subscriber.getSlot<LinksRouting::SlotType::Image>("/rendered-links");
+    _subscribe_xray =
+      slot_subscriber.getSlot<LinksRouting::SlotType::XRayPopup>("/x-ray");
 #ifdef USE_GPU_ROUTING
     _subscribe_costmap =
       slot_subscriber.getSlot<LinksRouting::SlotType::Image>("/costmap");
@@ -476,6 +479,12 @@ ShaderPtr loadShader( QString vert, QString frag )
   void GLWidget::paintEvent(QPaintEvent *event)
   {
     QPainter painter(this);
+
+    if( _subscribe_xray->_data->img )
+    {
+      painter.drawImage( _subscribe_xray->_data->region.toQRect(),
+                         *_subscribe_xray->_data->img );
+    }
 
     painter.drawImage(QPoint(0,0), _image);
 

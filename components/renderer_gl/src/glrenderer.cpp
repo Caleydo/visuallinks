@@ -661,9 +661,9 @@ namespace LinksRouting
         {
           const Rect r = parseRect( (*node)->get<std::string>("covered-region") );
           renderRect(r, 3.f, 0, 0.5 * current_color, 2 * current_color);
-          const Rect rp = parseRect( (*node)->get<std::string>("covered-preview-region") );
-          Color preview_color(0.5, 1.0, 0.5, 1.0);
-          renderRect(rp, 2.f, (*node)->get<GLuint>("covered-preview-texture"), 0.5 * preview_color, preview_color);
+//          const Rect rp = parseRect( (*node)->get<std::string>("covered-preview-region") );
+//          Color preview_color(0.5, 1.0, 0.5, 1.0);
+//          renderRect(rp, 2.f, (*node)->get<GLuint>("covered-preview-texture"), 0.5 * preview_color, preview_color);
           rendered_anything = true;
         }
         continue;
