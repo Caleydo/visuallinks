@@ -17,7 +17,8 @@ std::ostream& operator<<(std::ostream& s, const std::vector<float2>& verts)
   s << "]";
   return s;
 }
-
+static GLuint preview_tex_id = 0;
+static Rect preview_rect;
 namespace LinksRouting
 {
   // internal helper...
@@ -255,6 +256,7 @@ namespace LinksRouting
     assert( _blur_x_shader );
     assert( _blur_y_shader );
 
+    preview_tex_id = 0;
     _slot_links->setValid(false);
     _links_fbo.bind();
 
@@ -452,6 +454,16 @@ namespace LinksRouting
         glPopAttrib();
       }
     }
+//
+//    if( preview_tex_id )
+//    {
+//      glEnable(GL_BLEND);
+//      glTexEnvf(GL_TEXTURE_ENV, GL_TEXTURE_ENV_MODE, GL_MODULATE);
+//      Color preview_color(1, 1, 1, 0.5);
+//      renderRect(preview_rect, 0, preview_tex_id, preview_color);
+//
+//    }
+
     _links_fbo.unbind();
 
     if( !rendered_anything )
@@ -661,9 +673,11 @@ namespace LinksRouting
         {
           const Rect r = parseRect( (*node)->get<std::string>("covered-region") );
           renderRect(r, 3.f, 0, 0.5 * current_color, 2 * current_color);
-//          const Rect rp = parseRect( (*node)->get<std::string>("covered-preview-region") );
-//          Color preview_color(0.5, 1.0, 0.5, 1.0);
-//          renderRect(rp, 2.f, (*node)->get<GLuint>("covered-preview-texture"), 0.5 * preview_color, preview_color);
+          preview_tex_id = (*node)->get<GLuint>("covered-preview-texture");
+          preview_rect = parseRect( (*node)->get<std::string>("covered-preview-region") );
+          const Rect rp = parseRect( (*node)->get<std::string>("covered-preview-region") );
+          Color preview_color(0.5, 0.5, 0.5, 0.5);
+          renderRect(rp, 0, preview_tex_id, preview_color);
           rendered_anything = true;
         }
         continue;
@@ -711,16 +725,21 @@ namespace LinksRouting
                                const Color& fill,
                                const Color& border )
   {
-    glColor4fv(border);
-    glBegin(GL_QUADS);
-      glVertex2f(rect.pos.x - b,               rect.pos.y - b);
-      glVertex2f(rect.pos.x + rect.size.x + b, rect.pos.y - b);
-      glVertex2f(rect.pos.x + rect.size.x + b, rect.pos.y + rect.size.y + b);
-      glVertex2f(rect.pos.x - b,               rect.pos.y + rect.size.y + b);
-    glEnd();
+    if( b )
+    {
+      glColor4fv(border);
+      glBegin(GL_QUADS);
+        glVertex2f(rect.pos.x - b,               rect.pos.y - b);
+        glVertex2f(rect.pos.x + rect.size.x + b, rect.pos.y - b);
+        glVertex2f(rect.pos.x + rect.size.x + b, rect.pos.y + rect.size.y + b);
+        glVertex2f(rect.pos.x - b,               rect.pos.y + rect.size.y + b);
+      glEnd();
+    }
 
     if( tex )
     {
+//      glEnable(GL_BLEND);
+//      glTexEnvf(GL_TEXTURE_ENV, GL_TEXTURE_ENV_MODE, GL_MODULATE);
       glEnable(GL_TEXTURE_2D);
       glBindTexture(GL_TEXTURE_2D, tex);
     }

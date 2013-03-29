@@ -333,12 +333,30 @@ ShaderPtr loadShader( QString vert, QString frag )
 
     PROFILE_RESULT("  core")
 
-    glMatrixMode(GL_PROJECTION);
-    glLoadIdentity();
-
     // normal draw...
     glClear(GL_COLOR_BUFFER_BIT);
     glActiveTexture(GL_TEXTURE0);
+
+//    if( _subscribe_xray->_data->tex_id )
+//    {
+//      std::cout << "tex..." << std::endl;
+//      glBindTexture(GL_TEXTURE_2D, _subscribe_xray->_data->tex_id);
+//      const Rect& rect = _subscribe_xray->_data->region;
+//      glColor4f(1.0,1.0,1.0,1.0);
+//      glBegin(GL_QUADS);
+//        glTexCoord2f(0, 0);
+//        glVertex2f(rect.pos.x,               rect.pos.y);
+//        glTexCoord2f(1, 0);
+//        glVertex2f(rect.pos.x + rect.size.x, rect.pos.y);
+//        glTexCoord2f(1, 1);
+//        glVertex2f(rect.pos.x + rect.size.x, rect.pos.y + rect.size.y);
+//        glTexCoord2f(0, 1);
+//        glVertex2f(rect.pos.x,               rect.pos.y + rect.size.y);
+//      glEnd();
+//    }
+
+    glMatrixMode(GL_PROJECTION);
+    glLoadIdentity();
     glBindTexture(GL_TEXTURE_2D, _subscribe_links->_data->id);
 
 #ifndef USE_DESKTOP_BLEND
@@ -479,12 +497,6 @@ ShaderPtr loadShader( QString vert, QString frag )
   void GLWidget::paintEvent(QPaintEvent *event)
   {
     QPainter painter(this);
-
-    if( _subscribe_xray->_data->img )
-    {
-      painter.drawImage( _subscribe_xray->_data->region.toQRect(),
-                         *_subscribe_xray->_data->img );
-    }
 
     painter.drawImage(QPoint(0,0), _image);
 

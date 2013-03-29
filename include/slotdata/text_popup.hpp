@@ -15,8 +15,6 @@
 #include <string>
 #include <vector>
 
-class QImage;
-
 namespace LinksRouting
 {
 namespace SlotType
@@ -64,7 +62,7 @@ namespace SlotType
 
   struct XRayPopup
   {
-    QImage* img;
+    unsigned int tex_id;
     Rect region;
   };
 

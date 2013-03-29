@@ -65,6 +65,7 @@ namespace LinksRouting
     _window_monitor(widget, std::bind(&IPCServer::regionsChanged, this, _1)),
     _mutex_slot_links(mutex),
     _cond_data_ready(cond_data),
+    _full_preview_img(0),
     _interaction_handler(this)
   {
     assert(widget);
@@ -146,24 +147,23 @@ namespace LinksRouting
 
     if( !_debug_full_preview_path.empty() )
     {
-//      QImage img =
-      _full_preview_img =
+      QImage img =
         QGLWidget::convertToGLFormat
         (
-          QImage( _debug_full_preview_path.c_str() )
+          QImage( _debug_full_preview_path.c_str() ).mirrored(false, true)
         );
       _debug_full_preview_path.clear();
 
-//      if( !_full_preview_img )
-//        glGenTextures(1, &_full_preview_img);
-//
-//      glBindTexture(GL_TEXTURE_2D, _full_preview_img);
-//      glTexImage2D( GL_TEXTURE_2D, 0, GL_RGBA,
-//                    img.width(), img.height(),
-//                    0, GL_RGBA, GL_UNSIGNED_BYTE, img.bits() );
-//      glTexParameteri( GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR );
-//      glTexParameteri( GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR );
-//      glBindTexture(GL_TEXTURE_2D, 0);
+      if( !_full_preview_img )
+        glGenTextures(1, &_full_preview_img);
+
+      glBindTexture(GL_TEXTURE_2D, _full_preview_img);
+      glTexImage2D( GL_TEXTURE_2D, 0, GL_RGBA,
+                    img.width(), img.height(),
+                    0, GL_RGBA, GL_UNSIGNED_BYTE, img.bits() );
+      glTexParameteri( GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR );
+      glTexParameteri( GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR );
+      glBindTexture(GL_TEXTURE_2D, 0);
     }
   }
 
@@ -1405,7 +1405,7 @@ namespace LinksRouting
     node->set("covered", true);
     node->set("covered-region", to_string(region));
     node->set("covered-preview-region", to_string(_desktop_rect.intersect( scroll_region )));
-//    node->set("covered-preview-texture", _full_preview_img);
+    node->set("covered-preview-texture", _full_preview_img);
     node->set("hover", false);
 
     Rect bb;
@@ -1426,15 +1426,15 @@ namespace LinksRouting
           if( hover )
             return;
           hover = true;
-          _slot_xray->_data->img = &_full_preview_img;
-//          _slot_xray->_data->tex_id =
-//            node->get<unsigned int>("covered-preview-texture");
+//          _slot_xray->_data->img = &_full_preview_img;
+          _slot_xray->_data->tex_id =
+            node->get<unsigned int>("covered-preview-texture");
           _slot_xray->_data->region = preview_region;
         }
         else if( hover )
         {
           hover = false;
-          _slot_xray->_data->img = 0;
+          _slot_xray->_data->tex_id = 0;
         }
         else
           return;
