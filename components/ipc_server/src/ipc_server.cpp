@@ -1405,7 +1405,7 @@ namespace LinksRouting
      * Mouse move callback
      */
     _subscribe_mouse->_data->_move_callbacks.push_back(
-      [&,bb,node,preview_region](int x, int y)
+      [&,bb,node,preview_region,scroll_region](int x, int y)
       {
         bool hover = node->get<bool>("hover");
         if( bb.contains(x, y) )
@@ -1414,7 +1414,7 @@ namespace LinksRouting
             return;
           hover = true;
           _slot_xray->_data->img = &_full_preview_img;
-          _slot_xray->_data->region = preview_region;
+          _slot_xray->_data->region = scroll_region.translated(0, -24);
         }
         else if( hover )
         {

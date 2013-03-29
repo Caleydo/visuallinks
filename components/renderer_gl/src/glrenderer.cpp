@@ -660,6 +660,8 @@ namespace LinksRouting
             && (*node)->get<bool>("covered")
             && (*node)->get<bool>("hover") )
         {
+          const Rect rp = parseRect( (*node)->get<std::string>("covered-preview-region") );
+          renderRect(rp, 2.f, 0, 0.07 * current_color, 2 * current_color);
           const Rect r = parseRect( (*node)->get<std::string>("covered-region") );
           renderRect(r, 3.f, 0, 0.5 * current_color, 2 * current_color);
           rendered_anything = true;

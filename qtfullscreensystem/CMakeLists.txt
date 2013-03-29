@@ -24,6 +24,7 @@ set( RUNTIME_FILES
   ${SHADER_FILES}
   ${CMAKE_CURRENT_SOURCE_DIR}/qtconfig.xml
   ${CMAKE_CURRENT_SOURCE_DIR}/wikipedia-test.png
+  ${CMAKE_CURRENT_SOURCE_DIR}/C-130J-wikipedia.png
 )
 
 set (ADDITIONAL_INCLUDE_DIRS
