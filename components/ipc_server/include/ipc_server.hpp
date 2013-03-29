@@ -140,7 +140,7 @@ namespace LinksRouting
 
       std::string   _debug_regions,
                     _debug_full_preview_path;
-      GLuint        _full_preview_img;
+      QImage        _full_preview_img;
       int           _preview_width,
                     _preview_height;
       bool          _preview_auto_width;

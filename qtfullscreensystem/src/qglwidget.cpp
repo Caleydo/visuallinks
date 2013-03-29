@@ -337,24 +337,6 @@ ShaderPtr loadShader( QString vert, QString frag )
     glClear(GL_COLOR_BUFFER_BIT);
     glActiveTexture(GL_TEXTURE0);
 
-//    if( _subscribe_xray->_data->tex_id )
-//    {
-//      std::cout << "tex..." << std::endl;
-//      glBindTexture(GL_TEXTURE_2D, _subscribe_xray->_data->tex_id);
-//      const Rect& rect = _subscribe_xray->_data->region;
-//      glColor4f(1.0,1.0,1.0,1.0);
-//      glBegin(GL_QUADS);
-//        glTexCoord2f(0, 0);
-//        glVertex2f(rect.pos.x,               rect.pos.y);
-//        glTexCoord2f(1, 0);
-//        glVertex2f(rect.pos.x + rect.size.x, rect.pos.y);
-//        glTexCoord2f(1, 1);
-//        glVertex2f(rect.pos.x + rect.size.x, rect.pos.y + rect.size.y);
-//        glTexCoord2f(0, 1);
-//        glVertex2f(rect.pos.x,               rect.pos.y + rect.size.y);
-//      glEnd();
-//    }
-
     glMatrixMode(GL_PROJECTION);
     glLoadIdentity();
     glBindTexture(GL_TEXTURE_2D, _subscribe_links->_data->id);
@@ -455,7 +437,12 @@ ShaderPtr loadShader( QString vert, QString frag )
       //writeTexture(_subscribe_links, QString("links%1.png").arg(counter));
 
       QBitmap mask = QBitmap::fromImage( links.createMaskFromColor( qRgba(0,0,0, 0) ) );
-      setMask(mask);
+      setMask
+      (
+        _subscribe_xray->_data->img
+        ? QRegion(mask).unite(_subscribe_xray->_data->region.toQRect())
+        : mask
+      );
 //      mask.save(QString("mask%1.png").arg(counter));
     }
     else
@@ -497,6 +484,14 @@ ShaderPtr loadShader( QString vert, QString frag )
   void GLWidget::paintEvent(QPaintEvent *event)
   {
     QPainter painter(this);
+
+    if( _subscribe_xray->_data->img )
+    {
+      painter.setOpacity(0.5);
+      painter.drawImage( _subscribe_xray->_data->region.toQRect(),
+                         *_subscribe_xray->_data->img );
+      painter.setOpacity(1.0);
+    }
 
     painter.drawImage(QPoint(0,0), _image);
 
