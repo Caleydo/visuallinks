@@ -29,6 +29,11 @@ namespace LinksRouting
     return strm.str();
   }
 
+  std::string to_string(const Rect& r)
+  {
+    return to_string( r.toQRect() );
+  }
+
   std::string WIdtoStr(WId wid)
   {
     return std::to_string(
@@ -889,7 +894,7 @@ namespace LinksRouting
         if( center != float2(0,0) )
         {
           if( _desktop_rect.contains(center.x, center.y) )
-            addCoveredPreview(*node, region, scroll_region, covered_nodes);
+            addCoveredPreview(*node, region, scroll_region, covered_nodes, true);
           else
             for( size_t i = 0; i < num_outside_scroll; ++i )
             {
@@ -1387,12 +1392,20 @@ namespace LinksRouting
   void IPCServer::addCoveredPreview( const LinkDescription::NodePtr& node,
                                      const QRect& region,
                                      const QRect& scroll_region,
-                                     LinkDescription::nodes_t& covered_nodes )
+                                     LinkDescription::nodes_t& covered_nodes,
+                                     bool extend )
   {
-    Rect preview_region = Rect(_desktop_rect.intersect( scroll_region ));
+    QRect preview_region =
+      scroll_region.intersect(extend ? _desktop_rect : region);
+    QRect source_region
+    (
+      preview_region.topLeft() - scroll_region.topLeft(),
+      preview_region.size()
+    );
+
     node->set("covered", true);
     node->set("covered-region", to_string(region));
-    node->set("covered-preview-region", to_string(_desktop_rect.intersect( scroll_region )));
+    node->set("covered-preview-region", to_string(preview_region));
     node->set("hover", false);
 
     Rect bb;
@@ -1405,7 +1418,7 @@ namespace LinksRouting
      * Mouse move callback
      */
     _subscribe_mouse->_data->_move_callbacks.push_back(
-      [&,bb,node,preview_region,scroll_region](int x, int y)
+      [&,bb,node,preview_region,scroll_region,source_region](int x, int y)
       {
         bool hover = node->get<bool>("hover");
         if( bb.contains(x, y) )
@@ -1414,7 +1427,8 @@ namespace LinksRouting
             return;
           hover = true;
           _slot_xray->_data->img = &_full_preview_img;
-          _slot_xray->_data->region = scroll_region.translated(0, -24);
+          _slot_xray->_data->region = source_region;
+          _slot_xray->_data->pos = preview_region.topLeft() - QPoint(0, 24);
         }
         else if( hover )
         {

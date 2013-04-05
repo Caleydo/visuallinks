@@ -66,6 +66,7 @@ namespace SlotType
   {
     QImage* img;
     Rect region;
+    float2 pos;
   };
 
 } // namespace SlotType

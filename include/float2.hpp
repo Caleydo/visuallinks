@@ -31,6 +31,18 @@ struct float2
    */
   float2(float _x, float _y) : x(_x), y(_y) { }
   
+#ifdef QPOINT_H
+  float2(const QPoint& p):
+    x(p.x()),
+    y(p.y())
+  {}
+
+  QPoint toQPoint() const
+  {
+    return QPoint(x, y);
+  }
+#endif
+
   /**
    *
    */

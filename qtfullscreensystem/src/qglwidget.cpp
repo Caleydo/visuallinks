@@ -431,7 +431,7 @@ ShaderPtr loadShader( QString vert, QString frag )
 
     //glPopAttrib();
 
-    //links.save("fbo.png");
+    //links.save(QString("fbo%1.png").arg(counter));
     if( _subscribe_links->isValid() )
     {
       //writeTexture(_subscribe_links, QString("links%1.png").arg(counter));
@@ -488,8 +488,9 @@ ShaderPtr loadShader( QString vert, QString frag )
     if( _subscribe_xray->_data->img )
     {
       painter.setOpacity(0.5);
-      painter.drawImage( _subscribe_xray->_data->region.toQRect(),
-                         *_subscribe_xray->_data->img );
+      painter.drawImage( _subscribe_xray->_data->pos.toQPoint(),
+                         *_subscribe_xray->_data->img,
+                         _subscribe_xray->_data->region.toQRect() );
       painter.setOpacity(1.0);
     }
 

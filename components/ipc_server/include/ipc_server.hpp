@@ -105,7 +105,8 @@ namespace LinksRouting
       void addCoveredPreview( const LinkDescription::NodePtr& node,
                               const QRect& region,
                               const QRect& scroll_region,
-                              LinkDescription::nodes_t& covered_nodes );
+                              LinkDescription::nodes_t& covered_nodes,
+                              bool extend = false );
 
     private:
 
