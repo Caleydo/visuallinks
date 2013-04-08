@@ -28,11 +28,13 @@ namespace LinkDescription
   typedef std::map<std::string, std::string> props_t;
   typedef std::vector<HyperEdgePtr> hedges_t;
 
-  class PropertyElement
+  class PropertyMap
   {
     public:
-      props_t& getProps() { return _props; }
-      const props_t& getProps() const { return _props; }
+
+      PropertyMap( const props_t& props = props_t() ):
+        _props(props)
+      {}
 
       /**
        * Set a property
@@ -46,23 +48,13 @@ namespace LinkDescription
 //#if defined(WIN32) || defined(_WIN32)
         // Use stringstream because visual studio seems do not have the proper
         // std::to_string overloads.
-		std::stringstream strm;
-		strm << val;
-		_props[ key ] = strm.str();
+        std::stringstream strm;
+        strm << val;
+        _props[ key ] = strm.str();
 //#else
-//		_props[ key ] = std::to_string(val);
+//      _props[ key ] = std::to_string(val);
 //#endif
       }
-
-//      void set(const std::string& key, const std::string& val)
-//      {
-//        _props[ key ] = val;
-//      }
-//
-//      void set(const std::string& key, const char* val)
-//      {
-//        _props[ key ] = val;
-//      }
 
       /**
        * Get a property
@@ -81,10 +73,38 @@ namespace LinkDescription
         return convertFromString(it->second, def_val);
       }
 
-    protected:
-      props_t   _props;
+      props_t&       getMap()       { return _props; }
+      props_t const& getMap() const { return _props; }
 
-      PropertyElement( const props_t& props = props_t() ):
+      friend std::ostream& operator<<(std::ostream& strm, const PropertyMap& m);
+
+    protected:
+      props_t _props;
+  };
+
+  class PropertyElement
+  {
+    public:
+
+      template<typename T>
+      void set(const std::string& key, const T& val)
+      {
+        _props.set(key, val);
+      }
+
+      template<typename T>
+      T get(const std::string& key, const T& def_val = T()) const
+      {
+        return _props.get(key, def_val);
+      }
+
+      PropertyMap&       getProps()       { return _props; }
+      PropertyMap const& getProps() const { return _props; }
+
+    protected:
+      PropertyMap _props;
+
+      PropertyElement( const PropertyMap& props = PropertyMap() ):
         _props( props )
       {}
   };
@@ -97,14 +117,14 @@ namespace LinkDescription
 
       Node();
       explicit Node( const points_t& points,
-                     const props_t& props = props_t() );
+                     const PropertyMap& props = PropertyMap() );
       Node( const points_t& points,
             const points_t& link_points,
-            const props_t& props = props_t() );
+            const PropertyMap& props = PropertyMap() );
       Node( const points_t& points,
             const points_t& link_points,
             const points_t& link_points_children,
-            const props_t& props = props_t() );
+            const PropertyMap& props = PropertyMap() );
       explicit Node(HyperEdgePtr hedge);
 
       points_t& getVertices();
@@ -148,7 +168,7 @@ namespace LinkDescription
 
       HyperEdge();
       explicit HyperEdge( const nodes_t& nodes,
-                          const props_t& props = props_t() );
+                          const PropertyMap& props = PropertyMap() );
 
       nodes_t& getNodes();
       const nodes_t& getNodes() const;

@@ -78,7 +78,7 @@ function updateScale()
 /**
  * Get the document region relative to the application window
  */
-function getRegion()
+function getViewport()
 {
   updateScale();
   var win = content.document.defaultView;
@@ -91,12 +91,15 @@ function getRegion()
   ];
 }
 
+/**
+ * Get the scroll region relative to the document region
+ */
 function getScrollRegion()
 {
   var doc = content.document;
   return {
-    x: content.scrollX,
-    y: content.scrollY,
+    x: -content.scrollX, // coordinates relative to
+    y: -content.scrollY, // top left corner of viewport
     width: doc.documentElement.scrollWidth,
     height: doc.documentElement.scrollHeight
   };
@@ -382,7 +385,7 @@ function register()
           task: 'REGISTER',
           name: "Firefox",
           pos: [box.screenX + box.width / 2, box.screenY + box.height / 2],
-          region: getRegion()
+          viewport: getViewport()
         });
         send({
           task: 'GET',
@@ -509,7 +512,7 @@ function attrModified(e)
 //------------------------------------------------------------------------------
 function resize()
 {
-  send({task: 'RESIZE', region: getRegion()});
+  send({task: 'RESIZE', viewport: getViewport()});
 	//register();
 	//windowChanged();
 }

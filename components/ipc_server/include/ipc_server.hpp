@@ -15,9 +15,7 @@
 
 #include "common/componentarguments.h"
 #include "config.h"
-#include "HierarchicTileMap.hpp"
 #include "linkdescription.h"
-#include "PartitionHelper.hxx"
 #include "slotdata/component_selection.hpp"
 #include "slotdata/image.hpp"
 #include "slotdata/mouse_event.hpp"
@@ -39,6 +37,7 @@ class JSONParser;
 namespace LinksRouting
 {
   typedef std::chrono::high_resolution_clock clock;
+  class ClientInfo;
 
   class IPCServer:
     public QObject,
@@ -76,16 +75,6 @@ namespace LinksRouting
 
     protected:
 
-      struct ClientInfo
-      {
-        WId     wid;
-        QRect   region;
-        QRect   scroll_region, scroll_region_uncompressed;
-        Partitions           partitions_src,
-                             partitions_dest;
-        HierarchicTileMapPtr tile_map,
-                             tile_map_uncompressed;
-      };
       typedef std::map<QWsSocket*, ClientInfo> ClientInfos;
 
       void onInitiate( LinkDescription::LinkList::iterator& link,

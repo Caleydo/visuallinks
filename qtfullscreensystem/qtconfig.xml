@@ -10,7 +10,7 @@
   <QtWebsocketServer>
 <!-- <DebugRegions type="String" val="{'task':'INITIATE','id':'Test','stamp':75672,'regions':[[[177,252],[231,252],[231,284],[177,284]],[[427,310],[452,310],[452,326],[427,326]],[[746,310],[771,310],[771,326],[746,326]]]}"/>
 -->
-    <DebugFullPreview type="String" val="C-130J-wikipedia.png" />
+<!-- <DebugFullPreview type="String" val="C-130J-wikipedia.png" /> -->
     <PreviewWidth type="Integer" val="700" />
     <PreviewHeight type="Integer" val="400" />
     <PreviewAutoWidth type="Bool" val="true" />

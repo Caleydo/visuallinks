@@ -13,6 +13,14 @@ namespace LinkDescription
 {
 
   //----------------------------------------------------------------------------
+  std::ostream& operator<<(std::ostream& strm, const PropertyMap& m)
+  {
+    for(auto& prop: m._props)
+      strm << '"' << prop.first << "\" = \"" << prop.second << "\"\n";
+    return strm;
+  }
+
+  //----------------------------------------------------------------------------
   Node::Node():
     _parent(0)
   {
@@ -21,7 +29,7 @@ namespace LinkDescription
 
   //----------------------------------------------------------------------------
   Node::Node( const points_t& points,
-              const props_t& props ):
+              const PropertyMap& props ):
     PropertyElement( props ),
     _points( points ),
     _parent(0)
@@ -32,7 +40,7 @@ namespace LinkDescription
   //----------------------------------------------------------------------------
   Node::Node( const points_t& points,
               const points_t& link_points,
-              const props_t& props ):
+              const PropertyMap& props ):
     PropertyElement( props ),
     _points( points ),
     _link_points( link_points ),
@@ -45,7 +53,7 @@ namespace LinkDescription
   Node::Node( const points_t& points,
               const points_t& link_points,
               const points_t& link_points_children,
-              const props_t& props ):
+              const PropertyMap& props ):
     PropertyElement( props ),
     _points( points ),
     _link_points( link_points ),
@@ -184,7 +192,7 @@ namespace LinkDescription
 
   //----------------------------------------------------------------------------
   HyperEdge::HyperEdge( const nodes_t& nodes,
-                        const props_t& props ):
+                        const PropertyMap& props ):
     PropertyElement( props ),
     _parent(0),
     _nodes( nodes ),

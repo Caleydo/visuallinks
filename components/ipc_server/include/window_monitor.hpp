@@ -24,7 +24,9 @@ namespace LinksRouting
     QRect       region;
     std::string title;
 
-    WindowInfo(WId id, const QRect& region, const std::string& title):
+    explicit WindowInfo( WId id,
+                         const QRect& region = QRect(),
+                         const std::string& title = "" ):
       id(id),
       region(region),
       title(title)
@@ -34,6 +36,11 @@ namespace LinksRouting
     {
       // We don't care about title changes -> Only compare id and region
       return id == rhs.id && region == rhs.region;
+    }
+
+    bool isValid() const
+    {
+      return id && id != static_cast<WId>(-1);
     }
   };
   typedef std::vector<WindowInfo> WindowRegions;

@@ -8,6 +8,7 @@
 
 #include "ipc_server.hpp"
 #include "log.hpp"
+#include "ClientInfo.hxx"
 #include "JSONParser.h"
 
 #include <QMutex>
@@ -15,6 +16,7 @@
 #include <algorithm>
 #include <map>
 #include <tuple>
+#include <limits>
 
 namespace LinksRouting
 {
@@ -189,9 +191,8 @@ namespace LinksRouting
     }
 
     ClientInfo& client_info = client->second;
-    WId& client_wid = client_info.wid;
-
-    std::cout << "Received (" << client_wid << "): " << data << std::endl;
+    std::cout << "Received (" << client_info.getWindowInfo().id << "): "
+              << data << std::endl;
 
     try
     {
@@ -210,10 +211,12 @@ namespace LinksRouting
           }
 
           QPoint pos(pos_list.at(0).toInt(), pos_list.at(1).toInt());
-          client_wid = windowAt(_window_monitor.getWindows(), pos);
+          const WindowRegions& windows = _window_monitor.getWindows();
+          client_info.setWindowId( windowAt(windows, pos) );
+          client_info.updateWindow(windows);
         }
 
-        client_info.region = msg.getValue<QRect>("region");
+        client_info.viewport = msg.getValue<QRect>("viewport");
 
         return;
       }
@@ -816,14 +819,18 @@ namespace LinksRouting
       _clients.end(),
       [&client_wid](const ClientInfos::value_type& it)
       {
-        return it.second.wid == client_wid;
+        return it.second.getWindowInfo().id == client_wid;
       }
     );
+    assert( client_info != _clients.end() );
+
+    client_info->second.updateWindow(regions);
+
     QRect region, scroll_region;
     WindowRegions::const_iterator first_above = regions.end();
     if( client_info != _clients.end() )
     {
-      region = client_info->second.region;
+      region = client_info->second.viewport;
       scroll_region = client_info->second.scroll_region_uncompressed;
 
       if( client_wid )
@@ -1207,7 +1214,7 @@ namespace LinksRouting
               node != hedge->getNodes().end();
             ++node )
       if(    !(*node)->get<bool>("hidden", false)
-          /*||  (*node)->get<bool>("covered", false) */)
+          ||  (*node)->get<bool>("covered", false) )
       {
         float2 center = (*node)->getCenter();
         if( center != float2(0,0) )
@@ -1251,22 +1258,12 @@ namespace LinksRouting
         _clients.end(),
         [&client_wid](const ClientInfos::value_type& it)
         {
-          return it.second.wid == client_wid;
+          return it.second.getWindowInfo().id == client_wid;
         }
       );
 
       assert( client_info != _clients.end() );
-      QRect client_region = client_info->second.region;
-      auto window_info = std::find_if
-      (
-        regions.begin(),
-        regions.end(),
-        [&client_wid](const WindowInfo& winfo)
-        {
-          return winfo.id == client_wid;
-        }
-      );
-      client_region.translate( window_info->region.topLeft() );
+      QRect client_region = client_info->second.getViewportAbs();
 
       /**
        * Mouse click callback
@@ -1277,9 +1274,7 @@ namespace LinksRouting
 //          if( (center - float2(x,y)).length() > 10 )
 //            return;
 
-        std::cout << "raise: "
-                  << QxtWindowSystem::activeWindow(client_info->second.wid)
-                  << std::endl;
+        client_info->second.activateWindow();
 
         if( !is_outside )
           return;
@@ -1365,26 +1360,16 @@ namespace LinksRouting
         ++hidden_count;
     }
 
-    LinkDescription::props_t& props = node->getProps();
-    LinkDescription::props_t::iterator hidden = props.find("hidden");
-    if( hidden_count > node->getVertices().size() / 2 )
+    LinkDescription::PropertyMap& props = node->getProps();
+    bool was_hidden = props.get<bool>("hidden"),
+         hidden = hidden_count > node->getVertices().size() / 2;
+
+    if( hidden != was_hidden )
     {
-      if( hidden == props.end() )
-      {
-        // if more than half of the points are in another window don't show
-        // region
-        props["hidden"] = "true";
-        return true;
-      }
+      props.set("hidden", hidden);
+      return true;
     }
-    else
-    {
-      if( hidden != props.end() )
-      {
-        props.erase(hidden);
-        return true;
-      }
-    }
+
     return false;
   }
 
@@ -1450,32 +1435,13 @@ namespace LinksRouting
   LinkDescription::NodePtr IPCServer::parseRegions( const JSONParser& json,
                                                     ClientInfo& client_info )
   {
-    std::cout << "Parse regions (" << client_info.wid << ")" << std::endl;
+    std::cout << "Parse regions (" << client_info.getWindowInfo().id << ")" << std::endl;
 
     if( !json.isSet("regions") )
       return std::make_shared<LinkDescription::Node>();
 
-    const WindowRegions windows = _window_monitor.getWindows();
-    auto window_info = std::find_if
-    (
-      windows.begin(),
-      windows.end(),
-      [&client_info](const WindowInfo& winfo)
-      {
-        return winfo.id == client_info.wid;
-      }
-    );
-    float2 top_left( client_info.region.left(),
-                     client_info.region.top() );
-    if( window_info == windows.end() )
-    {
-      LOG_WARN("No such window!");
-    }
-    else
-    {
-      top_left.x += window_info->region.left();
-      top_left.y += window_info->region.top();
-    }
+    QPoint top_left = client_info.getViewportAbs().topLeft(),
+           scroll_offset = client_info.scroll_region.topLeft();
 
     LinkDescription::nodes_t nodes;
     float avg_height = 0;
@@ -1484,10 +1450,10 @@ namespace LinksRouting
     for(auto region = regions.begin(); region != regions.end(); ++region)
     {
       LinkDescription::points_t points;
-      LinkDescription::props_t props;
+      LinkDescription::PropertyMap props;
 
-      float min_y = 0,
-            max_y = 0;
+      float min_y = std::numeric_limits<float>::lowest(),
+            max_y = std::numeric_limits<float>::max();
 
       //for(QVariant point: region.toList())
       auto regionlist = region->toList();
@@ -1523,7 +1489,7 @@ namespace LinksRouting
         {
           auto map = point->toMap();
           for( auto it = map.constBegin(); it != map.constEnd(); ++it )
-            props[ to_string(it.key()) ] = to_string(it->toString());
+            props.set(to_string(it.key()), it->toString());
         }
         else
           LOG_WARN("Wrong data type: " << point->typeName());
@@ -1535,39 +1501,45 @@ namespace LinksRouting
       avg_height += max_y - min_y;
       float2 center;
 
-      auto rel = props.find("rel");
-      if( rel != props.end() && rel->second == "true" )
+      bool rel = props.get<bool>("rel");
+      for(size_t i = 0; i < points.size(); ++i)
       {
-        for(size_t i = 0; i < points.size(); ++i)
-          center += (points[i] += top_left);
-      }
-      else
-      {
-        for(size_t i = 0; i < points.size(); ++i)
-          center += points[i];
+        // Transform to local coordinates within applications scrollable area
+        if( !rel )
+          points[i] -= top_left;
+        points[i] -= scroll_offset;
+        center += points[i];
       }
 
       center /= points.size();
       LinkDescription::points_t link_points;
       link_points.push_back(center);
 
-      nodes.push_back( std::make_shared<LinkDescription::Node>(points, link_points, props) );
+      nodes.push_back
+      (
+        std::make_shared<LinkDescription::Node>(points, link_points, props)
+      );
     }
 
     if( !nodes.empty() )
       avg_height /= nodes.size();
 
+    std::cout << "parseRegions:\n";
+    for(auto& node: nodes)
+      std::cout << node->getProps();
+    std::cout << std::endl;
+
     LinkDescription::HyperEdgePtr hedge =
       std::make_shared<LinkDescription::HyperEdge>(nodes);
-    hedge->set("client_wid", WIdtoStr(client_info.wid));
-    hedge->set("offset", client_info.scroll_region.top() - top_left.y);
+    hedge->set("client_wid", WIdtoStr(client_info.getWindowInfo().id));
+//    hedge->set("offset", client_info.scroll_region.top() - top_left.y());
 
     hedge->set("partitions_src", to_string(client_info.tile_map->partitions_src));
     hedge->set("partitions_dest", to_string(client_info.tile_map->partitions_dest));
     client_info.partitions_src = client_info.tile_map->partitions_src;
     client_info.partitions_dest = client_info.tile_map->partitions_dest;
 
-    updateHedge(windows, hedge.get());
+    updateHedge(_window_monitor.getWindows(), hedge.get());
     return std::make_shared<LinkDescription::Node>(hedge);
   }
 
@@ -1578,30 +1550,14 @@ namespace LinksRouting
     if( msg.isSet("scroll-region") )
       client_info.scroll_region = msg.getValue<QRect>("scroll-region");
     else
-      client_info.scroll_region = client_info.region;
+      // If no scroll-region is given assume only content within viewport is
+      // accessible
+      client_info.scroll_region = QRect( QPoint(0,0),
+                                         client_info.viewport.size() );
+
     client_info.scroll_region_uncompressed = client_info.scroll_region;
 
-    const WindowRegions windows = _window_monitor.getWindows();
-    auto window_info = std::find_if
-    (
-      windows.begin(),
-      windows.end(),
-      [&client_info](const WindowInfo& winfo)
-      {
-        return winfo.id == client_info.wid;
-      }
-    );
-    float2 top_left( client_info.region.left(),
-                     client_info.region.top() );
-    if( window_info == windows.end() )
-    {
-      LOG_WARN("No such window!");
-    }
-    else
-    {
-      top_left.x += window_info->region.left();
-      top_left.y += window_info->region.top();
-    }
+    float2 top_left( client_info.getViewportAbs().topLeft() );
 
     if( !msg.isSet("regions") )
       return;
@@ -1613,7 +1569,7 @@ namespace LinksRouting
     for(auto region = regions.begin(); region != regions.end(); ++region)
     {
       LinkDescription::points_t points;
-      LinkDescription::props_t props;
+      LinkDescription::PropertyMap props;
 
       float min_y = 0,
             max_y = 0;
@@ -1652,7 +1608,7 @@ namespace LinksRouting
         {
           auto map = point->toMap();
           for( auto it = map.constBegin(); it != map.constEnd(); ++it )
-            props[ to_string(it.key()) ] = to_string(it->toString());
+            props.set(to_string(it.key()), it->toString());
         }
         else
           LOG_WARN("Wrong data type: " << point->typeName());
@@ -1664,8 +1620,7 @@ namespace LinksRouting
       avg_height += max_y - min_y;
       float2 center;
 
-      auto rel = props.find("rel");
-      if( rel != props.end() && rel->second == "true" )
+      if( props.get<bool>("rel") )
       {
         for(size_t i = 0; i < points.size(); ++i)
           center += (points[i] += top_left);

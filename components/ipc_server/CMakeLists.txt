@@ -11,6 +11,7 @@ include_directories(
 )
 
 set(HEADER_FILES
+  include/ClientInfo.hxx
 #  ${COMPONENTINC_DIR}/ipc_server.hpp
 )
 
@@ -20,6 +21,7 @@ set( HEADER_FILES_MOC
 )
 
 set(SOURCE_FILES
+  src/ClientInfo.cxx
   src/ipc_server.cpp
   src/window_monitor.cpp
 )
