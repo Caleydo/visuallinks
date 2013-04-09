@@ -9,9 +9,10 @@
 #define CLIENTINFO_HXX_
 
 #include "HierarchicTileMap.hpp"
+#include "JSONParser.h"
+#include "linkdescription.h"
 #include "PartitionHelper.hxx"
 #include "window_monitor.hpp"
-#include <QRect>
 
 namespace LinksRouting
 {
@@ -22,9 +23,11 @@ namespace LinksRouting
     QRect   viewport,
 
     /** Scroll region (relative to application viewport) */
-            scroll_region,
+            scroll_region;
 
-            scroll_region_uncompressed;
+    /** Size of whole preview region */
+    QSize   preview_size;
+
     Partitions           partitions_src,
                          partitions_dest;
     HierarchicTileMapPtr tile_map,
@@ -37,6 +40,21 @@ namespace LinksRouting
     const WindowInfo& getWindowInfo() const;
 
     /**
+     * Parse and update scroll region
+     */
+    void parseScrollRegion( const JSONParser& json );
+
+    /**
+     * Parse regions from JSON and replace current regions
+     */
+    LinkDescription::NodePtr parseRegions( const JSONParser& json );
+
+    /**
+     * Update tile map (and recalculate paritions)
+     */
+    void updateTileMap();
+
+    /**
      * Get viewport in absolute (screen) coordinates
      */
     QRect getViewportAbs() const;
@@ -46,8 +64,15 @@ namespace LinksRouting
      */
     void activateWindow();
 
+    /**
+     * Get node (with hedge and regions)
+     */
+    LinkDescription::NodePtr getNode();
+
     private:
-      WindowInfo _window_info;
+      WindowInfo                _window_info;
+      LinkDescription::NodePtr  _node;
+      float                     _avg_region_height;
   };
 
 } // namespace LinksRouting

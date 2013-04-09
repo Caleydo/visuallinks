@@ -29,6 +29,7 @@ set(HEADER_FILES_QT
 )
 
 set(SOURCE_FILES_QT
+  JSONParser.cxx
   qt_helper.cxx
 )
 

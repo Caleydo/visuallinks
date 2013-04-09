@@ -210,9 +210,9 @@ namespace LinksRouting
             return;
           }
 
-          QPoint pos(pos_list.at(0).toInt(), pos_list.at(1).toInt());
           const WindowRegions& windows = _window_monitor.getWindows();
-          client_info.setWindowId( windowAt(windows, pos) );
+          const WId wid = windowAt(windows, msg.getValue<QPoint>("pos"));
+          client_info.setWindowId(wid);
           client_info.updateWindow(windows);
         }
 
@@ -329,8 +329,10 @@ namespace LinksRouting
 
         LOG_INFO("Received FOUND: " << id_str);
 
-        updateScrollRegion(msg, client_info);
-        link->_link->addNode( parseRegions(msg, client_info) );
+        client_info.parseScrollRegion(msg);
+        client_info.parseRegions(msg);
+
+        link->_link->addNode( client_info.getNode() );
         updateCenter(link->_link.get());
       }
       else if( task == "ABORT" )
@@ -470,7 +472,7 @@ namespace LinksRouting
     (*_subscribe_user_config->_data)
       ->setString("QtWebsocketServer:SearchHistory", to_string(new_history));
 #endif
-    updateScrollRegion(msg, client_info);
+    client_info.parseScrollRegion(msg);
 
     // TODO keep working for multiple links at the same time
     _subscribe_mouse->_data->clear();
@@ -503,7 +505,8 @@ namespace LinksRouting
         ++color_id;
     }
     auto hedge = std::make_shared<LinkDescription::HyperEdge>();
-    hedge->addNode( parseRegions(msg, client_info) );
+    client_info.parseRegions(msg);
+    hedge->addNode( client_info.getNode() );
     updateCenter(hedge.get());
 
     _slot_links->_data->push_back(
@@ -822,16 +825,14 @@ namespace LinksRouting
         return it.second.getWindowInfo().id == client_wid;
       }
     );
-    assert( client_info != _clients.end() );
-
-    client_info->second.updateWindow(regions);
 
     QRect region, scroll_region;
     WindowRegions::const_iterator first_above = regions.end();
     if( client_info != _clients.end() )
     {
+      client_info->second.updateWindow(regions);
       region = client_info->second.viewport;
-      scroll_region = client_info->second.scroll_region_uncompressed;
+      scroll_region = client_info->second.scroll_region;
 
       if( client_wid )
       {
@@ -1073,8 +1074,8 @@ namespace LinksRouting
 
           popup.hover_region.visible = false;
 
-          QRect reg = client_info->second.scroll_region;
-          float scale = (reg.height() / pow(2.0f, static_cast<float>(popup.hover_region.zoom)))
+          QSize preview_size = client_info->second.preview_size;
+          float scale = (preview_size.height() / pow(2.0f, static_cast<float>(popup.hover_region.zoom)))
                       / _preview_height;
           float dy = y - popup.hover_region.region.pos.y,
                 scroll_y = scale * dy + popup.hover_region.src_region.pos.y;
@@ -1429,284 +1430,6 @@ namespace LinksRouting
     );
 
     covered_nodes.push_back(node);
-  }
-
-  //----------------------------------------------------------------------------
-  LinkDescription::NodePtr IPCServer::parseRegions( const JSONParser& json,
-                                                    ClientInfo& client_info )
-  {
-    std::cout << "Parse regions (" << client_info.getWindowInfo().id << ")" << std::endl;
-
-    if( !json.isSet("regions") )
-      return std::make_shared<LinkDescription::Node>();
-
-    QPoint top_left = client_info.getViewportAbs().topLeft(),
-           scroll_offset = client_info.scroll_region.topLeft();
-
-    LinkDescription::nodes_t nodes;
-    float avg_height = 0;
-
-    QVariantList regions = json.getValue<QVariantList>("regions");
-    for(auto region = regions.begin(); region != regions.end(); ++region)
-    {
-      LinkDescription::points_t points;
-      LinkDescription::PropertyMap props;
-
-      float min_y = std::numeric_limits<float>::lowest(),
-            max_y = std::numeric_limits<float>::max();
-
-      //for(QVariant point: region.toList())
-      auto regionlist = region->toList();
-      for(auto point = regionlist.begin(); point != regionlist.end(); ++point)
-      {
-        if( point->type() == QVariant::List )
-        {
-          QVariantList coords = point->toList();
-          if( coords.size() != 2 )
-          {
-            LOG_WARN("Wrong coord count for point.");
-            continue;
-          }
-
-          points.push_back(float2(
-            coords.at(0).toInt(),
-            coords.at(1).toInt()
-          ));
-
-          if( points.size() == 1 )
-          {
-            min_y = max_y = points.back().y;
-          }
-          else
-          {
-            if( points.back().y > max_y )
-              max_y = points.back().y;
-            else if( points.back().y < min_y )
-              min_y = points.back().y;
-          }
-        }
-        else if( point->type() == QVariant::Map )
-        {
-          auto map = point->toMap();
-          for( auto it = map.constBegin(); it != map.constEnd(); ++it )
-            props.set(to_string(it.key()), it->toString());
-        }
-        else
-          LOG_WARN("Wrong data type: " << point->typeName());
-      }
-
-      if( points.empty() )
-        continue;
-
-      avg_height += max_y - min_y;
-      float2 center;
-
-      bool rel = props.get<bool>("rel");
-      for(size_t i = 0; i < points.size(); ++i)
-      {
-        // Transform to local coordinates within applications scrollable area
-        if( !rel )
-          points[i] -= top_left;
-        points[i] -= scroll_offset;
-        center += points[i];
-      }
-
-      center /= points.size();
-      LinkDescription::points_t link_points;
-      link_points.push_back(center);
-
-      nodes.push_back
-      (
-        std::make_shared<LinkDescription::Node>(points, link_points, props)
-      );
-    }
-
-    if( !nodes.empty() )
-      avg_height /= nodes.size();
-
-    std::cout << "parseRegions:\n";
-    for(auto& node: nodes)
-      std::cout << node->getProps();
-    std::cout << std::endl;
-
-    LinkDescription::HyperEdgePtr hedge =
-      std::make_shared<LinkDescription::HyperEdge>(nodes);
-    hedge->set("client_wid", WIdtoStr(client_info.getWindowInfo().id));
-//    hedge->set("offset", client_info.scroll_region.top() - top_left.y());
-
-    hedge->set("partitions_src", to_string(client_info.tile_map->partitions_src));
-    hedge->set("partitions_dest", to_string(client_info.tile_map->partitions_dest));
-    client_info.partitions_src = client_info.tile_map->partitions_src;
-    client_info.partitions_dest = client_info.tile_map->partitions_dest;
-
-    updateHedge(_window_monitor.getWindows(), hedge.get());
-    return std::make_shared<LinkDescription::Node>(hedge);
-  }
-
-  //----------------------------------------------------------------------------
-  void IPCServer::updateScrollRegion( const JSONParser& msg,
-                                      ClientInfo& client_info )
-  {
-    if( msg.isSet("scroll-region") )
-      client_info.scroll_region = msg.getValue<QRect>("scroll-region");
-    else
-      // If no scroll-region is given assume only content within viewport is
-      // accessible
-      client_info.scroll_region = QRect( QPoint(0,0),
-                                         client_info.viewport.size() );
-
-    client_info.scroll_region_uncompressed = client_info.scroll_region;
-
-    float2 top_left( client_info.getViewportAbs().topLeft() );
-
-    if( !msg.isSet("regions") )
-      return;
-
-    LinkDescription::nodes_t nodes;
-    float avg_height = 0;
-
-    QVariantList regions = msg.getValue<QVariantList>("regions");
-    for(auto region = regions.begin(); region != regions.end(); ++region)
-    {
-      LinkDescription::points_t points;
-      LinkDescription::PropertyMap props;
-
-      float min_y = 0,
-            max_y = 0;
-
-      //for(QVariant point: region.toList())
-      auto regionlist = region->toList();
-      for(auto point = regionlist.begin(); point != regionlist.end(); ++point)
-      {
-        if( point->type() == QVariant::List )
-        {
-          QVariantList coords = point->toList();
-          if( coords.size() != 2 )
-          {
-            LOG_WARN("Wrong coord count for point.");
-            continue;
-          }
-
-          points.push_back(float2(
-            coords.at(0).toInt(),
-            coords.at(1).toInt()
-          ));
-
-          if( points.size() == 1 )
-          {
-            min_y = max_y = points.back().y;
-          }
-          else
-          {
-            if( points.back().y > max_y )
-              max_y = points.back().y;
-            else if( points.back().y < min_y )
-              min_y = points.back().y;
-          }
-        }
-        else if( point->type() == QVariant::Map )
-        {
-          auto map = point->toMap();
-          for( auto it = map.constBegin(); it != map.constEnd(); ++it )
-            props.set(to_string(it.key()), it->toString());
-        }
-        else
-          LOG_WARN("Wrong data type: " << point->typeName());
-      }
-
-      if( points.empty() )
-        continue;
-
-      avg_height += max_y - min_y;
-      float2 center;
-
-      if( props.get<bool>("rel") )
-      {
-        for(size_t i = 0; i < points.size(); ++i)
-          center += (points[i] += top_left);
-      }
-      else
-      {
-        for(size_t i = 0; i < points.size(); ++i)
-          center += points[i];
-      }
-
-      center /= points.size();
-      LinkDescription::points_t link_points;
-      link_points.push_back(center);
-
-      nodes.push_back( std::make_shared<LinkDescription::Node>(points, link_points, props) );
-    }
-
-    if( !nodes.empty() )
-      avg_height /= nodes.size();
-
-    const bool do_partitions = true;
-    const bool partition_compress = true;
-
-    float offset = client_info.scroll_region.top() - top_left.y;
-    Partitions partitions_src,
-               partitions_dest;
-
-    if( do_partitions )
-    {
-      PartitionHelper part;
-      for(auto node = nodes.begin(); node != nodes.end(); ++node)
-      {
-        const Rect& bb = (*node)->getBoundingBox();
-        part.add( float2( offset + bb.t() - 3 * avg_height,
-                          offset + bb.b() + 3 * avg_height ) );
-      }
-      part.clip(0, client_info.scroll_region.height(), 2 * avg_height);
-      partitions_src = part.getPartitions();
-
-      if( partition_compress )
-      {
-        const int compress_size = avg_height * 1.5;
-        float cur_pos = 0;
-        for( auto part = partitions_src.begin();
-                  part != partitions_src.end();
-                ++part )
-        {
-          if( part->x > cur_pos )
-            cur_pos += compress_size;
-
-          float2 target_part;
-          target_part.x = cur_pos;
-
-          cur_pos += part->y - part->x;
-          target_part.y = cur_pos;
-
-          partitions_dest.push_back(target_part);
-        }
-
-        if( partitions_src.back().y + 0.5 < client_info.scroll_region.height() )
-          cur_pos += compress_size;
-
-        int min_height = static_cast<float>(_preview_height)
-                       / _preview_width
-                       * client_info.scroll_region.width() + 0.5;
-        cur_pos = std::max<int>(min_height, cur_pos);
-
-        client_info.scroll_region.setHeight(cur_pos);
-      }
-      else
-        partitions_dest = partitions_src;
-    }
-    else
-    {
-      partitions_src.push_back(float2(0, client_info.scroll_region.height()));
-      partitions_dest.push_back(partitions_src.back());
-    }
-
-    client_info.tile_map =
-      std::make_shared<HierarchicTileMap>( client_info.scroll_region.width(),
-                                           client_info.scroll_region.height(),
-                                           _preview_width,
-                                           _preview_height );
-
-    client_info.tile_map->partitions_src = partitions_src;
-    client_info.tile_map->partitions_dest = partitions_dest;
   }
 
   //----------------------------------------------------------------------------

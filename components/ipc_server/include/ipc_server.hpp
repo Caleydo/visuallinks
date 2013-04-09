@@ -123,8 +123,6 @@ namespace LinksRouting
       slot_t<SlotType::MouseEvent>::type _subscribe_mouse;
       slot_t<SlotType::TextPopup>::type _subscribe_popups;
 
-      LinkDescription::NodePtr parseRegions( const JSONParser& json,
-                                             ClientInfo& client_info );
       void updateScrollRegion( const JSONParser& json,
                                ClientInfo& client_info );
 
