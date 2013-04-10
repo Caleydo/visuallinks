@@ -11,6 +11,7 @@
 
 #include <cmath>
 #include <iosfwd>
+#include <stdexcept>
 #include <sstream>
 
 /**
@@ -204,6 +205,20 @@ inline const float2 operator /(const float2& lhs, const float2& rhs)
 inline std::ostream& operator<<(std::ostream& strm, const float2& p)
 {
   return strm << "(" << p.x << "|" << p.y << ")";
+}
+
+inline std::istream& operator>>(std::istream& strm, float2& p)
+{
+  if( strm.get() != '(' )
+    throw std::runtime_error("can not convert to float2 '('");
+  strm >> p.x;
+  if( strm.get() != '|')
+    throw std::runtime_error("can not convert to float2 '|'");
+  strm >> p.y;
+  if( strm.get() != ')')
+      throw std::runtime_error("can not convert to float2 ')'");
+
+  return strm;
 }
 
 struct Rect

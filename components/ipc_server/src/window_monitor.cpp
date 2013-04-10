@@ -29,7 +29,7 @@ namespace LinksRouting
 	_cb_regions_changed(cb_regions_changed)
   {
 	connect(&_timer, SIGNAL(timeout()), this, SLOT(check()));
-	_timer.start(300);
+	_timer.start(150);
   }
 
   //----------------------------------------------------------------------------

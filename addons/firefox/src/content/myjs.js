@@ -158,8 +158,8 @@ function onVisLinkButton()
     if( register() )
     {
       window.addEventListener('unload', stopVisLinks, false);
-      window.addEventListener('scroll', windowChanged, false);
-      window.addEventListener("DOMAttrModified", attrModified, false);
+      window.addEventListener('scroll', onScroll, false);
+//      window.addEventListener("DOMAttrModified", attrModified, false);
       window.addEventListener('resize', resize, false);
 //      window.addEventListener("DOMContentLoaded", windowChanged, false);
     }
@@ -344,6 +344,15 @@ function windowChanged()
 }
 
 //------------------------------------------------------------------------------
+function onScroll()
+{
+  send({
+    'task': 'SCROLL',
+    'pos': [-content.scrollX, -content.scrollY]
+  });
+}
+
+//------------------------------------------------------------------------------
 function reroute()
 {
   // trigger reroute
@@ -357,7 +366,7 @@ function stopVisLinks()
 	stopped = true;
 	setStatus('');
 	window.removeEventListener('unload', stopVisLinks, false);
-	window.removeEventListener('scroll', windowChanged, false);
+	window.removeEventListener('scroll', onScroll, false);
 	window.removeEventListener("DOMAttrModified", attrModified, false);
   window.removeEventListener('resize', resize, false);
 }
@@ -747,13 +756,13 @@ function findBoundingBox(doc, obj)
   
   x = curleft - win.pageXOffset;     
   y = curtop - win.pageYOffset;
-  
+  /*
   var outside = false;
 
   // check if	visible
   if(    (x + 0.5 * w < 0) || (x + 0.5 * w > win.innerWidth)
       || (y + 0.5 * h < 0) || (y + 0.5 * h > win.innerHeight) )
-    outside = true;
+    outside = true;*/
   
   x *= scale;
   y *= scale;
@@ -766,6 +775,6 @@ function findBoundingBox(doc, obj)
   return [ [x,     y],
            [x + w, y],
            [x + w, y + h],
-           [x,     y + h],
-           {outside: outside} ];
+           [x,     y + h]/*,
+           {outside: outside}*/ ];
 }

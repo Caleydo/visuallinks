@@ -562,6 +562,9 @@ namespace LinksRouting
         auto fork = hedge->getHyperEdgeDescription();
         if( !fork )
         {
+          float2 offset = hedge->get<float2>("screen-offset");
+          glPushMatrix();
+          glTranslatef(offset.x, offset.y, 0);
           if( renderNodes( hedge->getNodes(),
                            3.f,
                            &hedges_open,
@@ -569,6 +572,7 @@ namespace LinksRouting
                            false,
                            pass ) )
             rendered_anything = true;
+          glPopMatrix();
 
           continue;
         }

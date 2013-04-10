@@ -36,17 +36,6 @@ namespace LinksRouting
     return to_string( r.toQRect() );
   }
 
-  std::string WIdtoStr(WId wid)
-  {
-    return std::to_string(
-#ifdef _WIN32
-      reinterpret_cast<unsigned long long>(wid)
-#else
-      wid
-#endif
-    );
-  }
-
   template<typename T>
   void clamp(T& val, T min, T max)
   {
@@ -217,8 +206,15 @@ namespace LinksRouting
         }
 
         client_info.viewport = msg.getValue<QRect>("viewport");
+        client_info.update();
 
         return;
+      }
+      else if( task == "SCROLL" )
+      {
+        client_info.setScrollPos( msg.getValue<QPoint>("pos") );
+        client_info.update();
+        return _cond_data_ready->wakeAll();;
       }
 
       QString id = msg.getValue<QString>("id").trimmed().toLower(),
@@ -331,6 +327,7 @@ namespace LinksRouting
 
         client_info.parseScrollRegion(msg);
         client_info.parseRegions(msg);
+        client_info.update();
 
         link->_link->addNode( client_info.getNode() );
         updateCenter(link->_link.get());
@@ -473,6 +470,7 @@ namespace LinksRouting
       ->setString("QtWebsocketServer:SearchHistory", to_string(new_history));
 #endif
     client_info.parseScrollRegion(msg);
+    client_info.update();
 
     // TODO keep working for multiple links at the same time
     _subscribe_mouse->_data->clear();
@@ -506,6 +504,7 @@ namespace LinksRouting
     }
     auto hedge = std::make_shared<LinkDescription::HyperEdge>();
     client_info.parseRegions(msg);
+    client_info.update();
     hedge->addNode( client_info.getNode() );
     updateCenter(hedge.get());
 
@@ -804,6 +803,7 @@ namespace LinksRouting
   bool IPCServer::updateHedge( const WindowRegions& regions,
                                LinkDescription::HyperEdge* hedge )
   {
+    bool modified = false;
     hedge->resetNodeParents();
     WId client_wid =
 #ifdef _WIN32
@@ -831,6 +831,7 @@ namespace LinksRouting
     if( client_info != _clients.end() )
     {
       client_info->second.updateWindow(regions);
+      modified |= client_info->second.update();
       region = client_info->second.viewport;
       scroll_region = client_info->second.scroll_region;
 
@@ -853,8 +854,7 @@ namespace LinksRouting
       }
     }
 
-    bool modified = false;
-
+#if 0
     LinkDescription::nodes_t covered_nodes;
     struct OutsideScroll
     {
@@ -881,12 +881,13 @@ namespace LinksRouting
 
     float2 hedge_center;
     size_t num_visible = 0;
-
+#endif
     const LinkDescription::nodes_t nodes = hedge->getNodes();
     for( auto node = hedge->getNodes().begin();
               node != hedge->getNodes().end();
             ++node )
     {
+#if 0
       if(    !(*node)->get<std::string>("virtual-outside").empty()
           || (*node)->get<bool>("virtual-covered", false) )
       {
@@ -921,29 +922,31 @@ namespace LinksRouting
         (*node)->set("hidden", true);
         continue;
       }
-
+#endif
       for(auto child = (*node)->getChildren().begin();
                child != (*node)->getChildren().end();
              ++child )
       {
         if( updateHedge(regions, child->get()) )
           modified = true;
-
+#if 0
         float2 center = (*child)->getCenter();
         if( center != float2(0,0) )
         {
           hedge_center += center;
           num_visible += 1;
         }
+#endif
       }
 
       if( !client_wid )
         continue;
-
+#if 0
       if( updateRegion(regions, node->get(), client_wid) )
         modified = true;
+#endif
     }
-
+#if 0
     for( size_t i = 0; i < num_outside_scroll; ++i )
     {
       OutsideScroll& out = outside_scroll[i];
@@ -1308,7 +1311,7 @@ namespace LinksRouting
           "}"));
       });
     }
-
+#endif
     return modified;
   }
 

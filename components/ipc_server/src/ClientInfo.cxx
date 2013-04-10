@@ -15,7 +15,9 @@ namespace LinksRouting
 
   //----------------------------------------------------------------------------
   ClientInfo::ClientInfo(WId wid):
-    _window_info(wid)
+    _dirty(~0),
+    _window_info(wid),
+    _avg_region_height(0)
   {
 
   }
@@ -43,7 +45,11 @@ namespace LinksRouting
     if( window_info == windows.end() )
       return false;
 
+    if( _window_info == *window_info )
+      return false;
+
     _window_info = *window_info;
+    _dirty |= WINDOW;
 
     return true;
   }
@@ -63,6 +69,15 @@ namespace LinksRouting
       // If no scroll-region is given assume only content within viewport is
       // accessible
       scroll_region = QRect(QPoint(0,0), viewport.size());
+
+    _dirty |= SCROLL_POS | SCROLL_SIZE;
+  }
+
+  //----------------------------------------------------------------------------
+  void ClientInfo::setScrollPos( const QPoint& offset )
+  {
+    scroll_region.setTopLeft(offset);
+    _dirty |= SCROLL_POS;
   }
 
   //----------------------------------------------------------------------------
@@ -70,6 +85,10 @@ namespace LinksRouting
   {
     std::cout << "Parse regions (" << _window_info.id<< ")" << std::endl;
     _avg_region_height = 0;
+    _node.reset();
+    _hedge.reset();
+
+    _dirty |= REGIONS;
 
     if( !json.hasChild("regions") )
       return std::make_shared<LinkDescription::Node>();
@@ -138,24 +157,62 @@ namespace LinksRouting
     if( !nodes.empty() )
       _avg_region_height /= nodes.size();
 
-//    std::cout << "parseRegions:\n";
-//    for(auto& node: nodes)
-//      std::cout << node->getProps();
-//    std::cout << std::endl;
-
-    LinkDescription::HyperEdgePtr hedge =
-      std::make_shared<LinkDescription::HyperEdge>(nodes);
-    //hedge->set("client_wid", WIdtoStr(_window_info.id));
-//    hedge->set("offset", client_info.scroll_region.top() - top_left.y());
-
-    hedge->set("partitions_src", to_string(tile_map->partitions_src));
-    hedge->set("partitions_dest", to_string(tile_map->partitions_dest));
-    partitions_src = tile_map->partitions_src;
-    partitions_dest = tile_map->partitions_dest;
-
+    _hedge = std::make_shared<LinkDescription::HyperEdge>(nodes);
     //updateHedge(_window_monitor.getWindows(), hedge.get());
-    _node = std::make_shared<LinkDescription::Node>(hedge);
+    _node = std::make_shared<LinkDescription::Node>(_hedge);
     return _node;
+  }
+
+  //------------------------------------------------------------------------------
+  bool ClientInfo::update()
+  {
+    if( !_dirty )
+      return false;
+
+    if( _dirty & (SCROLL_SIZE | REGIONS) )
+      updateTileMap();
+
+    updateHedge();
+
+    _dirty = 0;
+    return true;
+  }
+
+  //----------------------------------------------------------------------------
+  QRect ClientInfo::getViewportAbs() const
+  {
+    return viewport.translated( _window_info.region.topLeft() );
+  }
+
+  //----------------------------------------------------------------------------
+  QRect ClientInfo::getScrollRegionAbs() const
+  {
+    return scroll_region.translated( getViewportAbs().topLeft() );
+  }
+
+  //----------------------------------------------------------------------------
+  void ClientInfo::activateWindow()
+  {
+    if( _window_info.isValid() )
+      QxtWindowSystem::activeWindow( _window_info.id );
+  }
+
+  //----------------------------------------------------------------------------
+  LinkDescription::NodePtr ClientInfo::getNode()
+  {
+    return _node;
+  }
+
+  //------------------------------------------------------------------------------
+  void ClientInfo::updateHedge()
+  {
+    if( !_hedge )
+      return;
+
+    _hedge->set("client_wid", _window_info.id);
+    _hedge->set("screen-offset", getScrollRegionAbs().topLeft());
+    _hedge->set("partitions_src", to_string(tile_map->partitions_src));
+    _hedge->set("partitions_dest", to_string(tile_map->partitions_dest));
   }
 
   //----------------------------------------------------------------------------
@@ -168,8 +225,7 @@ namespace LinksRouting
 
     preview_size = scroll_region.size();
 
-    LinkDescription::HyperEdge* hedge = _node ? _node->getParent() : 0;
-    if( !hedge )
+    if( !_hedge )
       return;
 
     Partitions partitions_src,
@@ -178,7 +234,7 @@ namespace LinksRouting
     if( do_partitions )
     {
       PartitionHelper part;
-      for(auto const& node: hedge->getNodes())
+      for(auto const& node: _hedge->getNodes())
       {
         const Rect& bb = node->getBoundingBox();
         part.add( float2( bb.t() - 3 * _avg_region_height,
@@ -234,25 +290,6 @@ namespace LinksRouting
 
     tile_map->partitions_src = partitions_src;
     tile_map->partitions_dest = partitions_dest;
-  }
-
-  //----------------------------------------------------------------------------
-  QRect ClientInfo::getViewportAbs() const
-  {
-    return viewport.translated( _window_info.region.topLeft() );
-  }
-
-  //----------------------------------------------------------------------------
-  void ClientInfo::activateWindow()
-  {
-    if( _window_info.isValid() )
-      QxtWindowSystem::activeWindow( _window_info.id );
-  }
-
-  //----------------------------------------------------------------------------
-  LinkDescription::NodePtr ClientInfo::getNode()
-  {
-    return _node;
   }
 
 } // namespace LinksRouting

@@ -44,20 +44,27 @@ namespace LinksRouting
      */
     void parseScrollRegion( const JSONParser& json );
 
+    void setScrollPos( const QPoint& offset );
+
     /**
      * Parse regions from JSON and replace current regions
      */
     LinkDescription::NodePtr parseRegions( const JSONParser& json );
 
     /**
-     * Update tile map (and recalculate paritions)
+     *
      */
-    void updateTileMap();
+    bool update();
 
     /**
      * Get viewport in absolute (screen) coordinates
      */
     QRect getViewportAbs() const;
+
+    /**
+     * Get scroll region in absolute (screen) coordinates
+     */
+    QRect getScrollRegionAbs() const;
 
     /**
      * Activate window (and raise to top)
@@ -70,9 +77,27 @@ namespace LinksRouting
     LinkDescription::NodePtr getNode();
 
     private:
-      WindowInfo                _window_info;
-      LinkDescription::NodePtr  _node;
-      float                     _avg_region_height;
+
+      enum DirtyFlags
+      {
+        WINDOW          = 1,
+        REGIONS         = WINDOW << 1,
+        SCROLL_POS      = REGIONS << 1,
+        SCROLL_SIZE     = SCROLL_POS << 1
+      };
+
+      uint32_t                      _dirty;
+      WindowInfo                    _window_info;
+      LinkDescription::NodePtr      _node;
+      LinkDescription::HyperEdgePtr _hedge;
+      float                         _avg_region_height;
+
+      void updateHedge();
+
+      /**
+       * Update tile map (and recalculate paritions)
+       */
+      void updateTileMap();
   };
 
 } // namespace LinksRouting

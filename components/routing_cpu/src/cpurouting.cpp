@@ -52,6 +52,8 @@ namespace LinksRouting
       return;
     }
 
+    return;
+
     LinkDescription::LinkList& links = *_subscribe_links->_data;
     for( auto it = links.begin(); it != links.end(); ++it )
     {
