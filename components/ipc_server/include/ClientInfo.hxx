@@ -17,6 +17,7 @@
 namespace LinksRouting
 {
 
+  class IPCServer;
   struct ClientInfo
   {
     /** Viewport (relative to application window) */
@@ -33,10 +34,9 @@ namespace LinksRouting
     HierarchicTileMapPtr tile_map,
                          tile_map_uncompressed;
 
-    ClientInfo(WId wid = -1);
-    void setWindowId(WId wid);
+    explicit ClientInfo(IPCServer* ipc_server = nullptr, WId wid = -1);
 
-    bool updateWindow(const WindowRegions& windows);
+    void setWindowId(WId wid);
     const WindowInfo& getWindowInfo() const;
 
     /**
@@ -49,12 +49,17 @@ namespace LinksRouting
     /**
      * Parse regions from JSON and replace current regions
      */
-    LinkDescription::NodePtr parseRegions( const JSONParser& json );
+    LinkDescription::NodePtr parseRegions(const JSONParser& json);
 
     /**
      *
      */
-    bool update();
+    bool update(const WindowRegions& windows);
+
+    /**
+     * Remove all information about given link
+     */
+    void removeLink(LinkDescription::HyperEdge* hedge);
 
     /**
      * Get viewport in absolute (screen) coordinates
@@ -71,11 +76,6 @@ namespace LinksRouting
      */
     void activateWindow();
 
-    /**
-     * Get node (with hedge and regions)
-     */
-    LinkDescription::NodePtr getNode();
-
     private:
 
       enum DirtyFlags
@@ -87,17 +87,21 @@ namespace LinksRouting
       };
 
       uint32_t                      _dirty;
+      IPCServer                    *_ipc_server;
       WindowInfo                    _window_info;
-      LinkDescription::NodePtr      _node;
-      LinkDescription::HyperEdgePtr _hedge;
+      LinkDescription::nodes_t      _nodes;
       float                         _avg_region_height;
 
-      void updateHedge();
+      void updateRegions(const WindowRegions& windows);
+      void updateHedges();
 
       /**
        * Update tile map (and recalculate paritions)
        */
       void updateTileMap();
+
+      WindowList::const_iterator findWindow( const WindowRegions& windows,
+                                             WId wid ) const;
   };
 
 } // namespace LinksRouting

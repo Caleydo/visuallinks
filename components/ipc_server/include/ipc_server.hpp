@@ -65,6 +65,10 @@ namespace LinksRouting
 
       void process(unsigned int type);
 
+      int getPreviewWidth() const { return _preview_width; }
+      int getPreviewHeight() const { return _preview_height; }
+      bool getPreviewAutoWidth() const { return _preview_auto_width; }
+
     private slots:
 
       void onClientConnection();
@@ -84,6 +88,7 @@ namespace LinksRouting
                        ClientInfo& client_info );
 
       void regionsChanged(const WindowRegions& regions);
+      ClientInfos::iterator findClientInfo(WId wid);
       bool updateHedge( const WindowRegions& regions,
                         LinkDescription::HyperEdge* hedge );
       bool updateCenter(LinkDescription::HyperEdge* hedge);
@@ -125,6 +130,19 @@ namespace LinksRouting
 
       void updateScrollRegion( const JSONParser& json,
                                ClientInfo& client_info );
+
+      /**
+       * Clear all data for the given link
+       */
+      LinkDescription::LinkList::iterator abortLinking(
+        const LinkDescription::LinkList::iterator& link =
+              LinkDescription::LinkList::iterator()
+      );
+
+      /**
+       * Clear all links
+       */
+      void abortAll();
 
       std::string   _debug_regions,
                     _debug_full_preview_path;

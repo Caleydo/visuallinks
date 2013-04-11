@@ -171,12 +171,16 @@ function getSelectionId()
   var txt = document.getElementById("vislink-search-text");
   var selid = txt != null ? txt.value.trim() : "";
   if( selid == "" )
-    selid =	content.getSelection().toString().trim();
+  {
+    var selection = content.getSelection();
+    selid = selection.toString().trim();
+    selection.removeAllRanges();
+  }
   else
     txt.reset();
 
-	return selid//.replace( /\s+/g, ' ' )
-              .toLowerCase();
+  return selid//.replace( /\s+/g, ' ' )
+        .toLowerCase();
 }
 
 function onStandardSearchButton(backwards = false)

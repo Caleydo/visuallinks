@@ -38,12 +38,34 @@ namespace LinksRouting
       return id == rhs.id && region == rhs.region;
     }
 
+    bool operator!=(const WindowInfo& rhs) const
+    {
+      return !(*this == rhs);
+    }
+
     bool isValid() const
     {
       return id && id != static_cast<WId>(-1);
     }
   };
-  typedef std::vector<WindowInfo> WindowRegions;
+  typedef std::vector<WindowInfo> WindowInfos;
+
+  class WindowRegions
+  {
+    public:
+      WindowRegions(const WindowInfos& windows);
+
+      WindowInfos::const_iterator find(WId wid) const;
+      WindowInfos::const_iterator begin() const;
+      WindowInfos::const_iterator end() const;
+
+      QRect desktopRect() const;
+      WindowInfos::const_reverse_iterator windowAt(const QPoint& point) const;
+      WId windowIdAt(const QPoint& point) const;
+
+    private:
+      const WindowInfos _windows;
+  };
 
   class WindowMonitor:
     public QThread
@@ -70,11 +92,16 @@ namespace LinksRouting
     protected:
 
       const QWidget *_own_widget;
-      WindowRegions  _regions,
+      WindowInfos    _regions,
 		             _last_regions;
 	  int            _timeout;
       QTimer         _timer;
       RegionsCallback _cb_regions_changed;
+
+      /**
+       * Get all visible windows in stacking order and filtered by minimum size
+       */
+      WindowInfos getWindowInfos() const;
 
 	protected slots:
       void check();

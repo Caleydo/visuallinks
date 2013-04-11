@@ -22,8 +22,6 @@ namespace LinksRouting
 {
   using namespace std::placeholders;
 
-  WId windowAt( const WindowRegions& regions,
-                const QPoint& pos );
   std::string to_string(const QRect& r)
   {
     std::stringstream strm;
@@ -69,10 +67,6 @@ namespace LinksRouting
     registerArg("PreviewWidth", _preview_width = 700);
     registerArg("PreviewHeight", _preview_height = 400);
     registerArg("PreviewAutoWidth", _preview_auto_width = true);
-
-//    qRegisterMetaType<WindowRegions>("WindowRegions");
-//    assert( connect( &_window_monitor, SIGNAL(regionsChanged(WindowRegions)),
-//             this,             SLOT(regionsChanged(WindowRegions)) ) );
   }
 
   //----------------------------------------------------------------------------
@@ -162,7 +156,7 @@ namespace LinksRouting
     connect(client_object, SIGNAL(disconnected()), this, SLOT(onClientDisconnection()));
     connect(client_object, SIGNAL(pong(quint64)), this, SLOT(onPong(quint64)));
 
-    _clients[ client_socket ] = ClientInfo();
+    _clients[ client_socket ] = ClientInfo(this);
 
     LOG_INFO(   "Client connected: "
              << client_socket->peerAddress().toString()
@@ -190,30 +184,24 @@ namespace LinksRouting
       QString task = msg.getValue<QString>("task");
       if( task == "REGISTER" || task == "RESIZE" )
       {
+        const WindowRegions& windows = _window_monitor.getWindows();
+        client_info.viewport = msg.getValue<QRect>("viewport");
+
         if( task == "REGISTER" )
         {
-          QVariantList pos_list = msg.getValue<QVariantList>("pos");
-          if( pos_list.length() != 2 )
-          {
-            LOG_WARN("Received invalid position (REGISTER)");
-            return;
-          }
-
-          const WindowRegions& windows = _window_monitor.getWindows();
-          const WId wid = windowAt(windows, msg.getValue<QPoint>("pos"));
+          const WId wid = windows.windowIdAt(msg.getValue<QPoint>("pos"));
           client_info.setWindowId(wid);
-          client_info.updateWindow(windows);
         }
-
-        client_info.viewport = msg.getValue<QRect>("viewport");
-        client_info.update();
-
+        else
+        {
+          client_info.update(windows);
+        }
         return;
       }
       else if( task == "SCROLL" )
       {
         client_info.setScrollPos( msg.getValue<QPoint>("pos") );
-        client_info.update();
+        client_info.update(_window_monitor.getWindows());
         return _cond_data_ready->wakeAll();;
       }
 
@@ -326,18 +314,18 @@ namespace LinksRouting
         LOG_INFO("Received FOUND: " << id_str);
 
         client_info.parseScrollRegion(msg);
-        client_info.parseRegions(msg);
-        client_info.update();
-
-        link->_link->addNode( client_info.getNode() );
+        link->_link->addNode(
+          client_info.parseRegions(msg)
+        );
+        client_info.update(_window_monitor.getWindows());
         updateCenter(link->_link.get());
       }
       else if( task == "ABORT" )
       {
         if( id.isEmpty() && stamp == (uint32_t)-1 )
-          _slot_links->_data->clear();
+          abortAll();
         else if( link != _slot_links->_data->end() )
-          _slot_links->_data->erase(link);
+          abortLinking(link);
         else
           LOG_WARN("Received ABORT for none existing REQUEST");
 
@@ -356,12 +344,6 @@ namespace LinksRouting
       LOG_WARN("Failed to parse message: " << ex.what());
     }
 
-//    std::map<std::string, std::tuple<std::string>> types
-//    {
-//      {"x", std::make_tuple("int")},
-//      {"y", std::make_tuple("int")},
-//      {"key", std::make_tuple("string")}
-//    };
     _cond_data_ready->wakeAll();
   }
 
@@ -470,7 +452,7 @@ namespace LinksRouting
       ->setString("QtWebsocketServer:SearchHistory", to_string(new_history));
 #endif
     client_info.parseScrollRegion(msg);
-    client_info.update();
+    client_info.update(_window_monitor.getWindows());
 
     // TODO keep working for multiple links at the same time
     _subscribe_mouse->_data->clear();
@@ -483,7 +465,7 @@ namespace LinksRouting
       color_id = link->_color_id;
 
       LOG_INFO("Replacing search for " << link->_id);
-      _slot_links->_data->erase(link);
+      abortLinking(link);
     }
     else
     {
@@ -503,9 +485,8 @@ namespace LinksRouting
         ++color_id;
     }
     auto hedge = std::make_shared<LinkDescription::HyperEdge>();
-    client_info.parseRegions(msg);
-    client_info.update();
-    hedge->addNode( client_info.getNode() );
+    hedge->addNode( client_info.parseRegions(msg) );
+    client_info.update(_window_monitor.getWindows());
     updateCenter(hedge.get());
 
     _slot_links->_data->push_back(
@@ -528,8 +509,6 @@ namespace LinksRouting
       "}"
     );
 
-//        for(QWsSocket* socket: _clients)
-//          socket->write(request);
     for(auto socket = _clients.begin(); socket != _clients.end(); ++socket)
       socket->first->write(request);
   }
@@ -541,7 +520,7 @@ namespace LinksRouting
     _subscribe_mouse->_data->clear();
     _subscribe_popups->_data->popups.clear();
 
-    _desktop_rect = regions.front().region;
+    _desktop_rect = regions.desktopRect();
 
     bool need_update = false;
     for( auto link = _slot_links->_data->begin();
@@ -567,8 +546,8 @@ namespace LinksRouting
   class CoverWindows
   {
     public:
-      CoverWindows( const WindowRegions::const_iterator& begin,
-                    const WindowRegions::const_iterator& end ):
+      CoverWindows( const WindowInfos::const_iterator& begin,
+                    const WindowInfos::const_iterator& end ):
         _begin(begin),
         _end(end)
       {}
@@ -750,8 +729,8 @@ namespace LinksRouting
       }
 
     protected:
-      const WindowRegions::const_iterator& _begin,
-                                           _end;
+      const WindowInfos::const_iterator& _begin,
+                                         _end;
 
       LinkDescription::NodePtr buildIcon( float2 center,
                                           const float2& normal,
@@ -800,6 +779,20 @@ namespace LinksRouting
   };
 
   //----------------------------------------------------------------------------
+  IPCServer::ClientInfos::iterator IPCServer::findClientInfo(WId wid)
+  {
+    return std::find_if
+    (
+      _clients.begin(),
+      _clients.end(),
+      [wid](const ClientInfos::value_type& it)
+      {
+        return it.second.getWindowInfo().id == wid;
+      }
+    );
+  }
+
+  //----------------------------------------------------------------------------
   bool IPCServer::updateHedge( const WindowRegions& regions,
                                LinkDescription::HyperEdge* hedge )
   {
@@ -816,22 +809,13 @@ namespace LinksRouting
 #endif
     ;
 
-    auto client_info = std::find_if
-    (
-      _clients.begin(),
-      _clients.end(),
-      [&client_wid](const ClientInfos::value_type& it)
-      {
-        return it.second.getWindowInfo().id == client_wid;
-      }
-    );
-
     QRect region, scroll_region;
-    WindowRegions::const_iterator first_above = regions.end();
+//    WindowInfo::const_iterator first_above = regions.end();
+    auto client_info = findClientInfo(client_wid);
     if( client_info != _clients.end() )
     {
-      client_info->second.updateWindow(regions);
-      modified |= client_info->second.update();
+      modified |= client_info->second.update(regions);
+#if 0
       region = client_info->second.viewport;
       scroll_region = client_info->second.scroll_region;
 
@@ -852,6 +836,7 @@ namespace LinksRouting
 
         first_above = window_info + 1;
       }
+#endif
     }
 
 #if 0
@@ -1360,7 +1345,7 @@ namespace LinksRouting
               vert != node->getVertices().end();
             ++vert )
     {
-      if( client_wid != windowAt(regions, QPoint(vert->x, vert->y)) )
+      if( client_wid != regions.windowIdAt(QPoint(vert->x, vert->y)) )
         ++hidden_count;
     }
 
@@ -1433,6 +1418,24 @@ namespace LinksRouting
     );
 
     covered_nodes.push_back(node);
+  }
+
+  //----------------------------------------------------------------------------
+  LinkDescription::LinkList::iterator
+  IPCServer::abortLinking(const LinkDescription::LinkList::iterator& link)
+  {
+    for(auto client: _clients)
+      client.second.removeLink(link->_link.get());
+    return _slot_links->_data->erase(link);
+  }
+
+  //----------------------------------------------------------------------------
+  void IPCServer::abortAll()
+  {
+    for(auto link = _slot_links->_data->begin();
+             link != _slot_links->_data->end(); )
+      link = abortLinking(link);
+    assert( _slot_links->_data->empty() );
   }
 
   //----------------------------------------------------------------------------
@@ -1548,18 +1551,6 @@ namespace LinksRouting
 
     if( !sent )
       _server->_cond_data_ready->wakeAll();
-  }
-
-  //----------------------------------------------------------------------------
-  WId windowAt( const WindowRegions& regions,
-                const QPoint& pos )
-  {
-    for( auto reg = regions.rbegin(); reg != regions.rend(); ++reg )
-    {
-      if( reg->region.contains(pos) )
-        return reg->id;
-    }
-    return 0;
   }
 
 } // namespace LinksRouting

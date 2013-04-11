@@ -7,6 +7,7 @@
 
 #include <QPoint>
 #include "ClientInfo.hxx"
+#include "ipc_server.hpp"
 
 #include <cassert>
 
@@ -14,8 +15,9 @@ namespace LinksRouting
 {
 
   //----------------------------------------------------------------------------
-  ClientInfo::ClientInfo(WId wid):
+  ClientInfo::ClientInfo(IPCServer* ipc_server, WId wid):
     _dirty(~0),
+    _ipc_server(ipc_server),
     _window_info(wid),
     _avg_region_height(0)
   {
@@ -26,32 +28,6 @@ namespace LinksRouting
   void ClientInfo::setWindowId(WId wid)
   {
     _window_info.id = wid;
-  }
-
-  //----------------------------------------------------------------------------
-  bool ClientInfo::updateWindow(const WindowRegions& windows)
-  {
-    WId wid = _window_info.id;
-    auto window_info = std::find_if
-    (
-      windows.begin(),
-      windows.end(),
-      [wid](const WindowInfo& winfo)
-      {
-        return winfo.id == wid;
-      }
-    );
-
-    if( window_info == windows.end() )
-      return false;
-
-    if( _window_info == *window_info )
-      return false;
-
-    _window_info = *window_info;
-    _dirty |= WINDOW;
-
-    return true;
   }
 
   //----------------------------------------------------------------------------
@@ -85,8 +61,6 @@ namespace LinksRouting
   {
     std::cout << "Parse regions (" << _window_info.id<< ")" << std::endl;
     _avg_region_height = 0;
-    _node.reset();
-    _hedge.reset();
 
     _dirty |= REGIONS;
 
@@ -157,25 +131,51 @@ namespace LinksRouting
     if( !nodes.empty() )
       _avg_region_height /= nodes.size();
 
-    _hedge = std::make_shared<LinkDescription::HyperEdge>(nodes);
+    auto hedge = std::make_shared<LinkDescription::HyperEdge>(nodes);
     //updateHedge(_window_monitor.getWindows(), hedge.get());
-    _node = std::make_shared<LinkDescription::Node>(_hedge);
-    return _node;
+    auto node = std::make_shared<LinkDescription::Node>(hedge);
+    std::cout << "add node " << node.get() << std::endl;
+    _nodes.push_back(node);
+    return node;
   }
 
   //------------------------------------------------------------------------------
-  bool ClientInfo::update()
+  bool ClientInfo::update(const WindowRegions& windows)
   {
+    auto window_info = windows.find(_window_info.id);
+    if( window_info == windows.end() )
+      return false;
+
+    if( _window_info != *window_info )
+    {
+      _window_info = *window_info;
+      _dirty |= WINDOW;
+    }
+
+    updateRegions(windows);
+
     if( !_dirty )
       return false;
 
     if( _dirty & (SCROLL_SIZE | REGIONS) )
       updateTileMap();
 
-    updateHedge();
+    updateHedges();
 
     _dirty = 0;
     return true;
+  }
+
+  //----------------------------------------------------------------------------
+  void ClientInfo::removeLink(LinkDescription::HyperEdge* hedge)
+  {
+    for( auto node = _nodes.begin(); node != _nodes.end(); )
+    {
+      if( (*node)->getParent() == hedge )
+        node = _nodes.erase(node);
+      else
+        ++node;
+    }
   }
 
   //----------------------------------------------------------------------------
@@ -198,35 +198,37 @@ namespace LinksRouting
   }
 
   //----------------------------------------------------------------------------
-  LinkDescription::NodePtr ClientInfo::getNode()
+  void ClientInfo::updateRegions(const WindowRegions& windows)
   {
-    return _node;
+    auto first_above = windows.find(_window_info.id);
+    if( first_above != windows.end() )
+      first_above = first_above + 1;
   }
 
   //------------------------------------------------------------------------------
-  void ClientInfo::updateHedge()
+  void ClientInfo::updateHedges()
   {
-    if( !_hedge )
-      return;
-
-    _hedge->set("client_wid", _window_info.id);
-    _hedge->set("screen-offset", getScrollRegionAbs().topLeft());
-    _hedge->set("partitions_src", to_string(tile_map->partitions_src));
-    _hedge->set("partitions_dest", to_string(tile_map->partitions_dest));
+    for(auto& node: _nodes)
+      for(auto& hedge: node->getChildren())
+      {
+        hedge->set("client_wid", _window_info.id);
+        hedge->set("screen-offset", getScrollRegionAbs().topLeft());
+        hedge->set("partitions_src", to_string(tile_map->partitions_src));
+        hedge->set("partitions_dest", to_string(tile_map->partitions_dest));
+      }
   }
 
   //----------------------------------------------------------------------------
   void ClientInfo::updateTileMap()
   {
+    assert(_ipc_server);
+
     const bool do_partitions = true;
     const bool partition_compress = true;
-    const double _preview_width = 400,
-                 _preview_height = 800;
+    const double preview_width = _ipc_server->getPreviewWidth(),
+                 preview_height = _ipc_server->getPreviewHeight();
 
     preview_size = scroll_region.size();
-
-    if( !_hedge )
-      return;
 
     Partitions partitions_src,
                partitions_dest;
@@ -234,12 +236,15 @@ namespace LinksRouting
     if( do_partitions )
     {
       PartitionHelper part;
-      for(auto const& node: _hedge->getNodes())
-      {
-        const Rect& bb = node->getBoundingBox();
-        part.add( float2( bb.t() - 3 * _avg_region_height,
-                          bb.b() + 3 * _avg_region_height ) );
-      }
+      for(auto const& node: _nodes)
+        for(auto const& hedge: node->getChildren())
+          for(auto const& region: hedge->getNodes())
+          {
+            const Rect& bb = region->getBoundingBox();
+            part.add( float2( bb.t() - 3 * _avg_region_height,
+                              bb.b() + 3 * _avg_region_height ) );
+          }
+
       part.clip(0, scroll_region.height(), 2 * _avg_region_height);
       partitions_src = part.getPartitions();
 
@@ -266,8 +271,8 @@ namespace LinksRouting
         if( partitions_src.back().y + 0.5 < scroll_region.height() )
           cur_pos += compress_size;
 
-        int min_height = static_cast<float>(_preview_height)
-                       / _preview_width
+        int min_height = static_cast<float>(preview_height)
+                       / preview_width
                        * scroll_region.width() + 0.5;
         cur_pos = std::max<int>(min_height, cur_pos);
 
@@ -285,8 +290,8 @@ namespace LinksRouting
     tile_map =
       std::make_shared<HierarchicTileMap>( preview_size.width(),
                                            preview_size.height(),
-                                           _preview_width,
-                                           _preview_height );
+                                           preview_width,
+                                           preview_height );
 
     tile_map->partitions_src = partitions_src;
     tile_map->partitions_dest = partitions_dest;
