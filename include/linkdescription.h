@@ -10,6 +10,7 @@
 #include <map>
 #include <vector>
 #include <memory>
+#include <iostream>
 
 namespace LinksRouting
 {
@@ -41,16 +42,21 @@ namespace LinkDescription
        *
        * @param key     Property key
        * @param val     New value
+       * @return Whether the value has changed
        */
       template<typename T>
-      void set(const std::string& key, const T& val)
+      bool set(const std::string& key, const T& val)
       {
 //#if defined(WIN32) || defined(_WIN32)
         // Use stringstream because visual studio seems do not have the proper
         // std::to_string overloads.
         std::stringstream strm;
         strm << val;
+        if( _props[key] == strm.str() )
+          return false;
+
         _props[ key ] = strm.str();
+        return true;
 //#else
 //      _props[ key ] = std::to_string(val);
 //#endif
@@ -87,9 +93,9 @@ namespace LinkDescription
     public:
 
       template<typename T>
-      void set(const std::string& key, const T& val)
+      bool set(const std::string& key, const T& val)
       {
-        _props.set(key, val);
+        return _props.set(key, val);
       }
 
       template<typename T>
@@ -181,6 +187,7 @@ namespace LinkDescription
       void addNodes(const nodes_t& nodes);
       void addNode(const NodePtr& node);
       void resetNodeParents();
+      nodes_t::iterator removeNode(const nodes_t::iterator& node);
 
       const Node* getParent() const;
 

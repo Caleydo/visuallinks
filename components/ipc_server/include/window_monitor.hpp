@@ -63,6 +63,9 @@ namespace LinksRouting
       WindowInfos::const_reverse_iterator windowAt(const QPoint& point) const;
       WId windowIdAt(const QPoint& point) const;
 
+      bool hit( const WindowInfos::const_iterator& first_above,
+                const QPoint& point ) const;
+
     private:
       const WindowInfos _windows;
   };

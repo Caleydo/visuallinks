@@ -82,7 +82,8 @@ namespace LinksRouting
       {
         WINDOW          = 1,
         REGIONS         = WINDOW << 1,
-        SCROLL_POS      = REGIONS << 1,
+        VISIBLITY       = REGIONS << 1,
+        SCROLL_POS      = VISIBLITY << 1,
         SCROLL_SIZE     = SCROLL_POS << 1
       };
 
@@ -93,6 +94,16 @@ namespace LinksRouting
       float                         _avg_region_height;
 
       void updateRegions(const WindowRegions& windows);
+      bool updateNode( LinkDescription::Node& hedge,
+                       const QRect& desktop, ///<! desktop in local coords
+                       const QRect& view,    ///<! viewport in local coords
+                       const WindowRegions& windows,
+                       const WindowInfos::const_iterator& first_above );
+      bool updateChildren( LinkDescription::HyperEdge& hedge,
+                           const QRect& desktop, ///<! desktop in local coords
+                           const QRect& view,    ///<! viewport in local coords
+                           const WindowRegions& windows,
+                           const WindowInfos::const_iterator& first_above );
       void updateHedges();
 
       /**

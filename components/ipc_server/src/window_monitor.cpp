@@ -83,6 +83,16 @@ namespace LinksRouting
   }
 
   //----------------------------------------------------------------------------
+  bool WindowRegions::hit( const WindowInfos::const_iterator& first_above,
+                           const QPoint& point ) const
+  {
+    for(auto it = first_above; it != _windows.end(); ++it)
+      if( it->region.contains(point) )
+        return true;
+    return false;
+  }
+
+  //----------------------------------------------------------------------------
   WindowMonitor::WindowMonitor( const QWidget* own_widget,
                                 RegionsCallback cb_regions_changed ):
     _own_widget(own_widget),

@@ -6,6 +6,7 @@
  */
 
 #include <QPoint>
+#include <QRect>
 #include "ClientInfo.hxx"
 #include "ipc_server.hpp"
 
@@ -203,6 +204,131 @@ namespace LinksRouting
     auto first_above = windows.find(_window_info.id);
     if( first_above != windows.end() )
       first_above = first_above + 1;
+
+
+    std::cout << (first_above != windows.end() ? first_above->title : "nothing above") << std::endl;
+
+    bool modified = false;
+    QRect desktop = windows.desktopRect()
+                           .translated( -getScrollRegionAbs().topLeft() ),
+          local_view(-scroll_region.topLeft(), viewport.size());
+
+    for(auto& node: _nodes)
+      for(auto& hedge: node->getChildren())
+        for( auto region = hedge->getNodes().begin();
+                  region != hedge->getNodes().end();
+                ++region )
+        {
+//          if(    !(*node)->get<std::string>("virtual-outside").empty()
+//              || (*node)->get<bool>("virtual-covered", false) )
+//          {
+//            //old_outside_nodes.push_back(node);
+//            node = hedge->getNodes().erase(node);
+//            modified = true;
+//            continue;
+//          }
+
+          LinkDescription::hedges_t& children = (*region)->getChildren();
+          for( auto child = children.begin(); child != children.end(); ++child )
+          {
+            modified |= updateChildren( **child,
+                                        desktop, local_view,
+                                        windows, first_above );
+          }
+
+          if( updateNode(**region, desktop, local_view, windows, first_above) )
+          {
+            if(    (*region)->get<bool>("on-screen")
+                && (*region)->get<bool>("outside") )
+            {
+              // Insert HyperEdge for outside node to allow for special route
+              // with "tunnel" icon
+              LinkDescription::NodePtr outside_node = *region;
+              region = hedge->removeNode(region);
+
+              auto new_hedge = std::make_shared<LinkDescription::HyperEdge>();
+              new_hedge->set("client_wid", _window_info.id);
+              new_hedge->set("no-parent-route", true);
+              new_hedge->set("outside", true);
+              new_hedge->addNode(outside_node);
+
+              auto new_node = std::make_shared<LinkDescription::Node>();
+              new_node->addChild(new_hedge);
+              hedge->addNode(new_node);
+            }
+          }
+
+//            new_hedge->setCenter(new_node->getLinkPointsChildren().front());
+//            new_node->getChildren().push_back(new_hedge);
+//            hedge->addNode(new_node);
+
+//          if( (*region)->get<bool>("outside", false) )
+//          {
+//            float2 center = (*node)->getCenter();
+//            if( center != float2(0,0) )
+//            {
+//              if( _desktop_rect.contains(center.x, center.y) )
+//                addCoveredPreview(*node, region, scroll_region, covered_nodes, true);
+//              else
+//                for( size_t i = 0; i < num_outside_scroll; ++i )
+//                {
+//                  OutsideScroll& out = outside_scroll[i];
+//                  if( (center - out.pos) * out.normal > 0 )
+//                    continue;
+//
+//                  if( out.normal.x == 0 )
+//                    out.pos.x += center.x;
+//                  else
+//                    out.pos.y += center.y;
+//                  out.num_outside += 1;
+//                }
+//            }
+
+          }
+
+    if( modified )
+      _dirty |= VISIBLITY;
+  }
+
+  //----------------------------------------------------------------------------
+  bool ClientInfo::updateNode(
+    LinkDescription::Node& node,
+    const QRect& desktop,
+    const QRect& view,
+    const WindowRegions& windows,
+    const WindowInfos::const_iterator& first_above
+  )
+  {
+    if( node.getVertices().empty() )
+      return false;
+
+    bool modified = false;
+    QPoint center = node.getCenter().toQPoint();
+
+    bool on_screen = desktop.contains(center);
+    bool inside_view = view.contains(center);
+    bool covered = windows.hit(first_above, center);
+
+    modified |= node.set("on-screen", on_screen);
+    modified |= node.set("covered", covered);
+    modified |= node.set("outside", inside_view);
+
+    return modified;
+  }
+
+  //----------------------------------------------------------------------------
+  bool ClientInfo::updateChildren(
+    LinkDescription::HyperEdge& hedge,
+    const QRect& desktop,
+    const QRect& view,
+    const WindowRegions& windows,
+    const WindowInfos::const_iterator& first_above
+  )
+  {
+    bool modified = false;
+    for(auto node: hedge.getNodes())
+      modified |= updateNode(*node, desktop, view, windows, first_above);
+    return modified;
   }
 
   //------------------------------------------------------------------------------

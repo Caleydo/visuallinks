@@ -112,6 +112,11 @@ namespace LinkDescription
   float2 Node::getCenter() const
   {
     const points_t& points = getLinkPoints();
+    if( points.empty() )
+      return float2();
+
+    return points.front();
+
     float2 center;
     for( auto p = points.begin(); p != points.end(); ++p )
       center += *p;
@@ -125,6 +130,9 @@ namespace LinkDescription
   //----------------------------------------------------------------------------
   Rect Node::getBoundingBox() const
   {
+    if( _points.empty() )
+      return Rect();
+
     float2 min = _points.front(),
            max = _points.front();
     for( auto p = _points.begin(); p != _points.end(); ++p )
@@ -252,6 +260,13 @@ namespace LinkDescription
   {
     _nodes.push_back(node);
     _nodes.back()->_parent = this;
+  }
+
+  //----------------------------------------------------------------------------
+  nodes_t::iterator HyperEdge::removeNode(const nodes_t::iterator& node)
+  {
+    (*node)->_parent = 0;
+    return _nodes.erase(node);
   }
 
   //----------------------------------------------------------------------------
