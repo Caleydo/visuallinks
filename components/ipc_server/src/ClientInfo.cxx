@@ -161,7 +161,8 @@ namespace LinksRouting
     if( _dirty & (SCROLL_SIZE | REGIONS) )
       updateTileMap();
 
-    updateHedges();
+    for(auto& node: _nodes)
+      updateHedges( node->getChildren() );
 
     _dirty = 0;
     return true;
@@ -205,9 +206,6 @@ namespace LinksRouting
     if( first_above != windows.end() )
       first_above = first_above + 1;
 
-
-    std::cout << (first_above != windows.end() ? first_above->title : "nothing above") << std::endl;
-
     bool modified = false;
     QRect desktop = windows.desktopRect()
                            .translated( -getScrollRegionAbs().topLeft() ),
@@ -215,28 +213,43 @@ namespace LinksRouting
 
     for(auto& node: _nodes)
       for(auto& hedge: node->getChildren())
+      {
+        LinkDescription::nodes_t changed_nodes;
+
         for( auto region = hedge->getNodes().begin();
                   region != hedge->getNodes().end();
                 ++region )
         {
-//          if(    !(*node)->get<std::string>("virtual-outside").empty()
-//              || (*node)->get<bool>("virtual-covered", false) )
-//          {
-//            //old_outside_nodes.push_back(node);
-//            node = hedge->getNodes().erase(node);
-//            modified = true;
-//            continue;
-//          }
-
           LinkDescription::hedges_t& children = (*region)->getChildren();
-          for( auto child = children.begin(); child != children.end(); ++child )
+          for( auto child = children.begin(); child != children.end(); )
           {
-            modified |= updateChildren( **child,
-                                        desktop, local_view,
-                                        windows, first_above );
+            if( modified |= updateChildren( **child,
+                                            desktop, local_view,
+                                            windows, first_above ) )
+            {
+              if( (*child)->get<bool>("outside") )
+              {
+                assert( (*child)->getNodes().size() == 1 );
+                LinkDescription::NodePtr outside_node =
+                  (*child)->getNodes().front();
+
+                if( !outside_node->get<bool>("outside") )
+                {
+                  // Remove HyperEdge and move node back after it has moved back
+                  // into the viewport.
+                  changed_nodes.push_back( outside_node );
+                  child = children.erase(child);
+                  continue;
+                }
+              }
+            }
+
+            ++child;
           }
 
-          if( updateNode(**region, desktop, local_view, windows, first_above) )
+          if( modified |= updateNode( **region,
+                                      desktop, local_view,
+                                      windows, first_above ) )
           {
             if(    (*region)->get<bool>("on-screen")
                 && (*region)->get<bool>("outside") )
@@ -247,7 +260,6 @@ namespace LinksRouting
               region = hedge->removeNode(region);
 
               auto new_hedge = std::make_shared<LinkDescription::HyperEdge>();
-              new_hedge->set("client_wid", _window_info.id);
               new_hedge->set("no-parent-route", true);
               new_hedge->set("outside", true);
               new_hedge->addNode(outside_node);
@@ -286,6 +298,9 @@ namespace LinksRouting
 
           }
 
+        hedge->addNodes(changed_nodes);
+      }
+
     if( modified )
       _dirty |= VISIBLITY;
   }
@@ -305,13 +320,9 @@ namespace LinksRouting
     bool modified = false;
     QPoint center = node.getCenter().toQPoint();
 
-    bool on_screen = desktop.contains(center);
-    bool inside_view = view.contains(center);
-    bool covered = windows.hit(first_above, center);
-
-    modified |= node.set("on-screen", on_screen);
-    modified |= node.set("covered", covered);
-    modified |= node.set("outside", inside_view);
+    modified |= node.set("on-screen", desktop.contains(center));
+    modified |= node.set("covered", windows.hit(first_above, center));
+    modified |= node.set("outside", !view.contains(center));
 
     return modified;
   }
@@ -332,16 +343,23 @@ namespace LinksRouting
   }
 
   //------------------------------------------------------------------------------
-  void ClientInfo::updateHedges()
+  void ClientInfo::updateHedges( LinkDescription::hedges_t& hedges,
+                                 bool first )
   {
-    for(auto& node: _nodes)
-      for(auto& hedge: node->getChildren())
+    for(auto& hedge: hedges)
+    {
+      hedge->set("client_wid", _window_info.id);
+      hedge->set("screen-offset", getScrollRegionAbs().topLeft());
+
+      if( first )
       {
-        hedge->set("client_wid", _window_info.id);
-        hedge->set("screen-offset", getScrollRegionAbs().topLeft());
         hedge->set("partitions_src", to_string(tile_map->partitions_src));
         hedge->set("partitions_dest", to_string(tile_map->partitions_dest));
       }
+
+      for(auto& node: hedge->getNodes())
+        updateHedges(node->getChildren(), false);
+    }
   }
 
   //----------------------------------------------------------------------------

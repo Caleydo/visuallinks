@@ -104,7 +104,8 @@ namespace LinksRouting
                            const QRect& view,    ///<! viewport in local coords
                            const WindowRegions& windows,
                            const WindowInfos::const_iterator& first_above );
-      void updateHedges();
+      void updateHedges( LinkDescription::hedges_t& hedges,
+                         bool first = true );
 
       /**
        * Update tile map (and recalculate paritions)

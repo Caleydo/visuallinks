@@ -554,7 +554,7 @@ namespace LinksRouting
         if( hedges_done.find(hedge) != hedges_done.end() )
           continue;
 
-        if( hedge->get<bool>("covered") )
+        if( hedge->get<bool>("covered") || hedge->get<bool>("outside") )
           glColor4fv(color_covered);
         else
           glColor4fv(color);
