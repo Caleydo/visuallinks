@@ -39,9 +39,11 @@ typedef QList<WId> WindowList;
 class QXT_GUI_EXPORT QxtWindowSystem
 {
 public:
+
     static WindowList windows();
     static WId activeWindow();
     static int activeWindow(WId window);
+    static bool isVisible(WId window);
     static WId findWindow(const QString& title);
     static WId windowAt(const QPoint& pos);
     static QString windowTitle(WId window);

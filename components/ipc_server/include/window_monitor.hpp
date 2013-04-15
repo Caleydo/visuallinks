@@ -21,21 +21,28 @@ namespace LinksRouting
   struct WindowInfo
   {
     WId         id;
-    QRect       region;
-    std::string title;
+    bool        minimized;
+    QRect       region,
+                region_launcher;
+    QString     title;
 
     explicit WindowInfo( WId id,
+                         bool minimized = false,
                          const QRect& region = QRect(),
-                         const std::string& title = "" ):
+                         const QString& title = "" ):
       id(id),
+      minimized(minimized),
       region(region),
       title(title)
     {}
 
     bool operator==(const WindowInfo& rhs) const
     {
-      // We don't care about title changes -> Only compare id and region
-      return id == rhs.id && region == rhs.region;
+      // We don't care about title changes -> Only compare other values
+      return id == rhs.id
+          && region == rhs.region
+          && minimized == rhs.minimized
+          && region_launcher == rhs.region_launcher;
     }
 
     bool operator!=(const WindowInfo& rhs) const
@@ -100,6 +107,9 @@ namespace LinksRouting
 	  int            _timeout;
       QTimer         _timer;
       RegionsCallback _cb_regions_changed;
+
+      mutable int    _launcher_size;
+      QStringList    _launchers;
 
       /**
        * Get all visible windows in stacking order and filtered by minimum size

@@ -8,6 +8,8 @@
 #include "JSONParser.h"
 #include "float2.hpp"
 
+#include <QStringList>
+
 //------------------------------------------------------------------------------
 JSONNode::JSONNode(const QScriptValue& node):
   _node(node)
@@ -82,6 +84,19 @@ QVariantList JSONNode::getValue() const
 
 //------------------------------------------------------------------------------
 template<>
+QStringList JSONNode::getValue() const
+{
+  if( _var.type() == QVariant::StringList )
+    return _var.toStringList();
+
+  if( !_node.isArray() )
+    throw std::runtime_error("Not an array");
+
+  return _node.toVariant().toStringList();
+}
+
+//------------------------------------------------------------------------------
+template<>
 float2 JSONNode::getValue() const
 {
   QVariantList region_list = getValue<QVariantList>();
@@ -125,7 +140,7 @@ JSONParser::JSONParser(const QString& data)
     throw std::runtime_error("Failed to evaluted received data: "
                              + to_string(json.toString()));
 
-  if( json.isArray() || !json.isObject() )
+  if( !json.isArray() && !json.isObject() )
     throw std::runtime_error("Received data is no JSON object.");
 
   _root = JSONNode(json);
@@ -141,4 +156,10 @@ JSONNode const JSONParser::getChild(const QString& key) const
 bool JSONParser::hasChild(const QString& key) const
 {
   return _root.hasChild(key);
+}
+
+//----------------------------------------------------------------------------
+JSONNode const JSONParser::getRoot() const
+{
+  return _root;
 }

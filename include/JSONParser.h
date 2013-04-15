@@ -60,6 +60,7 @@ class JSONParser
 
     JSONNode const getChild(const QString& key) const;
     bool hasChild(const QString& key) const;
+    JSONNode const getRoot() const;
 
     template <class T>
     T getValue(const QString& key) const

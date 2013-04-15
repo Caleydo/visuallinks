@@ -641,6 +641,8 @@ namespace LinksRouting
 
     for( auto node = nodes.begin(); node != nodes.end(); ++node )
     {
+      if( (*node)->get<bool>("hidden", false) )
+        continue;
       if(    !render_all
           &&  (*node)->get<bool>("hidden", false)
           && !(*node)->get<bool>("covered", false) )

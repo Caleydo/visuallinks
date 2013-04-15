@@ -38,13 +38,6 @@ static WindowList qxt_getWindows(Atom prop)
     Display* display = QX11Info::display();
     Window window = QX11Info::appRootWindow();
 
-    static Atom wm_state = 0;
-    if( !wm_state )
-      wm_state = XInternAtom(display, "_NET_WM_STATE", True);
-    static Atom wm_hidden = 0;
-    if( !wm_hidden )
-      wm_hidden = XInternAtom(display, "_NET_WM_STATE_HIDDEN", True);
-
     WindowList res;
     Atom type = 0;
     int format = 0;
@@ -56,31 +49,7 @@ static WindowList qxt_getWindows(Atom prop)
     {
         Window* list = reinterpret_cast<Window*>(data);
         for( uint i = 0; i < count; ++i )
-        {
-            uchar* data_props = 0;
-            ulong count_props;
-
-            bool hidden = false;
-
-            // Check visibility
-            if( XGetWindowProperty(display, list[i], wm_state, 0, (~0L), False, AnyPropertyType,
-                                   &type, &format, &count_props, &after, &data_props) == Success )
-            {
-                Atom* props = reinterpret_cast<Atom*>(data_props);
-                for(size_t j = 0; j < count_props; ++j)
-                    if( props[j] == wm_hidden )
-                    {
-                      hidden = true;
-                      break;
-                    }
-            }
-
-            if( !hidden )
-                res += list[i];
-
-            if( data_props )
-                XFree(data_props);
-        }
+          res += list[i];
         if( data )
             XFree(data);
     }
@@ -130,6 +99,44 @@ int QxtWindowSystem::activeWindow(WId window)
       SubstructureNotifyMask | SubstructureRedirectMask,
       &ev
     ) == 0;
+}
+
+bool QxtWindowSystem::isVisible(WId wid)
+{
+  Display* display = QX11Info::display();
+  bool hidden = false;
+
+  static Atom wm_state = 0;
+  if( !wm_state )
+    wm_state = XInternAtom(display, "_NET_WM_STATE", True);
+  static Atom wm_hidden = 0;
+  if( !wm_hidden )
+    wm_hidden = XInternAtom(display, "_NET_WM_STATE_HIDDEN", True);
+
+  WindowList res;
+  Atom type = 0;
+  int format = 0;
+  uchar* data = 0;
+  ulong count, after;
+
+  // Check visibility
+  if( XGetWindowProperty( display, wid, wm_state,
+                          0, (~0L), False, AnyPropertyType,
+                          &type, &format, &count, &after, &data ) == Success )
+  {
+    Atom* props = reinterpret_cast<Atom*>(data);
+    for(size_t j = 0; j < count; ++j)
+      if( props[j] == wm_hidden )
+      {
+        hidden = true;
+        break;
+      }
+  }
+
+  if( data )
+    XFree(data);
+
+  return hidden;
 }
 
 WId QxtWindowSystem::findWindow(const QString& title)

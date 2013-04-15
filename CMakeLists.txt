@@ -79,10 +79,12 @@ endif()
 add_subdirectory(${COMPONENTS_DIR}/tools)
 include_directories(
   ${COMPONENTS_DIR}/tools
+  libs/libgq
   libs/qtwebsocket/QtWebsocket
   libs/libqxt/include
 )
 
+add_subdirectory(libs/libgq)
 add_subdirectory(libs/qtwebsocket/QtWebsocket)
 add_subdirectory(libs/libqxt)
 

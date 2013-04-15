@@ -10,6 +10,7 @@
 #include "log.hpp"
 #include "ClientInfo.hxx"
 #include "JSONParser.h"
+#include "gconfitem.h"
 
 #include <QMutex>
 
@@ -422,6 +423,12 @@ namespace LinksRouting
     socket->deleteLater();
 
     LOG_INFO("Client disconnected");
+  }
+
+  //----------------------------------------------------------------------------
+  void IPCServer::onPinnedAppsChanged()
+  {
+    std::cout << "Changed" << std::endl;
   }
 
   //----------------------------------------------------------------------------

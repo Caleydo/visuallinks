@@ -20,9 +20,10 @@ namespace LinksRouting
     _dirty(~0),
     _ipc_server(ipc_server),
     _window_info(wid),
+    _minimized_icon(std::make_shared<LinkDescription::Node>()),
     _avg_region_height(0)
   {
-
+    _minimized_icon->set("filled", true);
   }
 
   //----------------------------------------------------------------------------
@@ -133,6 +134,7 @@ namespace LinksRouting
       _avg_region_height /= nodes.size();
 
     auto hedge = std::make_shared<LinkDescription::HyperEdge>(nodes);
+    hedge->addNode(_minimized_icon);
     //updateHedge(_window_monitor.getWindows(), hedge.get());
     auto node = std::make_shared<LinkDescription::Node>(hedge);
     std::cout << "add node " << node.get() << std::endl;
@@ -140,7 +142,7 @@ namespace LinksRouting
     return node;
   }
 
-  //------------------------------------------------------------------------------
+  //----------------------------------------------------------------------------
   bool ClientInfo::update(const WindowRegions& windows)
   {
     auto window_info = windows.find(_window_info.id);
@@ -202,6 +204,28 @@ namespace LinksRouting
   //----------------------------------------------------------------------------
   void ClientInfo::updateRegions(const WindowRegions& windows)
   {
+    if( _dirty & WINDOW )
+    {
+      LinkDescription::points_t& icon = _minimized_icon->getVertices();
+      icon.clear();
+
+      if( _window_info.minimized )
+      {
+        const QRect& region_launcher = _window_info.region_launcher;
+        QPoint pos
+        (
+          region_launcher.right() + 11,
+          (region_launcher.top() + region_launcher.bottom()) / 2
+        );
+
+        const int ICON_SIZE = 10;
+
+        icon.push_back( pos );
+        icon.push_back( pos + QPoint(ICON_SIZE, ICON_SIZE) );
+        icon.push_back( pos + QPoint(ICON_SIZE,-ICON_SIZE) );
+      }
+    }
+
     auto first_above = windows.find(_window_info.id);
     if( first_above != windows.end() )
       first_above = first_above + 1;
@@ -220,6 +244,14 @@ namespace LinksRouting
                   region != hedge->getNodes().end();
                 ++region )
         {
+          if( *region == _minimized_icon )
+            continue;
+
+          modified |= (*region)->set("hidden", _window_info.minimized);
+
+          if( _window_info.minimized )
+            continue;
+
           LinkDescription::hedges_t& children = (*region)->getChildren();
           for( auto child = children.begin(); child != children.end(); )
           {
@@ -349,7 +381,9 @@ namespace LinksRouting
     for(auto& hedge: hedges)
     {
       hedge->set("client_wid", _window_info.id);
-      hedge->set("screen-offset", getScrollRegionAbs().topLeft());
+      hedge->set( "screen-offset", _window_info.minimized
+                                 ? QPoint()
+                                 : getScrollRegionAbs().topLeft() );
 
       if( first )
       {

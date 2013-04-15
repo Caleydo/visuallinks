@@ -91,6 +91,7 @@ namespace LinksRouting
       IPCServer                    *_ipc_server;
       WindowInfo                    _window_info;
       LinkDescription::nodes_t      _nodes;
+      LinkDescription::NodePtr      _minimized_icon;
       float                         _avg_region_height;
 
       void updateRegions(const WindowRegions& windows);
