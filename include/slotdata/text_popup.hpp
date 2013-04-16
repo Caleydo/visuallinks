@@ -58,7 +58,7 @@ namespace SlotType
       bool auto_resize;
     };
 
-    typedef std::vector<Popup> Popups;
+    typedef std::list<Popup> Popups;
     Popups popups;
   };
 

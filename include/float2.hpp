@@ -116,12 +116,12 @@ struct float2
     return *this;
   }
 
-  bool operator==(const float2& rhs)
+  bool operator==(const float2& rhs) const
   {
     return x == rhs.x && y == rhs.y;
   }
 
-  bool operator!=(const float2& rhs)
+  bool operator!=(const float2& rhs) const
   {
     return !(*this == rhs);
   }

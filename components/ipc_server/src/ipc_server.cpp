@@ -36,12 +36,6 @@ namespace LinksRouting
   }
 
   template<typename T>
-  void clamp(T& val, T min, T max)
-  {
-    val = std::max(min, std::min(val, max));
-  }
-
-  template<typename T>
   void clampedStep( T& val,
                     T step,
                     T min,
@@ -68,6 +62,7 @@ namespace LinksRouting
     registerArg("PreviewWidth", _preview_width = 700);
     registerArg("PreviewHeight", _preview_height = 400);
     registerArg("PreviewAutoWidth", _preview_auto_width = true);
+    registerArg("OutsideSeeThrough", _outside_see_through = false);
   }
 
   //----------------------------------------------------------------------------

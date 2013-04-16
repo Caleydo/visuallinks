@@ -534,13 +534,13 @@ namespace LinksRouting
                                 int pass )
   {
     bool rendered_anything = false;
-    Color color(1.0, 0.2, 0.2);
+    _color_cur = Color(1.0, 0.2, 0.2);
 
     for(auto link = links.begin(); link != links.end(); ++link)
     {
       if( !_colors.empty() )
-        color = _colors[ link->_color_id % _colors.size() ];
-      const Color color_covered = 0.4f * color;
+        _color_cur = _colors[ link->_color_id % _colors.size() ];
+      _color_covered_cur = 0.4f * _color_cur;
 
       HyperEdgeQueue hedges_open;
       HyperEdgeSet   hedges_done;
@@ -555,9 +555,9 @@ namespace LinksRouting
           continue;
 
         if( hedge->get<bool>("covered") || hedge->get<bool>("outside") )
-          glColor4fv(color_covered);
+          glColor4fv(_color_covered_cur);
         else
-          glColor4fv(color);
+          glColor4fv(_color_cur);
 
         auto fork = hedge->getHyperEdgeDescription();
         if( !fork )
@@ -637,15 +637,10 @@ namespace LinksRouting
                                 int pass )
   {
     bool rendered_anything = false;
-    const Color current_color = getCurrentColor();
 
     for( auto node = nodes.begin(); node != nodes.end(); ++node )
     {
-      if( (*node)->get<bool>("hidden", false) )
-        continue;
-      if(    !render_all
-          &&  (*node)->get<bool>("hidden", false)
-          && !(*node)->get<bool>("covered", false) )
+      if( (*node)->get<bool>("hidden") )
         continue;
 
       if( hedges_open )
@@ -667,18 +662,23 @@ namespace LinksRouting
             && (*node)->get<bool>("hover") )
         {
           const Rect rp = parseRect( (*node)->get<std::string>("covered-preview-region") );
-          renderRect(rp, 2.f, 0, 0.07 * current_color, 2 * current_color);
+          renderRect(rp, 2.f, 0, 0.07 * _color_cur, 2 * _color_cur);
           const Rect r = parseRect( (*node)->get<std::string>("covered-region") );
-          renderRect(r, 3.f, 0, 0.5 * current_color, 2 * current_color);
+          renderRect(r, 3.f, 0, 0.5 * _color_cur, 2 * _color_cur);
           rendered_anything = true;
         }
         continue;
       }
 
+      Color color_cur = (*node)->get<bool>("covered")
+                      || (*node)->get<bool>("outside")
+                      ? _color_covered_cur
+                      : _color_cur;
+
       bool filled = (*node)->get<bool>("filled", false);
       if( !filled && !render_all )
       {
-        Color light = 0.5 * current_color;
+        Color light = 0.5 * color_cur;
         light.a *= 0.6;
         glColor4fv(light);
         glBegin(GL_POLYGON);
@@ -687,8 +687,8 @@ namespace LinksRouting
                 ++vert )
           glVertex2f(vert->x, vert->y);
         glEnd();
-        glColor4fv(current_color);
       }
+      glColor4fv(color_cur);
       line_borders_t region = calcLineBorders( (*node)->getVertices(),
                                                line_width,
                                                true );

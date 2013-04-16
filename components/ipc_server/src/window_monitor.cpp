@@ -182,11 +182,10 @@ namespace LinksRouting
     {
       for(WindowInfo& winfo: regions)
       {
-        if( launcher.contains
-            (
-              winfo.title.split(' ', QString::SkipEmptyParts).last(),
-              Qt::CaseInsensitive
-            ) )
+        QStringList title_words =
+          winfo.title.split(' ', QString::SkipEmptyParts);
+        if(  !title_words.empty()
+          && launcher.contains(title_words.last(), Qt::CaseInsensitive) )
         {
           winfo.region_launcher =
             QRect(9, pos_y, _launcher_size, _launcher_size);

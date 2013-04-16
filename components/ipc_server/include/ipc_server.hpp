@@ -68,6 +68,7 @@ namespace LinksRouting
       int getPreviewWidth() const { return _preview_width; }
       int getPreviewHeight() const { return _preview_height; }
       bool getPreviewAutoWidth() const { return _preview_auto_width; }
+      bool getOutsideSeeThrough() const { return _outside_see_through; }
 
     private slots:
 
@@ -151,7 +152,8 @@ namespace LinksRouting
       QImage        _full_preview_img;
       int           _preview_width,
                     _preview_height;
-      bool          _preview_auto_width;
+      bool          _preview_auto_width,
+                    _outside_see_through;
 
       struct InteractionHandler
       {

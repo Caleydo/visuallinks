@@ -42,7 +42,10 @@ namespace LinksRouting
 
     protected:
 
-      std::vector<Color> _colors;
+      std::vector<Color>    _colors;
+      Color                 _color_cur,
+                            _color_covered_cur;
+
       Partitions *_partitions_src,
                  *_partitions_dest;
       float       _offset_y;

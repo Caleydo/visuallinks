@@ -230,6 +230,7 @@ namespace LinksRouting
     if( first_above != windows.end() )
       first_above = first_above + 1;
 
+
     bool modified = false;
     QRect desktop = windows.desktopRect()
                            .translated( -getScrollRegionAbs().topLeft() ),
@@ -240,17 +241,40 @@ namespace LinksRouting
       {
         LinkDescription::nodes_t changed_nodes;
 
+        /*
+         * Check for regions scrolled away and not visualized by any see-
+         * through visualization.
+         */
+        OutsideScroll outside_scroll[4] =
+        {
+          {float2(0, local_view.top()),    float2( 0, 1), 0},
+          {float2(0, local_view.bottom()), float2( 0,-1), 0},
+          {float2(local_view.left(),  0),  float2( 1, 0), 0},
+          {float2(local_view.right(), 0),  float2(-1, 0), 0}
+        };
+
         for( auto region = hedge->getNodes().begin();
-                  region != hedge->getNodes().end();
-                ++region )
+                  region != hedge->getNodes().end(); )
         {
           if( *region == _minimized_icon )
+          {
+            ++region;
             continue;
+          }
 
           modified |= (*region)->set("hidden", _window_info.minimized);
 
           if( _window_info.minimized )
+          {
+            ++region;
             continue;
+          }
+
+          if( !(*region)->get<std::string>("outside-scroll").empty() )
+          {
+            region = hedge->getNodes().erase(region);
+            continue;
+          }
 
           LinkDescription::hedges_t& children = (*region)->getChildren();
           for( auto child = children.begin(); child != children.end(); )
@@ -283,9 +307,30 @@ namespace LinksRouting
                                       desktop, local_view,
                                       windows, first_above ) )
           {
+            if(   !(*region)->getVertices().empty()
+                && (*region)->get<bool>("hidden")
+                && (*region)->get<bool>("outside") )
+            {
+              float2 center = (*region)->getCenter();
+              for(auto& out: outside_scroll)
+              {
+                if( (center - out.pos) * out.normal > 0 )
+                  continue;
+
+                if( out.normal.x == 0 )
+                  out.pos.x += center.x;
+                else
+                  out.pos.y += center.y;
+                out.num_outside += 1;
+
+                break;
+              }
+            }
+
             if(    (*region)->get<bool>("on-screen")
                 && (*region)->get<bool>("outside") )
             {
+#if 0
               // Insert HyperEdge for outside node to allow for special route
               // with "tunnel" icon
               LinkDescription::NodePtr outside_node = *region;
@@ -299,38 +344,57 @@ namespace LinksRouting
               auto new_node = std::make_shared<LinkDescription::Node>();
               new_node->addChild(new_hedge);
               hedge->addNode(new_node);
+#endif
             }
           }
 
-//            new_hedge->setCenter(new_node->getLinkPointsChildren().front());
-//            new_node->getChildren().push_back(new_hedge);
-//            hedge->addNode(new_node);
-
-//          if( (*region)->get<bool>("outside", false) )
-//          {
-//            float2 center = (*node)->getCenter();
-//            if( center != float2(0,0) )
-//            {
-//              if( _desktop_rect.contains(center.x, center.y) )
-//                addCoveredPreview(*node, region, scroll_region, covered_nodes, true);
-//              else
-//                for( size_t i = 0; i < num_outside_scroll; ++i )
-//                {
-//                  OutsideScroll& out = outside_scroll[i];
-//                  if( (center - out.pos) * out.normal > 0 )
-//                    continue;
-//
-//                  if( out.normal.x == 0 )
-//                    out.pos.x += center.x;
-//                  else
-//                    out.pos.y += center.y;
-//                  out.num_outside += 1;
-//                }
-//            }
-
-          }
+          ++region;
+        }
 
         hedge->addNodes(changed_nodes);
+
+        for( size_t i = 0; i < 4; ++i )
+        {
+          OutsideScroll& out = outside_scroll[i];
+          if( !out.num_outside )
+            continue;
+
+          if( out.normal.x == 0 )
+          {
+            out.pos.x /= out.num_outside;
+            clamp<float>
+            (
+              out.pos.x,
+              local_view.left() + 12,
+              local_view.right() - 12
+            );
+          }
+          else
+          {
+            out.pos.y /= out.num_outside;
+            clamp<float>
+            (
+              out.pos.y,
+              local_view.top() + 12,
+              local_view.bottom() - 12
+            );
+          }
+
+          LinkDescription::points_t link_points;
+          link_points.push_back(out.pos += 7 * out.normal);
+
+          LinkDescription::points_t points;
+          points.push_back(out.pos +=  3 * out.normal + 12 * out.normal.normal());
+          points.push_back(out.pos -= 10 * out.normal + 12 * out.normal.normal());
+          points.push_back(out.pos += 10 * out.normal - 12 * out.normal.normal());
+
+          auto node = std::make_shared<LinkDescription::Node>(points, link_points);
+          node->set("outside-scroll", "side[" + std::to_string(static_cast<unsigned long long>(i)) + "]");
+          node->set("filled", true);
+
+          updateNode(*node, desktop, local_view, windows, first_above);
+          hedge->addNode(node);
+        }
       }
 
     if( modified )
@@ -340,8 +404,8 @@ namespace LinksRouting
   //----------------------------------------------------------------------------
   bool ClientInfo::updateNode(
     LinkDescription::Node& node,
-    const QRect& desktop,
-    const QRect& view,
+    const QRect& desktop, // in local
+    const QRect& view,    // coordinates!
     const WindowRegions& windows,
     const WindowInfos::const_iterator& first_above
   )
@@ -350,11 +414,20 @@ namespace LinksRouting
       return false;
 
     bool modified = false;
-    QPoint center = node.getCenter().toQPoint();
+    QPoint center_rel = node.getCenter().toQPoint(),
+           center_abs = center_rel
+                      + getScrollRegionAbs().topLeft();
 
-    modified |= node.set("on-screen", desktop.contains(center));
-    modified |= node.set("covered", windows.hit(first_above, center));
-    modified |= node.set("outside", !view.contains(center));
+    bool onscreen   = desktop.contains(center_rel),
+         covered    = windows.hit(first_above, center_abs),
+         outside    = !view.contains(center_rel),
+         hidden     =   !onscreen
+                    || (!_ipc_server->getOutsideSeeThrough() && outside);
+
+    modified |= node.set("on-screen", onscreen);
+    modified |= node.set("covered", covered);
+    modified |= node.set("outside", outside);
+    modified |= node.set("hidden", hidden);
 
     return modified;
   }

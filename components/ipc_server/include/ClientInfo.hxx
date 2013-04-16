@@ -14,6 +14,12 @@
 #include "PartitionHelper.hxx"
 #include "window_monitor.hpp"
 
+template<typename T>
+void clamp(T& val, T min, T max)
+{
+  val = std::max(min, std::min(val, max));
+}
+
 namespace LinksRouting
 {
 
@@ -85,6 +91,28 @@ namespace LinksRouting
         VISIBLITY       = REGIONS << 1,
         SCROLL_POS      = VISIBLITY << 1,
         SCROLL_SIZE     = SCROLL_POS << 1
+      };
+
+      /**
+       * Summary about regions scrolled outside in a common direction
+       */
+      struct OutsideScroll
+      {
+        float2 pos;
+        float2 normal;
+        size_t num_outside;
+
+        bool operator==(const OutsideScroll& rhs) const
+        {
+          return    num_outside == rhs.num_outside
+                 && pos == rhs.pos
+                 && normal == rhs.normal;
+        }
+
+        bool operator!=(const OutsideScroll& rhs) const
+        {
+          return !(*this == rhs);
+        }
       };
 
       uint32_t                      _dirty;
