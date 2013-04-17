@@ -10,7 +10,6 @@
 #include "log.hpp"
 #include "ClientInfo.hxx"
 #include "JSONParser.h"
-#include "gconfitem.h"
 
 #include <QMutex>
 

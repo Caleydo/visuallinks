@@ -44,6 +44,5 @@ target_link_libraries( ipc_server
   QtWebSocket
   qxt
   tools-qt
-  gconfitem
 )
 add_component_data(${COMPONENTINC_DIR} ipc_server)
