@@ -202,6 +202,13 @@ namespace LinksRouting
   }
 
   //----------------------------------------------------------------------------
+  float2 ClientInfo::getPreviewSize() const
+  {
+    return float2( _ipc_server->getPreviewWidth(),
+                   _ipc_server->getPreviewHeight() );
+  }
+
+  //----------------------------------------------------------------------------
   void ClientInfo::updateRegions(const WindowRegions& windows)
   {
     if( _dirty & WINDOW )
@@ -230,6 +237,8 @@ namespace LinksRouting
     if( first_above != windows.end() )
       first_above = first_above + 1;
 
+    _ipc_server->removePopups(_popups);
+    _popups.clear();
 
     bool modified = false;
     QRect desktop = windows.desktopRect()
@@ -380,13 +389,14 @@ namespace LinksRouting
             );
           }
 
+          float2 pos = out.pos;
           LinkDescription::points_t link_points;
-          link_points.push_back(out.pos += 7 * out.normal);
+          link_points.push_back(pos += 7 * out.normal);
 
           LinkDescription::points_t points;
-          points.push_back(out.pos +=  3 * out.normal + 12 * out.normal.normal());
-          points.push_back(out.pos -= 10 * out.normal + 12 * out.normal.normal());
-          points.push_back(out.pos += 10 * out.normal - 12 * out.normal.normal());
+          points.push_back(pos +=  3 * out.normal + 12 * out.normal.normal());
+          points.push_back(pos -= 10 * out.normal + 12 * out.normal.normal());
+          points.push_back(pos += 10 * out.normal - 12 * out.normal.normal());
 
           auto node = std::make_shared<LinkDescription::Node>(points, link_points);
           node->set("outside-scroll", "side[" + std::to_string(static_cast<unsigned long long>(i)) + "]");
@@ -394,6 +404,49 @@ namespace LinksRouting
 
           updateNode(*node, desktop, local_view, windows, first_above);
           hedge->addNode(node);
+
+          float2 pos_abs = out.pos + getScrollRegionAbs().topLeft();
+          std::string text = std::to_string(static_cast<unsigned long long>(out.num_outside));
+          float2 popup_pos, popup_size(text.length() * 10 + 6, 16);
+          float2 hover_pos, hover_size = getPreviewSize();
+
+          const size_t border_text = 4,
+                       border_preview = 8;
+
+          if( std::fabs(out.normal.y) > 0.5 )
+          {
+            popup_pos.x = pos_abs.x - popup_size.x / 2;
+            hover_pos.x = pos_abs.x - hover_size.x / 2;
+
+            if( out.normal.y < 0 )
+            {
+              popup_pos.y = pos_abs.y - 13 - popup_size.y - border_text;
+              hover_pos.y = popup_pos.y - hover_size.y + border_text
+                                                       - 2 * border_preview;
+            }
+            else
+            {
+              popup_pos.y = pos_abs.y + 13 + border_text;
+              hover_pos.y = popup_pos.y + popup_size.y - border_text
+                                                       + 2 * border_preview;
+            }
+          }
+
+          using SlotType::TextPopup;
+          TextPopup::Popup popup = {
+            text,
+            hedge->getNodes(),
+            TextPopup::HoverRect(popup_pos, popup_size, border_text, true),
+            TextPopup::HoverRect(hover_pos, hover_size, border_preview, false),
+            _ipc_server->getPreviewAutoWidth()
+          };
+          _popups.push_back( _ipc_server->addPopup(popup) );
+//          popup.hover_region.offset.x = region.left();
+//          popup.hover_region.offset.y = region.top();
+//          popup.hover_region.dim.x = region.width();
+//          popup.hover_region.dim.y = region.height();
+//          popup.hover_region.scroll_region = client_info->second.scroll_region;
+//          popup.hover_region.tile_map = client_info->second.tile_map;
         }
       }
 

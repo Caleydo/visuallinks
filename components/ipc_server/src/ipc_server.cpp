@@ -141,6 +141,22 @@ namespace LinksRouting
   }
 
   //----------------------------------------------------------------------------
+  IPCServer::PopupIterator
+  IPCServer::addPopup(const SlotType::TextPopup::Popup& popup)
+  {
+    auto& popups = _subscribe_popups->_data->popups;
+    return popups.insert(popups.end(), popup);
+  }
+
+  //----------------------------------------------------------------------------
+  void IPCServer::removePopups(const std::vector<PopupIterator>& popups_remove)
+  {
+    auto& popups = _subscribe_popups->_data->popups;
+    for(auto const& it: popups_remove)
+      popups.erase(it);
+  }
+
+  //----------------------------------------------------------------------------
   void IPCServer::onClientConnection()
   {
     QWsSocket* client_socket = _server->nextPendingConnection();
@@ -457,7 +473,9 @@ namespace LinksRouting
 
     // TODO keep working for multiple links at the same time
     _subscribe_mouse->_data->clear();
+#if 0
     _subscribe_popups->_data->popups.clear();
+#endif
 
     // Remove eventually existing search for same id
     if( link != _slot_links->_data->end() )
@@ -519,7 +537,9 @@ namespace LinksRouting
   {
     _mutex_slot_links->lock();
     _subscribe_mouse->_data->clear();
+#if 0
     _subscribe_popups->_data->popups.clear();
+#endif
 
     _desktop_rect = regions.desktopRect();
 

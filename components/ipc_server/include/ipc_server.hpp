@@ -70,6 +70,11 @@ namespace LinksRouting
       bool getPreviewAutoWidth() const { return _preview_auto_width; }
       bool getOutsideSeeThrough() const { return _outside_see_through; }
 
+      typedef SlotType::TextPopup::Popups::iterator PopupIterator;
+
+      PopupIterator addPopup(const SlotType::TextPopup::Popup& popup);
+      void removePopups(const std::vector<PopupIterator>& popups);
+
     private slots:
 
       void onClientConnection();

@@ -12,6 +12,7 @@
 #include "JSONParser.h"
 #include "linkdescription.h"
 #include "PartitionHelper.hxx"
+#include "slotdata/text_popup.hpp"
 #include "window_monitor.hpp"
 
 template<typename T>
@@ -115,12 +116,18 @@ namespace LinksRouting
         }
       };
 
+      typedef SlotType::TextPopup::Popups::iterator PopupIterator;
+      typedef std::vector<PopupIterator> Popups;
+
       uint32_t                      _dirty;
       IPCServer                    *_ipc_server;
       WindowInfo                    _window_info;
       LinkDescription::nodes_t      _nodes;
       LinkDescription::NodePtr      _minimized_icon;
+      Popups                        _popups;
       float                         _avg_region_height;
+
+      float2 getPreviewSize() const;
 
       void updateRegions(const WindowRegions& windows);
       bool updateNode( LinkDescription::Node& hedge,
@@ -137,7 +144,7 @@ namespace LinksRouting
                          bool first = true );
 
       /**
-       * Update tile map (and recalculate paritions)
+       * Update tile map (and recalculate partitions)
        */
       void updateTileMap();
 
