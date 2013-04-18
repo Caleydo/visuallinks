@@ -209,6 +209,56 @@ namespace LinksRouting
   }
 
   //----------------------------------------------------------------------------
+  void ClientInfo::createPopup( const float2& pos,
+                                const float2& normal,
+                                const std::string& text,
+                                const LinkDescription::nodes_t& nodes )
+  {
+    float2 popup_pos, popup_size(text.length() * 10 + 6, 16);
+    float2 hover_pos, hover_size = getPreviewSize();
+
+    const size_t border_text = 4,
+                 border_preview = 8;
+
+    if( std::fabs(normal.y) > 0.5 )
+    {
+      popup_pos.x = pos.x - popup_size.x / 2;
+      hover_pos.x = pos.x - hover_size.x / 2;
+
+      if( normal.y < 0 )
+      {
+        popup_pos.y = pos.y - 13 - popup_size.y - border_text;
+        hover_pos.y = popup_pos.y - hover_size.y + border_text
+                                                 - 2 * border_preview;
+      }
+      else
+      {
+        popup_pos.y = pos.y + 13 + border_text;
+        hover_pos.y = popup_pos.y + popup_size.y - border_text
+                                                 + 2 * border_preview;
+      }
+    }
+
+    using SlotType::TextPopup;
+    TextPopup::Popup popup = {
+      text,
+      nodes,
+      0,
+      TextPopup::HoverRect(popup_pos, popup_size, border_text, true),
+      TextPopup::HoverRect(hover_pos, hover_size, border_preview, false),
+      _ipc_server->getPreviewAutoWidth()
+    };
+    const QRect& view_abs = getViewportAbs();
+    popup.hover_region.offset.x = view_abs.left();
+    popup.hover_region.offset.y = view_abs.top();
+    popup.hover_region.dim.x = view_abs.width();
+    popup.hover_region.dim.y = view_abs.height();
+    popup.hover_region.scroll_region.size = preview_size;
+    popup.hover_region.tile_map = tile_map;
+    _popups.push_back( _ipc_server->addPopup(*this, popup) );
+  }
+
+  //----------------------------------------------------------------------------
   void ClientInfo::updateRegions(const WindowRegions& windows)
   {
     if( _dirty & WINDOW )
@@ -405,48 +455,10 @@ namespace LinksRouting
           updateNode(*node, desktop, local_view, windows, first_above);
           hedge->addNode(node);
 
-          float2 pos_abs = out.pos + getScrollRegionAbs().topLeft();
-          std::string text = std::to_string(static_cast<unsigned long long>(out.num_outside));
-          float2 popup_pos, popup_size(text.length() * 10 + 6, 16);
-          float2 hover_pos, hover_size = getPreviewSize();
-
-          const size_t border_text = 4,
-                       border_preview = 8;
-
-          if( std::fabs(out.normal.y) > 0.5 )
-          {
-            popup_pos.x = pos_abs.x - popup_size.x / 2;
-            hover_pos.x = pos_abs.x - hover_size.x / 2;
-
-            if( out.normal.y < 0 )
-            {
-              popup_pos.y = pos_abs.y - 13 - popup_size.y - border_text;
-              hover_pos.y = popup_pos.y - hover_size.y + border_text
-                                                       - 2 * border_preview;
-            }
-            else
-            {
-              popup_pos.y = pos_abs.y + 13 + border_text;
-              hover_pos.y = popup_pos.y + popup_size.y - border_text
-                                                       + 2 * border_preview;
-            }
-          }
-
-          using SlotType::TextPopup;
-          TextPopup::Popup popup = {
-            text,
-            hedge->getNodes(),
-            TextPopup::HoverRect(popup_pos, popup_size, border_text, true),
-            TextPopup::HoverRect(hover_pos, hover_size, border_preview, false),
-            _ipc_server->getPreviewAutoWidth()
-          };
-          _popups.push_back( _ipc_server->addPopup(popup) );
-//          popup.hover_region.offset.x = region.left();
-//          popup.hover_region.offset.y = region.top();
-//          popup.hover_region.dim.x = region.width();
-//          popup.hover_region.dim.y = region.height();
-//          popup.hover_region.scroll_region = client_info->second.scroll_region;
-//          popup.hover_region.tile_map = client_info->second.tile_map;
+          createPopup( out.pos + getScrollRegionAbs().topLeft(),
+                       out.normal,
+                       std::to_string(static_cast<unsigned long long>(out.num_outside)),
+                       hedge->getNodes() );
         }
       }
 
@@ -599,6 +611,9 @@ namespace LinksRouting
 
     tile_map->partitions_src = partitions_src;
     tile_map->partitions_dest = partitions_dest;
+
+    for(auto& popup: _popups)
+      popup->hover_region.tile_map = tile_map;
   }
 
 } // namespace LinksRouting

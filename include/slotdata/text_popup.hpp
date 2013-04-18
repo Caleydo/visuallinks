@@ -53,6 +53,7 @@ namespace SlotType
     {
       std::string text;
       LinkDescription::nodes_t nodes;
+      void* client_socket;
       HoverRect region;
       HoverRect hover_region;
       bool auto_resize;

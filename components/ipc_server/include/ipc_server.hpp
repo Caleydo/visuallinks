@@ -72,7 +72,8 @@ namespace LinksRouting
 
       typedef SlotType::TextPopup::Popups::iterator PopupIterator;
 
-      PopupIterator addPopup(const SlotType::TextPopup::Popup& popup);
+      PopupIterator addPopup( const ClientInfo& client_info,
+                              const SlotType::TextPopup::Popup& popup );
       void removePopups(const std::vector<PopupIterator>& popups);
 
     private slots:
@@ -109,6 +110,8 @@ namespace LinksRouting
                               const QRect& scroll_region,
                               LinkDescription::nodes_t& covered_nodes,
                               bool extend = false );
+
+      void onMouseMove(int x, int y);
 
     private:
 

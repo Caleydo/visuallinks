@@ -44,6 +44,18 @@ struct float2
   }
 #endif
 
+#ifdef QSIZE_H
+  float2(const QSize& p):
+    x(p.width()),
+    y(p.height())
+  {}
+
+  QSize toQSize() const
+  {
+    return QSize(x, y);
+  }
+#endif
+
   /**
    *
    */

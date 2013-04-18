@@ -128,6 +128,10 @@ namespace LinksRouting
       float                         _avg_region_height;
 
       float2 getPreviewSize() const;
+      void createPopup( const float2& pos,
+    		            const float2& normal,
+    		            const std::string& text,
+    		            const LinkDescription::nodes_t& nodes );
 
       void updateRegions(const WindowRegions& windows);
       bool updateNode( LinkDescription::Node& hedge,

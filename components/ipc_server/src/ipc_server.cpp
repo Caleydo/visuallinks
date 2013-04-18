@@ -89,6 +89,11 @@ namespace LinksRouting
       slot_subscriber.getSlot<LinksRouting::SlotType::MouseEvent>("/mouse");
     _subscribe_popups =
       slot_subscriber.getSlot<SlotType::TextPopup>("/popups");
+
+    _subscribe_mouse->_data->_move_callbacks.push_back
+    (
+      std::bind(&IPCServer::onMouseMove, this, _1, _2)
+    );
   }
 
   //----------------------------------------------------------------------------
@@ -142,10 +147,27 @@ namespace LinksRouting
 
   //----------------------------------------------------------------------------
   IPCServer::PopupIterator
-  IPCServer::addPopup(const SlotType::TextPopup::Popup& popup)
+  IPCServer::addPopup( const ClientInfo& client_info,
+                       const SlotType::TextPopup::Popup& popup )
   {
     auto& popups = _subscribe_popups->_data->popups;
-    return popups.insert(popups.end(), popup);
+    auto popup_it = popups.insert(popups.end(), popup);
+
+    auto client = std::find_if
+    (
+      _clients.begin(),
+      _clients.end(),
+      [&client_info](const ClientInfos::value_type& c)
+      {
+        return c.second.getWindowInfo().id == client_info.getWindowInfo().id;
+      }
+    );
+
+    if( client == _clients.end() )
+      return popup_it;
+
+    popup_it->client_socket = client->first;
+    return popup_it;
   }
 
   //----------------------------------------------------------------------------
@@ -471,9 +493,9 @@ namespace LinksRouting
     client_info.parseScrollRegion(msg);
     client_info.update(_window_monitor.getWindows());
 
+#if 0
     // TODO keep working for multiple links at the same time
     _subscribe_mouse->_data->clear();
-#if 0
     _subscribe_popups->_data->popups.clear();
 #endif
 
@@ -536,8 +558,8 @@ namespace LinksRouting
   void IPCServer::regionsChanged(const WindowRegions& regions)
   {
     _mutex_slot_links->lock();
-    _subscribe_mouse->_data->clear();
 #if 0
+    _subscribe_mouse->_data->clear();
     _subscribe_popups->_data->popups.clear();
 #endif
 
@@ -1041,36 +1063,6 @@ namespace LinksRouting
         _subscribe_popups->_data->popups.push_back(popup);
 
         /**
-         * Mouse move callback
-         */
-        _subscribe_mouse->_data->_move_callbacks.push_back(
-          [&,index,client_info](int x, int y)
-          {
-            auto& popup = _subscribe_popups->_data->popups[index];
-            if(  popup.region.contains(x, y)
-              || (   popup.hover_region.visible
-                  && popup.hover_region.contains(x, y)
-                 )
-              )
-            {
-              if( popup.hover_region.visible )
-                return;
-
-              popup.hover_region.visible = true;
-
-              _interaction_handler.updateRegion(*client_info, popup);
-
-            }
-            else if( !popup.hover_region.visible )
-              return;
-            else
-              popup.hover_region.visible = false;
-
-            _cond_data_ready->wakeAll();
-          }
-        );
-
-        /**
          * Mouse click callback
          */
         _subscribe_mouse->_data->_click_callbacks.push_back(
@@ -1408,7 +1400,7 @@ namespace LinksRouting
               vert != node->getVertices().end();
             ++vert )
       bb.expand(*vert);
-
+#if 0
     /**
      * Mouse move callback
      */
@@ -1437,8 +1429,48 @@ namespace LinksRouting
         _cond_data_ready->wakeAll();
       }
     );
-
+#endif
     covered_nodes.push_back(node);
+  }
+
+  //----------------------------------------------------------------------------
+  void IPCServer::onMouseMove(int x, int y)
+  {
+    bool changed = false;
+    for(auto& popup: _subscribe_popups->_data->popups)
+    {
+      if( !popup.client_socket )
+        continue;
+
+      if(    popup.region.contains(x, y)
+          || (  popup.hover_region.visible
+             && popup.hover_region.contains(x,y)
+             ) )
+      {
+        if( popup.hover_region.visible )
+          continue;
+
+        popup.hover_region.visible = true;
+
+        QWsSocket* client_socket = static_cast<QWsSocket*>(popup.client_socket);
+        ClientInfos::iterator client = _clients.find(client_socket);
+        assert(client != _clients.end());
+
+        _interaction_handler.updateRegion(*client, popup);
+      }
+      else if( !popup.hover_region.visible )
+      {
+        continue;
+      }
+      else
+      {
+        popup.hover_region.visible = false;
+        changed = true;
+      }
+    }
+
+    if( changed )
+      _cond_data_ready->wakeAll();
   }
 
   //----------------------------------------------------------------------------
@@ -1474,13 +1506,14 @@ namespace LinksRouting
     float2 center,
     float2 rel_pos )
   {
-    const HierarchicTileMapPtr& tile_map = client_info.second.tile_map;
+    HierarchicTileMapPtr tile_map = popup.hover_region.tile_map.lock();
     float scale = 1/tile_map->getLayerScale(popup.hover_region.zoom);
 
     float preview_aspect = _server->_preview_width
                          / static_cast<float>(_server->_preview_height);
-    const QRect& reg = client_info.second.scroll_region;
+    const QRect reg = popup.hover_region.scroll_region.toQRect();
     float zoom_scale = pow(2.0f, static_cast<float>(popup.hover_region.zoom));
+
     int h = reg.height() / zoom_scale + 0.5f,
         w = h * preview_aspect + 0.5;
 
