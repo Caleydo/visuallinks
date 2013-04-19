@@ -69,6 +69,7 @@ namespace LinksRouting
       int getPreviewHeight() const { return _preview_height; }
       bool getPreviewAutoWidth() const { return _preview_auto_width; }
       bool getOutsideSeeThrough() const { return _outside_see_through; }
+      QRect& desktopRect() const { return *_subscribe_desktop_rect->_data; }
 
       typedef SlotType::TextPopup::Popups::iterator PopupIterator;
 
@@ -118,7 +119,6 @@ namespace LinksRouting
       QWsServer          *_server;
       ClientInfos         _clients;
       WindowMonitor       _window_monitor;
-      QRect               _desktop_rect;
 
       QMutex             *_mutex_slot_links;
       QWaitCondition     *_cond_data_ready;
@@ -132,8 +132,11 @@ namespace LinksRouting
       /* List of available routing components */
       slot_t<SlotType::ComponentSelection>::type _subscribe_routing;
 
-      /* Permanenet configuration changeable at runtime */
+      /* Permanent configuration changeable at runtime */
       slot_t<LinksRouting::Config*>::type _subscribe_user_config;
+
+      /* Drawable desktop region */
+      slot_t<QRect>::type _subscribe_desktop_rect;
 
       /* Slot for registering mouse callback */
       slot_t<SlotType::MouseEvent>::type _subscribe_mouse;

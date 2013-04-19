@@ -85,6 +85,10 @@ namespace LinksRouting
     _subscribe_user_config =
       slot_subscriber.getSlot<LinksRouting::Config*>("/user-config");
     assert(_subscribe_user_config->_data.get());
+
+    _subscribe_desktop_rect =
+      slot_subscriber.getSlot<QRect>("/desktop/rect");
+
     _subscribe_mouse =
       slot_subscriber.getSlot<LinksRouting::SlotType::MouseEvent>("/mouse");
     _subscribe_popups =
@@ -557,13 +561,12 @@ namespace LinksRouting
   //----------------------------------------------------------------------------
   void IPCServer::regionsChanged(const WindowRegions& regions)
   {
+    _window_monitor.setDesktopRect( desktopRect() );
     _mutex_slot_links->lock();
 #if 0
     _subscribe_mouse->_data->clear();
     _subscribe_popups->_data->popups.clear();
 #endif
-
-    _desktop_rect = regions.desktopRect();
 
     bool need_update = false;
     for( auto link = _slot_links->_data->begin();
@@ -930,7 +933,7 @@ namespace LinksRouting
         float2 center = (*node)->getCenter();
         if( center != float2(0,0) )
         {
-          if( _desktop_rect.contains(center.x, center.y) )
+          if( desktopRect().contains(center.x, center.y) )
             addCoveredPreview(*node, region, scroll_region, covered_nodes, true);
           else
             for( size_t i = 0; i < num_outside_scroll; ++i )
@@ -1383,7 +1386,7 @@ namespace LinksRouting
                                      bool extend )
   {
     QRect preview_region =
-      scroll_region.intersect(extend ? _desktop_rect : region);
+      scroll_region.intersect(extend ? desktopRect() : region);
     QRect source_region
     (
       preview_region.topLeft() - scroll_region.topLeft(),
@@ -1594,8 +1597,8 @@ namespace LinksRouting
           "\"size\": [" + QString::number(tile.width)
                   + "," + QString::number(tile.height)
                   + "],"
-          "\"sections_src\":" + to_string(client_info.second.partitions_src).c_str() + ","
-          "\"sections_dest\":" + to_string(client_info.second.partitions_dest).c_str() + ","
+          "\"sections_src\":" + to_string(tile_map->partitions_src).c_str() + ","
+          "\"sections_dest\":" + to_string(tile_map->partitions_dest).c_str() + ","
           "\"src\": " + src.toString(true).c_str() + ","
           "\"req_id\": " + QString::number(req_id) +
         "}"));

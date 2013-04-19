@@ -227,6 +227,9 @@ ShaderPtr loadShader( QString vert, QString frag )
       slot_collector.create<LinksRouting::SlotType::Image>("/desktop");
     _slot_desktop->_data->type = LinksRouting::SlotType::Image::OpenGLTexture;
 
+    _slot_desktop_rect =
+      slot_collector.create<QRect>("/desktop/rect");
+
     _slot_mouse =
       slot_collector.create<LinksRouting::SlotType::MouseEvent>("/mouse");
     _slot_popups =
@@ -558,6 +561,13 @@ ShaderPtr loadShader( QString vert, QString frag )
 
       _window_offset = window_offset;
       _window_end = window_end;
+
+      // Publish desktop region which contains only drawable areas
+      QRect& rect = *_slot_desktop_rect->_data;
+      rect.setTopLeft(window_offset);
+      rect.setBottomRight(window_end - window_offset - QPoint(1,1));
+
+      _slot_desktop_rect->setValid(true);
 
       // Moves the window to the top- and leftmost position. As long as the
       // offset changes either the user is moving the window or the window is

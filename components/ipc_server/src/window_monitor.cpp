@@ -58,12 +58,6 @@ namespace LinksRouting
   }
 
   //----------------------------------------------------------------------------
-  QRect WindowRegions::desktopRect() const
-  {
-    return _windows.empty() ? QRect() : _windows.front().region;
-  }
-
-  //----------------------------------------------------------------------------
   WindowInfos::const_reverse_iterator
   WindowRegions::windowAt(const QPoint& pos) const
   {
@@ -114,9 +108,14 @@ namespace LinksRouting
   }
 
   //----------------------------------------------------------------------------
+  void WindowMonitor::setDesktopRect(const QRect& desktop)
+  {
+    _desktop_rect = desktop;
+  }
+
+  //----------------------------------------------------------------------------
   WindowInfos WindowMonitor::getWindowInfos() const
   {
-    QRect desktop = WindowRegions(_last_regions).desktopRect();
     WId maximized_wid = 0;
 
     // Now get the actual list of windows
@@ -153,11 +152,11 @@ namespace LinksRouting
         QxtWindowSystem::windowTitle(id)
       ));
 
-      QRect visible_region = desktop.intersected(region);
-      if(    visible_region.left() <= 0.08 * desktop.width()
-          && visible_region.right() >= 0.94 * desktop.width()
-          && visible_region.top() <= 0.06 * desktop.height()
-          && visible_region.bottom() >= 0.96 * desktop.height() )
+      QRect visible_region = _desktop_rect.intersected(region);
+      if(    visible_region.left() <= 0.08 * _desktop_rect.width()
+          && visible_region.right() >= 0.94 * _desktop_rect.width()
+          && visible_region.top() <= 0.06 * _desktop_rect.height()
+          && visible_region.bottom() >= 0.96 * _desktop_rect.height() )
         maximized_wid = id;
     }
 

@@ -212,8 +212,11 @@ namespace LinksRouting
   void ClientInfo::createPopup( const float2& pos,
                                 const float2& normal,
                                 const std::string& text,
-                                const LinkDescription::nodes_t& nodes )
+                                const LinkDescription::nodes_t& nodes,
+                                bool auto_resize )
   {
+    const QRect& desktop_rect = _ipc_server->desktopRect();
+
     float2 popup_pos, popup_size(text.length() * 10 + 6, 16);
     float2 hover_pos, hover_size = getPreviewSize();
 
@@ -238,6 +241,25 @@ namespace LinksRouting
                                                  + 2 * border_preview;
       }
     }
+    else
+    {
+      popup_pos.x = pos.x + normal.x * (13 + border_text);
+      hover_pos.x = popup_pos.x + normal.x * (border_preview + border_text);
+      if( normal.x > 0 )
+        hover_pos.x += popup_size.x;
+      else
+      {
+        popup_pos.x -= popup_size.x;
+        hover_pos.x -= hover_size.x + popup_size.x;
+      }
+
+      popup_pos.y = pos.y - popup_size.y / 2;
+      hover_pos.y = pos.y - hover_size.y / 2;
+
+      clamp<float>( hover_pos.y,
+                    desktop_rect.top() + border_preview,
+                    desktop_rect.bottom() - border_preview - hover_size.y );
+    }
 
     using SlotType::TextPopup;
     TextPopup::Popup popup = {
@@ -246,7 +268,7 @@ namespace LinksRouting
       0,
       TextPopup::HoverRect(popup_pos, popup_size, border_text, true),
       TextPopup::HoverRect(hover_pos, hover_size, border_preview, false),
-      _ipc_server->getPreviewAutoWidth()
+      auto_resize && _ipc_server->getPreviewAutoWidth()
     };
     const QRect& view_abs = getViewportAbs();
     popup.hover_region.offset.x = view_abs.left();
@@ -261,7 +283,10 @@ namespace LinksRouting
   //----------------------------------------------------------------------------
   void ClientInfo::updateRegions(const WindowRegions& windows)
   {
-    if( _dirty & WINDOW )
+    _ipc_server->removePopups(_popups);
+    _popups.clear();
+
+    if( true ) //_dirty & WINDOW )
     {
       LinkDescription::points_t& icon = _minimized_icon->getVertices();
       icon.clear();
@@ -280,6 +305,15 @@ namespace LinksRouting
         icon.push_back( pos );
         icon.push_back( pos + QPoint(ICON_SIZE, ICON_SIZE) );
         icon.push_back( pos + QPoint(ICON_SIZE,-ICON_SIZE) );
+
+        createPopup
+        (
+          pos,
+          float2(1,0),
+          "5",
+          _nodes.front()->getChildren().front()->getNodes(),
+          false
+        );
       }
     }
 
@@ -287,13 +321,13 @@ namespace LinksRouting
     if( first_above != windows.end() )
       first_above = first_above + 1;
 
-    _ipc_server->removePopups(_popups);
-    _popups.clear();
-
     bool modified = false;
-    QRect desktop = windows.desktopRect()
-                           .translated( -getScrollRegionAbs().topLeft() ),
+    QRect desktop = _ipc_server->desktopRect()
+                                .translated( -getScrollRegionAbs().topLeft() ),
           local_view(-scroll_region.topLeft(), viewport.size());
+
+    // Limit outside indicators to desktop region
+    local_view = local_view.intersect(desktop);
 
     for(auto& node: _nodes)
       for(auto& hedge: node->getChildren())

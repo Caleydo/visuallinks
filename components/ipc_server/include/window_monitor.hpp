@@ -66,7 +66,6 @@ namespace LinksRouting
       WindowInfos::const_iterator begin() const;
       WindowInfos::const_iterator end() const;
 
-      QRect desktopRect() const;
       WindowInfos::const_reverse_iterator windowAt(const QPoint& point) const;
       WId windowIdAt(const QPoint& point) const;
 
@@ -99,9 +98,16 @@ namespace LinksRouting
        */
       WindowRegions getWindows() const;
 
+      /**
+       * Set dimensions and position of visible/drawable desktop area
+       * @param desktop
+       */
+      void setDesktopRect(const QRect& desktop);
+
     protected:
 
       const QWidget *_own_widget;
+      QRect          _desktop_rect;
       WindowInfos    _regions,
 		             _last_regions;
 	  int            _timeout;

@@ -94,6 +94,7 @@ namespace qtfullscreensystem
       float2 _last_mouse_pos;
 
       LinksRouting::slot_t<LinksRouting::SlotType::Image>::type _slot_desktop;
+      LinksRouting::slot_t<QRect>::type _slot_desktop_rect;
       LinksRouting::slot_t<LinksRouting::SlotType::MouseEvent>::type _slot_mouse;
       LinksRouting::slot_t<LinksRouting::SlotType::TextPopup>::type _slot_popups;
       QPixmap _screenshot;

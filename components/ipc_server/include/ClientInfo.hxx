@@ -36,8 +36,6 @@ namespace LinksRouting
     /** Size of whole preview region */
     QSize   preview_size;
 
-    Partitions           partitions_src,
-                         partitions_dest;
     HierarchicTileMapPtr tile_map,
                          tile_map_uncompressed;
 
@@ -129,9 +127,10 @@ namespace LinksRouting
 
       float2 getPreviewSize() const;
       void createPopup( const float2& pos,
-    		            const float2& normal,
-    		            const std::string& text,
-    		            const LinkDescription::nodes_t& nodes );
+                        const float2& normal,
+                        const std::string& text,
+                        const LinkDescription::nodes_t& nodes,
+                        bool auto_resize = true );
 
       void updateRegions(const WindowRegions& windows);
       bool updateNode( LinkDescription::Node& hedge,
