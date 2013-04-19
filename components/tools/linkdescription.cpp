@@ -191,6 +191,14 @@ namespace LinkDescription
   }
 
   //----------------------------------------------------------------------------
+  void Node::clearChildren()
+  {
+    for(auto& node: _children)
+      node->_parent = 0;
+    _children.clear();
+  }
+
+  //----------------------------------------------------------------------------
   HyperEdge::HyperEdge():
     _parent(0),
     _revision( 0 )

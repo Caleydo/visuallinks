@@ -52,9 +52,13 @@ namespace LinksRouting
     void setScrollPos( const QPoint& offset );
 
     /**
-     * Parse regions from JSON and replace current regions
+     * Parse regions from JSON and replace current regions in node if given
      */
-    LinkDescription::NodePtr parseRegions(const JSONParser& json);
+    LinkDescription::NodePtr parseRegions
+    (
+      const JSONParser& json,
+      LinkDescription::NodePtr node = nullptr
+    );
 
     /**
      *

@@ -59,7 +59,11 @@ namespace LinksRouting
   }
 
   //----------------------------------------------------------------------------
-  LinkDescription::NodePtr ClientInfo::parseRegions( const JSONParser& json )
+  LinkDescription::NodePtr ClientInfo::parseRegions
+  (
+    const JSONParser& json,
+    LinkDescription::NodePtr node
+  )
   {
     std::cout << "Parse regions (" << _window_info.id<< ")" << std::endl;
     _avg_region_height = 0;
@@ -136,9 +140,18 @@ namespace LinksRouting
     auto hedge = std::make_shared<LinkDescription::HyperEdge>(nodes);
     hedge->addNode(_minimized_icon);
     //updateHedge(_window_monitor.getWindows(), hedge.get());
-    auto node = std::make_shared<LinkDescription::Node>(hedge);
-    std::cout << "add node " << node.get() << std::endl;
-    _nodes.push_back(node);
+
+    if( !node )
+    {
+      node = std::make_shared<LinkDescription::Node>(hedge);
+      std::cout << "add node " << node.get() << std::endl;
+      _nodes.push_back(node);
+    }
+    else
+    {
+      node->clearChildren();
+      node->addChild(hedge);
+    }
     return node;
   }
 

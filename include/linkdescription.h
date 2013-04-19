@@ -153,6 +153,7 @@ namespace LinkDescription
 
       void addChildren(const hedges_t& edges);
       void addChild(const HyperEdgePtr& hedge);
+      void clearChildren();
 
     private:
 

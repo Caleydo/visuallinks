@@ -334,7 +334,7 @@ namespace LinksRouting
 
       if( task == "INITIATE" )
         onInitiate(link, id, stamp, msg, client_info);
-      else if( task == "FOUND" )
+      else if( task == "FOUND" || task == "UPDATE" )
       {
         if( link == _slot_links->_data->end() )
         {
@@ -342,18 +342,49 @@ namespace LinksRouting
           return;
         }
 
-        if( link->_stamp != stamp )
-        {
-          LOG_WARN("Received FOUND for wrong REQUEST (different stamp)");
-          return;
-        }
+//        if( link->_stamp != stamp )
+//        {
+//          LOG_WARN("Received FOUND for wrong REQUEST (different stamp)");
+//          return;
+//        }
 
-        LOG_INFO("Received FOUND: " << id_str);
+        LOG_INFO("Received "  << task << ": " << id_str);
 
         client_info.parseScrollRegion(msg);
-        link->_link->addNode(
-          client_info.parseRegions(msg)
-        );
+        client_info.update(_window_monitor.getWindows());
+
+        if( task == "FOUND" )
+        {
+          link->_link->addNode(
+            client_info.parseRegions(msg)
+          );
+        }
+        else
+        {
+          LinkDescription::NodePtr node;
+          for(auto& n: link->_link->getNodes())
+          {
+            if( n->getChildren().empty() )
+              continue;
+
+            auto& hedge = n->getChildren().front();
+            if(    hedge->get<WId>("client_wid")
+                == client_info.getWindowInfo().id )
+            {
+              node = n;
+              break;
+            }
+          }
+
+          if( !node )
+          {
+            LOG_WARN("Received UPDATE for none existing client");
+            return;
+          }
+
+          client_info.parseRegions(msg, node);
+        }
+
         client_info.update(_window_monitor.getWindows());
         updateCenter(link->_link.get());
       }

@@ -47,7 +47,7 @@ function send(data)
   {
     if( !socket )
       throw "No socket available!";
-  
+
     socket.send(JSON.stringify(data));
   }
   catch(e)
@@ -73,6 +73,9 @@ function updateScale()
     win.QueryInterface(Components.interfaces.nsIInterfaceRequestor)
        .getInterface(Components.interfaces.nsIDOMWindowUtils);
   scale = domWindowUtils.screenPixelsPerCSSPixel;
+
+  offset[0] = win.mozInnerScreenX * scale;
+  offset[1] = win.mozInnerScreenY * scale;
 }
 
 /**
@@ -138,9 +141,9 @@ window.addEventListener("load", function window_load()
 {
   //gBrowser.addTab("http://127.0.0.1:30828/search?flags=8&num=10&q=america&start=0&s=yksDNyehVZo2SvO2BRHGoLhH26k");
 
-  var appcontent = document.getElementById("appcontent");  
+  var appcontent = document.getElementById("appcontent");
   if( appcontent )
-      appcontent.addEventListener("DOMContentLoaded", onPageLoad, true);  
+      appcontent.addEventListener("DOMContentLoaded", onPageLoad, true);
 });
 
 //------------------------------------------------------------------------------
@@ -212,7 +215,7 @@ function selectVisLink()
 function removeRouteData(id)
 {
   var route = active_routes[id];
-  
+
   if( route )
   {
     menu.removeChild(route.menu_item);
@@ -226,7 +229,7 @@ function onAbort(id, stamp, send_msg = true)
   // TODO
   last_id = null;
   last_stamp = null;
-  
+
   // abort all
   if( id == '' && stamp == -1 )
   {
@@ -238,7 +241,7 @@ function onAbort(id, stamp, send_msg = true)
   {
     removeRouteData(id);
   }
-  
+
   if( send_msg )
     send({
       'task': 'ABORT',
@@ -258,7 +261,7 @@ function removeAllRouteData()
 {
   last_id = null;
   last_stamp = null;
-  
+
   // menu
   for(var route_id in active_routes)
     removeRouteData(route_id);
@@ -273,15 +276,8 @@ function reportVisLinks(id, found)
   if( !found && getPref("replace-route") )
     abortAll();
 
-  updateScale();
-  
-  offset[0] = win.mozInnerScreenX * scale;
-  offset[1] = win.mozInnerScreenY * scale;
-  
-//  alert(offset[0] + "|" + offset[1]);
-
   var bbs = searchDocument(content.document, id);
-  
+
   if( debug )
   {
     for(var i = 1; i < 10; i += 1)
@@ -295,7 +291,7 @@ function reportVisLinks(id, found)
     d = new Date();
     last_stamp = (d.getHours() * 60 + d.getMinutes()) * 60 + d.getSeconds();
   }
-  
+
   if( !active_routes[id] )
   {
     var item = document.createElement("menuitem");
@@ -303,7 +299,7 @@ function reportVisLinks(id, found)
     item.setAttribute("tooltiptext", "Remove routing for '"+id+"'");
     item.setAttribute("oncommand", "onAbort('"+id+"', "+last_stamp+")");
     menu.appendChild(item);
-    
+
     active_routes[id] = {
       stamp: last_stamp,
       menu_item: item
@@ -321,7 +317,7 @@ function reportVisLinks(id, found)
 
   if( bbs.length > 0 )
     msg['regions'] = bbs;
-  
+
   send(msg);
   //alert("time = " + (Date.now() - start) / 10);
 // if( found )
@@ -343,7 +339,7 @@ function windowChanged()
 {
   if( timeout )
     clearTimeout(timeout);
-  
+
   timeout = setTimeout(reroute, 500);
 }
 
@@ -361,7 +357,7 @@ function reroute()
 {
   // trigger reroute
   for(var route_id in active_routes)
-    reportVisLinks(route_id);  
+    reportVisLinks(route_id);
 }
 
 //------------------------------------------------------------------------------
@@ -378,7 +374,7 @@ function stopVisLinks()
 //------------------------------------------------------------------------------
 function register()
 {
-//	window.lastPointerID = null; 
+//	window.lastPointerID = null;
 //
 
 	// Get the box object for the link button to get window handler from the
@@ -424,10 +420,10 @@ function register()
           if( msg.id == last_id && msg.stamp == last_stamp )
             // already handled
             return;// alert('already handled...');
-  
+
           last_id = msg.id;
           last_stamp = msg.stamp;
-  
+
           setTimeout('reportVisLinks("'+msg.id+'", true)',0);
         }
         else if( msg.task == 'ABORT' )
@@ -504,11 +500,11 @@ function handleTileRequest()
     tile_timeout = false;
     return;
   }
-  
+
   var req = tile_requests.dequeue();
   var mapping = [req.sections_src, req.sections_dest];
   socket.send( grab(req.size, req.src, req.req_id, mapping) );
-  
+
   // We need to wait a bit before sending the next tile to not congest the
   // receiver queue.
   setTimeout('handleTileRequest()', 200);
@@ -526,57 +522,72 @@ function attrModified(e)
 function resize()
 {
   send({task: 'RESIZE', viewport: getViewport()});
-	//register();
-	//windowChanged();
+
+  var reg = getScrollRegion();
+  for(var route_id in active_routes)
+  {
+    var msg = {
+      'task': 'UPDATE',
+      'scroll-region': [reg.x, reg.y, reg.width, reg.height],
+      'id': route_id,
+      'stamp': active_routes[route_id].stamp,
+    };
+
+    var bbs = searchDocument(content.document, route_id);
+    if( bbs.length > 0 )
+      msg['regions'] = bbs;
+
+    send(msg);
+  }
 }
 
 //------------------------------------------------------------------------------
 function getMapAssociatedImage(node)
 {
-	// step through previous siblings and find image associated with map 
-	var sibling = node; 
+	// step through previous siblings and find image associated with map
+	var sibling = node;
 	while(sibling = sibling.previousSibling)
 	{
-		//alert(sibling.nodeName); 
+		//alert(sibling.nodeName);
 		if(sibling.nodeName == "IMG")
-			return sibling; 
+			return sibling;
 	}
 }
 
 //------------------------------------------------------------------------------
 function searchAreaTitles(doc, id)
 {
-	// find are node which title contains id 
+	// find are node which title contains id
 	var	areanodes =	doc.evaluate("//area[contains(@title,'"+id+"')]", doc, null, XPathResult.ANY_TYPE, null);
 	
-	// copy found nodes to results array 
+	// copy found nodes to results array
 	var	result = new Array();
-	try {  
-   		var thisNode = areanodes.iterateNext();  
-     
-   		while (thisNode) {  
-   		    //sourceString = thisNode.getAttribute('title'); 
-   		    //coordsString = thisNode.getAttribute('coords'); 
-     		//alert( sourceString + " - coords: " + coordsString + " - node name: " + thisNode.parentNode.nodeName );  
+	try {
+   		var thisNode = areanodes.iterateNext();
+
+   		while (thisNode) {
+   		    //sourceString = thisNode.getAttribute('title');
+   		    //coordsString = thisNode.getAttribute('coords');
+     		//alert( sourceString + " - coords: " + coordsString + " - node name: " + thisNode.parentNode.nodeName );
      		result[result.length] =	thisNode;
-     		thisNode = areanodes.iterateNext();  
-   		}   
- 	}  
- 	catch (e) {  
-   		alert( 'Error: Document tree modified during iteration ' + e );  
- 	} 
+     		thisNode = areanodes.iterateNext();
+   		}
+ 	}
+ 	catch (e) {
+   		alert( 'Error: Document tree modified during iteration ' + e );
+ 	}
  	
- // create bounding box array 
+ // create bounding box array
 	var	bbs	= new Array();
 	for(var	i=0; i<result.length; i++) {
 	
-		// find image associated with area element 
+		// find image associated with area element
 		var	r =	result[i];
-		var img = getMapAssociatedImage(r.parentNode); 
+		var img = getMapAssociatedImage(r.parentNode);
 		if(img != null){
 			
-			// find bounding box by interpreting the area's coord attribute and the image outline 
-			var bb = findAreaBoundingBox(doc, img, r.getAttribute('coords')); 
+			// find bounding box by interpreting the area's coord attribute and the image outline
+			var bb = findAreaBoundingBox(doc, img, r.getAttribute('coords'));
 			//var	bb = findObjectBoundingBox(imgArray[0]);
 			if (bb != null)	{
 				bbs[bbs.length]	= bb;
@@ -585,13 +596,16 @@ function searchAreaTitles(doc, id)
 		
 	}
 	
-	//alert("area bounding boxes: " + bbs.length); 
+	//alert("area bounding boxes: " + bbs.length);
 	
 	return bbs;
 }
 
 //------------------------------------------------------------------------------
-function searchDocument(doc, id) {
+function searchDocument(doc, id)
+{
+  updateScale();
+
 	var	textnodes =	doc.evaluate("//body//*/text()", doc, null,	XPathResult.ANY_TYPE, null);
 	var	result = new Array();
 	while(node = textnodes.iterateNext()) {
@@ -647,9 +661,9 @@ function searchDocument(doc, id) {
 		}
 	}
 	
-	// find area bounding boxes 
-	var areaBBS = searchAreaTitles(doc, id); 
-	bbs = bbs.concat(areaBBS); 
+	// find area bounding boxes
+	var areaBBS = searchAreaTitles(doc, id);
+	bbs = bbs.concat(areaBBS);
 	
 	return bbs;
 }
@@ -657,82 +671,82 @@ function searchDocument(doc, id) {
 //------------------------------------------------------------------------------
 function findAreaBoundingBox(doc, img, areaCoords){
 
-	var coords = new Array(); 
+	var coords = new Array();
 	
 	// parse the coords attribute, separated by comma
-	var sepIndex = areaCoords.indexOf(','); 
-	var counter = 0; 
+	var sepIndex = areaCoords.indexOf(',');
+	var counter = 0;
 	while(sepIndex >= 0){
-		var numString = areaCoords; 
-		numString = numString.substring(0, sepIndex); 
-		coords[coords.length] = parseInt(numString); 
-		areaCoords = areaCoords.substring(sepIndex + 1, areaCoords.length); 
-		//alert("numString: " + numString + " - coords: " + areaCoords + " sepIndex: " + sepIndex + ", length: " + areaCoords.length);  
-		sepIndex = areaCoords.indexOf(','); 
-		counter = counter + 1; 
+		var numString = areaCoords;
+		numString = numString.substring(0, sepIndex);
+		coords[coords.length] = parseInt(numString);
+		areaCoords = areaCoords.substring(sepIndex + 1, areaCoords.length);
+		//alert("numString: " + numString + " - coords: " + areaCoords + " sepIndex: " + sepIndex + ", length: " + areaCoords.length);
+		sepIndex = areaCoords.indexOf(',');
+		counter = counter + 1;
 	}
 	
 	// last element
-	coords[coords.length] = parseInt(areaCoords); 
+	coords[coords.length] = parseInt(areaCoords);
 	
-	//alert(coords.length + " coords found - last: " + coords[coords.length-1]); 
+	//alert(coords.length + " coords found - last: " + coords[coords.length-1]);
 	
-	var x = 0; 
-	var y = 0; 
-	var w = 0; 
-	var h = 0; 
+	var x = 0;
+	var y = 0;
+	var w = 0;
+	var h = 0;
 	
 	if(coords.length == 3){
 		// 3 coords elements: circle: x, y, radius
-		x = coords[0]; 
-		y = coords[1]; 
-		w = coords[2]; 
-		h = coords[2]; 
+		x = coords[0];
+		y = coords[1];
+		w = coords[2];
+		h = coords[2];
 	}
 	else{if(coords.length == 4){
-		// 4 elements: rectangle: x1, y1, x2, y2 
-		x = coords[0]; 
-		y = coords[1]; 
-		w = coords[2] - x; 
-		h = coords[3] - y; 
+		// 4 elements: rectangle: x1, y1, x2, y2
+		x = coords[0];
+		y = coords[1];
+		w = coords[2] - x;
+		h = coords[3] - y;
 	}
 	else{if(coords.length > 4){
-		// more than 4 elements: polygon 
-		var minX = coords[0]; 
-		var minY = coords[1]; 
-		var maxX = coords[0]; 
-		var maxY = coords[1]; 
+		// more than 4 elements: polygon
+		var minX = coords[0];
+		var minY = coords[1];
+		var maxX = coords[0];
+		var maxY = coords[1];
 		for(var i = 2; i <= coords.length; i=i+2){
-			var curX = coords[i]; 
-			var curY = coords[i+1]; 
-			if(curX < minX) minX = curX; 
-			if(curX > maxX) maxX = curX; 
-			if(curY < minY) minY = curY; 
-			if(curY > maxY) maxY = curY; 
+			var curX = coords[i];
+			var curY = coords[i+1];
+			if(curX < minX) minX = curX;
+			if(curX > maxX) maxX = curX;
+			if(curY < minY) minY = curY;
+			if(curY > maxY) maxY = curY;
 		}
-		x = minX; 
-		y = minY; 
-		w = maxX - minX; 
-		h = maxY - minY; 
-	};};}; // funny syntax.. 
+		x = minX;
+		y = minY;
+		w = maxX - minX;
+		h = maxY - minY;
+	};};}; // funny syntax..
 	
-	if(w < 10) w = 10; 
-	if(h < 10) h = 10; 
+	if(w < 10) w = 10;
+	if(h < 10) h = 10;
 	
-	//alert("Area: " + x + ", " + y + ", " + w + ", " + h); 
+	//alert("Area: " + x + ", " + y + ", " + w + ", " + h);
 	
-	// find the image's bounding box 
-	ret = findBoundingBox(doc, img); 
+	// find the image's bounding box
+	ret = findBoundingBox(doc, img);
 	
-	// add x, y to image bounding box and set to area's width / height 
-	ret.x += x; 
-	ret.y += y; 
-	ret.width = w; 
-	ret.height = h; 
+	// add x, y to image bounding box and set to area's width / height
+	ret.x += x;
+	ret.y += y;
+	ret.width = w;
+	ret.height = h;
 	
-	//alert("Area bounding box: " + ret.x + ", " + ret.y + "  [" + ret.width + " x " + ret.height + "]"); 
+	//alert("Area bounding box: " + ret.x + ", " + ret.y + "  [" + ret.width + " x " + ret.height + "]");
 	
-	return ret; 
+	return ret;
 }
 
 //------------------------------------------------------------------------------
@@ -742,13 +756,13 @@ function findBoundingBox(doc, obj)
   var h = obj.offsetHeight;
   var curleft = -1;
   var curtop = -1;
-  
+
   if( w == 0 || h == 0 )
     return null;
-  
+
   w += 2;
   h += 1;
-  
+
   if( obj.offsetParent )
   {
   	do
@@ -757,8 +771,8 @@ function findBoundingBox(doc, obj)
   	  curtop  += obj.offsetTop;
   	} while( obj = obj.offsetParent );
   }
-  
-  x = curleft - win.pageXOffset;     
+
+  x = curleft - win.pageXOffset;
   y = curtop - win.pageYOffset;
   /*
   var outside = false;
@@ -767,7 +781,7 @@ function findBoundingBox(doc, obj)
   if(    (x + 0.5 * w < 0) || (x + 0.5 * w > win.innerWidth)
       || (y + 0.5 * h < 0) || (y + 0.5 * h > win.innerHeight) )
     outside = true;*/
-  
+
   x *= scale;
   y *= scale;
   w *= scale;
@@ -775,7 +789,7 @@ function findBoundingBox(doc, obj)
 
   x += offset[0];
   y += offset[1];
-  
+
   return [ [x,     y],
            [x + w, y],
            [x + w, y + h],
