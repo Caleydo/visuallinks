@@ -40,6 +40,7 @@ namespace LinksRouting
                          tile_map_uncompressed;
 
     explicit ClientInfo(IPCServer* ipc_server = nullptr, WId wid = -1);
+    ClientInfo(const ClientInfo&) = delete;
 
     void setWindowId(WId wid);
     const WindowInfo& getWindowInfo() const;
@@ -119,7 +120,7 @@ namespace LinksRouting
       };
 
       typedef SlotType::TextPopup::Popups::iterator PopupIterator;
-      typedef std::vector<PopupIterator> Popups;
+      typedef std::list<PopupIterator> Popups;
 
       uint32_t                      _dirty;
       IPCServer                    *_ipc_server;
@@ -134,6 +135,7 @@ namespace LinksRouting
                         const float2& normal,
                         const std::string& text,
                         const LinkDescription::nodes_t& nodes,
+                        const std::string& link_id = "",
                         bool auto_resize = true );
 
       void updateRegions(const WindowRegions& windows);

@@ -75,7 +75,8 @@ namespace LinksRouting
 
       PopupIterator addPopup( const ClientInfo& client_info,
                               const SlotType::TextPopup::Popup& popup );
-      void removePopups(const std::vector<PopupIterator>& popups);
+      void removePopup(const PopupIterator& popup);
+      void removePopups(const std::list<PopupIterator>& popups);
 
     private slots:
 
@@ -89,7 +90,7 @@ namespace LinksRouting
 
     protected:
 
-      typedef std::map<QWsSocket*, ClientInfo> ClientInfos;
+      typedef std::map<QWsSocket*, std::unique_ptr<ClientInfo>> ClientInfos;
 
       void onInitiate( LinkDescription::LinkList::iterator& link,
                        const QString& id,

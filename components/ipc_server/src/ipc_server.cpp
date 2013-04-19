@@ -163,7 +163,7 @@ namespace LinksRouting
       _clients.end(),
       [&client_info](const ClientInfos::value_type& c)
       {
-        return c.second.getWindowInfo().id == client_info.getWindowInfo().id;
+        return c.second->getWindowInfo().id == client_info.getWindowInfo().id;
       }
     );
 
@@ -175,7 +175,13 @@ namespace LinksRouting
   }
 
   //----------------------------------------------------------------------------
-  void IPCServer::removePopups(const std::vector<PopupIterator>& popups_remove)
+  void IPCServer::removePopup(const PopupIterator& popup)
+  {
+    _subscribe_popups->_data->popups.erase(popup);
+  }
+
+  //----------------------------------------------------------------------------
+  void IPCServer::removePopups(const std::list<PopupIterator>& popups_remove)
   {
     auto& popups = _subscribe_popups->_data->popups;
     for(auto const& it: popups_remove)
@@ -193,7 +199,7 @@ namespace LinksRouting
     connect(client_object, SIGNAL(disconnected()), this, SLOT(onClientDisconnection()));
     connect(client_object, SIGNAL(pong(quint64)), this, SLOT(onPong(quint64)));
 
-    _clients[ client_socket ] = ClientInfo(this);
+    _clients[ client_socket ].reset(new ClientInfo(this));
 
     LOG_INFO(   "Client connected: "
              << client_socket->peerAddress().toString()
@@ -210,7 +216,7 @@ namespace LinksRouting
       return;
     }
 
-    ClientInfo& client_info = client->second;
+    ClientInfo& client_info = *client->second.get();
     std::cout << "Received (" << client_info.getWindowInfo().id << "): "
               << data << std::endl;
 
@@ -229,10 +235,7 @@ namespace LinksRouting
           const WId wid = windows.windowIdAt(msg.getValue<QPoint>("pos"));
           client_info.setWindowId(wid);
         }
-        else
-        {
-          client_info.update(windows);
-        }
+        client_info.update(windows);
         return;
       }
       else if( task == "SCROLL" )
@@ -351,7 +354,6 @@ namespace LinksRouting
         LOG_INFO("Received "  << task << ": " << id_str);
 
         client_info.parseScrollRegion(msg);
-        client_info.update(_window_monitor.getWindows());
 
         if( task == "FOUND" )
         {
@@ -561,18 +563,13 @@ namespace LinksRouting
         ++color_id;
     }
     auto hedge = std::make_shared<LinkDescription::HyperEdge>();
+    hedge->set("link-id", id_str);
     hedge->addNode( client_info.parseRegions(msg) );
     client_info.update(_window_monitor.getWindows());
     updateCenter(hedge.get());
 
     _slot_links->_data->push_back(
-      LinkDescription::LinkDescription
-      (
-        to_string(id),
-        stamp,
-        hedge, // TODO add props?
-        color_id
-      )
+      LinkDescription::LinkDescription(id_str, stamp, hedge, color_id)
     );
     _slot_links->setValid(true);
 
@@ -864,7 +861,7 @@ namespace LinksRouting
       _clients.end(),
       [wid](const ClientInfos::value_type& it)
       {
-        return it.second.getWindowInfo().id == wid;
+        return it.second->getWindowInfo().id == wid;
       }
     );
   }
@@ -891,7 +888,7 @@ namespace LinksRouting
     auto client_info = findClientInfo(client_wid);
     if( client_info != _clients.end() )
     {
-      modified |= client_info->second.update(regions);
+      modified |= client_info->second->update(regions);
 #if 0
       region = client_info->second.viewport;
       scroll_region = client_info->second.scroll_region;
@@ -1511,8 +1508,8 @@ namespace LinksRouting
   LinkDescription::LinkList::iterator
   IPCServer::abortLinking(const LinkDescription::LinkList::iterator& link)
   {
-    for(auto client: _clients)
-      client.second.removeLink(link->_link.get());
+    for(auto& client: _clients)
+      client.second->removeLink(link->_link.get());
     return _slot_links->_data->erase(link);
   }
 

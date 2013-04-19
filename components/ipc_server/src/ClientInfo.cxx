@@ -193,6 +193,18 @@ namespace LinksRouting
       else
         ++node;
     }
+
+    const std::string id = hedge->get<std::string>("link-id");
+    for( auto popup = _popups.begin(); popup != _popups.end(); )
+    {
+      if( (*popup)->link_id == id )
+      {
+        _ipc_server->removePopup( *popup );
+        popup = _popups.erase(popup);
+      }
+      else
+        ++popup;
+    }
   }
 
   //----------------------------------------------------------------------------
@@ -226,6 +238,7 @@ namespace LinksRouting
                                 const float2& normal,
                                 const std::string& text,
                                 const LinkDescription::nodes_t& nodes,
+                                const std::string& link_id,
                                 bool auto_resize )
   {
     const QRect& desktop_rect = _ipc_server->desktopRect();
@@ -277,6 +290,7 @@ namespace LinksRouting
     using SlotType::TextPopup;
     TextPopup::Popup popup = {
       text,
+      link_id,
       nodes,
       0,
       TextPopup::HoverRect(popup_pos, popup_size, border_text, true),
@@ -325,6 +339,7 @@ namespace LinksRouting
           float2(1,0),
           "5",
           _nodes.front()->getChildren().front()->getNodes(),
+          _nodes.front()->getParent()->get<std::string>("link-id"),
           false
         );
       }
@@ -495,17 +510,18 @@ namespace LinksRouting
           points.push_back(pos -= 10 * out.normal + 12 * out.normal.normal());
           points.push_back(pos += 10 * out.normal - 12 * out.normal.normal());
 
-          auto node = std::make_shared<LinkDescription::Node>(points, link_points);
-          node->set("outside-scroll", "side[" + std::to_string(static_cast<unsigned long long>(i)) + "]");
-          node->set("filled", true);
+          auto new_node = std::make_shared<LinkDescription::Node>(points, link_points);
+          new_node->set("outside-scroll", "side[" + std::to_string(static_cast<unsigned long long>(i)) + "]");
+          new_node->set("filled", true);
 
-          updateNode(*node, desktop, local_view, windows, first_above);
-          hedge->addNode(node);
+          updateNode(*new_node, desktop, local_view, windows, first_above);
+          hedge->addNode(new_node);
 
           createPopup( out.pos + getScrollRegionAbs().topLeft(),
                        out.normal,
                        std::to_string(static_cast<unsigned long long>(out.num_outside)),
-                       hedge->getNodes() );
+                       hedge->getNodes(),
+                       node->getParent()->get<std::string>("link-id") );
         }
       }
 

@@ -51,7 +51,8 @@ namespace SlotType
     };
     struct Popup
     {
-      std::string text;
+      std::string text,
+                  link_id;
       LinkDescription::nodes_t nodes;
       void* client_socket;
       HoverRect region;
