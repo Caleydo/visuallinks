@@ -183,8 +183,7 @@ namespace LinksRouting
   GlRenderer::GlRenderer():
     Configurable("GLRenderer"),
     _partitions_src(0),
-    _partitions_dest(0),
-    _offset_y(0)
+    _partitions_dest(0)
   {
 
   }
@@ -266,7 +265,6 @@ namespace LinksRouting
 
     _partitions_src = 0;
     _partitions_dest = 0;
-    _offset_y = 0;
 
     bool rendered_anything = false;
     for(int pass = 0; pass <= 1; ++pass)
@@ -276,37 +274,34 @@ namespace LinksRouting
     {
       rendered_anything = true;
 
-      for( auto popup = _subscribe_popups->_data->popups.begin();
-                popup != _subscribe_popups->_data->popups.end();
-              ++popup )
+      for( auto const& popup: _subscribe_popups->_data->popups )
       {
-        if( !popup->region.visible )
+        if( !popup.region.visible )
           continue;
 
         _partitions_src = 0;
         _partitions_dest = 0;
-        _offset_y = 0;
 
-        renderRect(popup->region.region, popup->region.border);
+        renderRect(popup.region.region, popup.region.border);
         rendered_anything = true;
 
-        if( !popup->hover_region.visible )
+        if( !popup.hover_region.visible )
           continue;
 
-        renderRect( popup->hover_region.region,
-                    popup->hover_region.border,
+        renderRect( popup.hover_region.region,
+                    popup.hover_region.border,
                     0,
                     Color(0.3,0.3,0.3) );
 
 
-        const Rect& hover = popup->hover_region.region,
-                  & src = popup->hover_region.src_region,
-                  & scroll = popup->hover_region.scroll_region;
+        const Rect& hover = popup.hover_region.region,
+                  & src = popup.hover_region.src_region,
+                  & scroll = popup.hover_region.scroll_region;
 
-        HierarchicTileMapPtr tile_map = popup->hover_region.tile_map.lock();
+        HierarchicTileMapPtr tile_map = popup.hover_region.tile_map.lock();
         if( tile_map )
         {
-          MapRect rect = tile_map->requestRect(src, popup->hover_region.zoom);
+          MapRect rect = tile_map->requestRect(src, popup.hover_region.zoom);
           float2 rect_size = rect.getSize();
           MapRect::QuadList quads = rect.getQuads();
           for(auto quad = quads.begin(); quad != quads.end(); ++quad)
@@ -350,12 +345,12 @@ namespace LinksRouting
             glBindTexture(GL_TEXTURE_2D, quad->first->id);
 
             float offset_x = 0;
-            if( !popup->auto_resize && hover.size.x > rect_size.x )
+            if( !popup.auto_resize && hover.size.x > rect_size.x )
               offset_x = (hover.size.x - rect_size.x) / 2;
 
             glPushMatrix();
-            glTranslatef( popup->hover_region.region.pos.x + offset_x,
-                          popup->hover_region.region.pos.y,
+            glTranslatef( popup.hover_region.region.pos.x + offset_x,
+                          popup.hover_region.region.pos.y,
                           0 );
 
             glColor4f(1,1,1,1);
@@ -417,22 +412,20 @@ namespace LinksRouting
         float scale = hover.size.y / src.size.y;
         glScalef(scale, scale, 0);
 
-        float2 offset = popup->hover_region.offset;
-        if( !popup->auto_resize && src.size.x > scroll.size.x )
+        float2 offset = src.pos;
+        if( !popup.auto_resize && src.size.x > scroll.size.x )
           offset.x -= (src.size.x - scroll.size.x) / 2;
-        offset -= scroll.pos - src.pos;
 
         glTranslatef(-offset.x, -offset.y, 0);
 
         const float w = 4.f;
-        const float2 vp_pos = popup->hover_region.offset + 0.5f * float2(w, w);
-        const float2 vp_dim = popup->hover_region.dim - 4.f * float2(w, w);
+        const float2 vp_pos = popup.hover_region.offset + 0.5f * float2(w, w);
+        const float2 vp_dim = popup.hover_region.dim - 4.f * float2(w, w);
 
         if( tile_map )
         {
           _partitions_src = &tile_map->partitions_src;
           _partitions_dest = &tile_map->partitions_dest;
-          _offset_y = popup->nodes.front()->getParent()->get<int>("offset");
         }
 
         glLineWidth(w);
@@ -443,7 +436,7 @@ namespace LinksRouting
           glVertex2f(vp_pos.x, vp_pos.y + vp_dim.y);
         glEnd();
 
-        renderNodes(popup->nodes, 3.f / scale, 0, 0, true, 1);
+        renderNodes(popup.nodes, 3.f / scale, 0, 0, true, 1);
 
         glPopMatrix();
         glMatrixMode(GL_PROJECTION);
@@ -640,7 +633,7 @@ namespace LinksRouting
 
     for( auto node = nodes.begin(); node != nodes.end(); ++node )
     {
-      if( (*node)->get<bool>("hidden") )
+      if( (*node)->get<bool>("hidden") && !render_all )
         continue;
 
       if( hedges_open )
@@ -670,8 +663,9 @@ namespace LinksRouting
         continue;
       }
 
-      Color color_cur = (*node)->get<bool>("covered")
-                      || (*node)->get<bool>("outside")
+      Color color_cur = !render_all && ( (*node)->get<bool>("covered")
+                                       || (*node)->get<bool>("outside")
+                                       )
                       ? _color_covered_cur
                       : _color_cur;
 
@@ -762,7 +756,7 @@ namespace LinksRouting
     {
       float last_src = 0,
             last_dest = 0,
-            ref_y = y + _offset_y;
+            ref_y = y;
       for( auto src = _partitions_src->begin(),
                 dest = _partitions_dest->begin();
                 src != _partitions_src->end() &&
@@ -773,7 +767,7 @@ namespace LinksRouting
         if( ref_y <= src->x )
         {
           float t = (ref_y - last_src) / (src->x - last_src);
-          y = (1 - t) * last_dest + t * dest->x - _offset_y;
+          y = (1 - t) * last_dest + t * dest->x;
         }
         else if( ref_y <= src->y )
         {

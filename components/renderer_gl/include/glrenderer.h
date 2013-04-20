@@ -48,7 +48,6 @@ namespace LinksRouting
 
       Partitions *_partitions_src,
                  *_partitions_dest;
-      float       _offset_y;
 
       /** Subscribe to the routed links */
       slot_t<LinkDescription::LinkList>::type _subscribe_links;

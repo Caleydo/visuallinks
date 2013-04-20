@@ -56,6 +56,9 @@ namespace LinksRouting
   {
     scroll_region.setTopLeft(offset);
     _dirty |= SCROLL_POS;
+
+    for(auto& popup: _popups)
+      popup->hover_region.offset = -offset;
   }
 
   //----------------------------------------------------------------------------
@@ -297,11 +300,8 @@ namespace LinksRouting
       TextPopup::HoverRect(hover_pos, hover_size, border_preview, false),
       auto_resize && _ipc_server->getPreviewAutoWidth()
     };
-    const QRect& view_abs = getViewportAbs();
-    popup.hover_region.offset.x = view_abs.left();
-    popup.hover_region.offset.y = view_abs.top();
-    popup.hover_region.dim.x = view_abs.width();
-    popup.hover_region.dim.y = view_abs.height();
+    popup.hover_region.offset = -scroll_region.topLeft();
+    popup.hover_region.dim = viewport.size();
     popup.hover_region.scroll_region.size = preview_size;
     popup.hover_region.tile_map = tile_map;
     _popups.push_back( _ipc_server->addPopup(*this, popup) );

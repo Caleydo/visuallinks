@@ -114,6 +114,8 @@ namespace LinksRouting
                               bool extend = false );
 
       void onMouseMove(int x, int y);
+      void onScrollWheel(int delta, const float2& pos, uint32_t mod);
+      void onDrag(const float2& delta);
 
     private:
 

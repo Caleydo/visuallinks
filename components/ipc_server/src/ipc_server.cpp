@@ -98,6 +98,14 @@ namespace LinksRouting
     (
       std::bind(&IPCServer::onMouseMove, this, _1, _2)
     );
+    _subscribe_mouse->_data->_scroll_callbacks.push_back
+    (
+      std::bind(&IPCServer::onScrollWheel, this, _1, _2, _3)
+    );
+    _subscribe_mouse->_data->_drag_callbacks.push_back
+    (
+      std::bind(&IPCServer::onDrag, this, _1)
+    );
   }
 
   //----------------------------------------------------------------------------
@@ -530,12 +538,6 @@ namespace LinksRouting
     client_info.parseScrollRegion(msg);
     client_info.update(_window_monitor.getWindows());
 
-#if 0
-    // TODO keep working for multiple links at the same time
-    _subscribe_mouse->_data->clear();
-    _subscribe_popups->_data->popups.clear();
-#endif
-
     // Remove eventually existing search for same id
     if( link != _slot_links->_data->end() )
     {
@@ -591,10 +593,6 @@ namespace LinksRouting
   {
     _window_monitor.setDesktopRect( desktopRect() );
     _mutex_slot_links->lock();
-#if 0
-    _subscribe_mouse->_data->clear();
-    _subscribe_popups->_data->popups.clear();
-#endif
 
     bool need_update = false;
     for( auto link = _slot_links->_data->begin();
@@ -1008,91 +1006,6 @@ namespace LinksRouting
 #if 0
     for( size_t i = 0; i < num_outside_scroll; ++i )
     {
-      OutsideScroll& out = outside_scroll[i];
-      if( !out.num_outside )
-        continue;
-
-      if( out.normal.x == 0 )
-        out.pos.x /= out.num_outside;
-      else
-        out.pos.y /= out.num_outside;
-
-      LinkDescription::points_t link_points;
-      link_points.push_back(out.pos += 7 * out.normal);
-
-      LinkDescription::points_t points;
-      points.push_back(out.pos +=  3 * out.normal + 12 * out.normal.normal());
-      points.push_back(out.pos -= 10 * out.normal + 12 * out.normal.normal());
-      points.push_back(out.pos += 10 * out.normal - 12 * out.normal.normal());
-
-      auto node = std::make_shared<LinkDescription::Node>(points, link_points);
-      node->set("virtual-outside", "side[" + std::to_string(static_cast<unsigned long long>(i)) + "]");
-      node->set("filled", true);
-      updateRegion(regions, node.get(), client_wid);
-
-      QRect reg(points[0].x, points[0].y, 0, 0);
-      const int border = 3;
-      for(size_t j = 1; j < points.size(); ++j)
-      {
-        int x = points[j].x,
-            y = points[j].y;
-
-        if( x - border < reg.left() )
-          reg.setLeft(x - border);
-        if( x + border > reg.right() )
-          reg.setRight(x + border);
-
-        if( y - border < reg.top() )
-          reg.setTop(y - border);
-        else if( y + border > reg.bottom() )
-          reg.setBottom(y + border);
-      }
-
-      {
-        std::string text = std::to_string(static_cast<unsigned long long>(out.num_outside));
-        float2 popup_pos, popup_size(text.length() * 10 + 6, 16);
-        float2 hover_pos, hover_size(_preview_width, _preview_height);
-
-        const size_t border_text = 4,
-                     border_preview = 8;
-
-        if( std::fabs(out.normal.y) > 0.5 )
-        {
-          popup_pos.x = reg.center().x() - popup_size.x / 2;
-          hover_pos.x = reg.center().x() - hover_size.x / 2;
-
-          if( out.normal.y < 0 )
-          {
-            popup_pos.y = reg.top() - popup_size.y - border_text;
-            hover_pos.y = popup_pos.y - hover_size.y + border_text
-                                                     - 2 * border_preview;
-          }
-          else
-          {
-            popup_pos.y = reg.bottom() + border_text;
-            hover_pos.y = popup_pos.y + popup_size.y - border_text
-                                                     + 2 * border_preview;
-          }
-        }
-
-        using SlotType::TextPopup;
-        TextPopup::Popup popup = {
-          text,
-          nodes,
-          TextPopup::HoverRect(popup_pos, popup_size, border_text, true),
-          TextPopup::HoverRect(hover_pos, hover_size, border_preview, false),
-          _preview_auto_width
-        };
-        popup.hover_region.offset.x = region.left();
-        popup.hover_region.offset.y = region.top();
-        popup.hover_region.dim.x = region.width();
-        popup.hover_region.dim.y = region.height();
-        popup.hover_region.scroll_region = client_info->second.scroll_region;
-        popup.hover_region.tile_map = client_info->second.tile_map;
-
-        size_t index = _subscribe_popups->_data->popups.size();
-        _subscribe_popups->_data->popups.push_back(popup);
-
         /**
          * Mouse click callback
          */
@@ -1134,76 +1047,6 @@ namespace LinksRouting
           "}"));
 
           _cond_data_ready->wakeAll();
-        });
-
-        /**
-         * Scroll callback
-         */
-        _subscribe_mouse->_data->_scroll_callbacks.push_back(
-        [&,index,client_info](int delta, const float2& pos, uint32_t mod)
-        {float preview_aspect = _preview_width
-          / static_cast<float>(_preview_height);
-          auto& popup = _subscribe_popups->_data->popups[index];
-          if( !popup.hover_region.visible )
-              return;
-
-          QRect reg = client_info->second.scroll_region;
-          float step_y = reg.height() / pow(2.0f, static_cast<float>(popup.hover_region.zoom))
-                       / _preview_height;
-
-          if( mod & SlotType::MouseEvent::ShiftModifier )
-          {
-            popup.hover_region.src_region.pos.y -= delta / fabs(static_cast<float>(delta)) * 20 * step_y;
-            _interaction_handler.updateRegion(*client_info, popup);
-          }
-          else if( mod & SlotType::MouseEvent::ControlModifier )
-          {
-            float step_x = step_y * preview_aspect;
-            popup.hover_region.src_region.pos.x -= delta / fabs(static_cast<float>(delta)) * 20 * step_x;
-            _interaction_handler.updateRegion(*client_info, popup);
-          }
-          else
-          {
-            int old_zoom = popup.hover_region.zoom;
-            clampedStep(popup.hover_region.zoom, delta, 0, 3, 1);
-
-            if( popup.hover_region.zoom != old_zoom )
-            {
-              float scale = (reg.height() / pow(2.0f, static_cast<float>(old_zoom)))
-                          / _preview_height;
-
-              float2 d = pos - popup.hover_region.region.pos,
-                     mouse_pos = scale * d + popup.hover_region.src_region.pos;
-              _interaction_handler.updateRegion(
-                *client_info,
-                popup,
-                mouse_pos,
-                d / popup.hover_region.region.size
-              );
-            }
-          }
-        });
-
-        /**
-         * Drag callback
-         */
-        _subscribe_mouse->_data->_drag_callbacks.push_back(
-        [&,index,client_info](const float2& delta)
-        {float preview_aspect = _preview_width
-          / static_cast<float>(_preview_height);
-          auto& popup = _subscribe_popups->_data->popups[index];
-          if( !popup.hover_region.visible )
-              return;
-
-          QRect reg = client_info->second.scroll_region;
-          float step_y = reg.height() / pow(2.0f, static_cast<float>(popup.hover_region.zoom))
-                       / _preview_height;
-
-          popup.hover_region.src_region.pos.y -= delta.y * step_y;
-          float step_x = step_y * preview_aspect;
-          popup.hover_region.src_region.pos.x -= delta.x * step_x;
-
-          _interaction_handler.updateRegion(*client_info, popup);
         });
       }
 
@@ -1505,6 +1348,91 @@ namespace LinksRouting
   }
 
   //----------------------------------------------------------------------------
+  void IPCServer::onScrollWheel(int delta, const float2& pos, uint32_t mod)
+  {
+    float preview_aspect = _preview_width
+                         / static_cast<float>(_preview_height);
+
+    for(auto& popup: _subscribe_popups->_data->popups)
+    {
+      if( !popup.hover_region.visible )
+        continue;
+
+      QWsSocket* client_socket = static_cast<QWsSocket*>(popup.client_socket);
+      ClientInfos::iterator client = _clients.find(client_socket);
+      assert(client != _clients.end());
+
+      const float2& scroll_size = popup.hover_region.scroll_region.size;
+      float step_y = scroll_size.y
+                   / pow(2.0f, static_cast<float>(popup.hover_region.zoom))
+                   / _preview_height;
+
+      if( mod & SlotType::MouseEvent::ShiftModifier )
+      {
+        popup.hover_region.src_region.pos.y -=
+          delta / fabs(static_cast<float>(delta)) * 20 * step_y;
+        _interaction_handler.updateRegion(*client, popup);
+      }
+      else if( mod & SlotType::MouseEvent::ControlModifier )
+      {
+        float step_x = step_y * preview_aspect;
+        popup.hover_region.src_region.pos.x -=
+          delta / fabs(static_cast<float>(delta)) * 20 * step_x;
+        _interaction_handler.updateRegion(*client, popup);
+      }
+      else
+      {
+        int old_zoom = popup.hover_region.zoom;
+        clampedStep(popup.hover_region.zoom, delta, 0, 3, 1);
+
+        if( popup.hover_region.zoom != old_zoom )
+        {
+          float scale = (scroll_size.y / pow(2.0f, static_cast<float>(old_zoom)))
+                      / _preview_height;
+
+          float2 d = pos - popup.hover_region.region.pos,
+                 mouse_pos = scale * d + popup.hover_region.src_region.pos;
+          _interaction_handler.updateRegion
+          (
+            *client,
+            popup,
+            mouse_pos,
+            d / popup.hover_region.region.size
+          );
+        }
+      }
+    }
+  }
+
+  //----------------------------------------------------------------------------
+  void IPCServer::onDrag(const float2& delta)
+  {
+    float preview_aspect = _preview_width
+                         / static_cast<float>(_preview_height);
+
+    for(auto& popup: _subscribe_popups->_data->popups)
+    {
+      if( !popup.hover_region.visible )
+        continue;
+
+      QWsSocket* client_socket = static_cast<QWsSocket*>(popup.client_socket);
+      ClientInfos::iterator client = _clients.find(client_socket);
+      assert(client != _clients.end());
+
+      const float2& scroll_size = popup.hover_region.scroll_region.size;
+      float step_y = scroll_size.y
+                   / pow(2.0f, static_cast<float>(popup.hover_region.zoom))
+                   / _preview_height;
+
+      popup.hover_region.src_region.pos.y -= delta.y * step_y;
+      float step_x = step_y * preview_aspect;
+      popup.hover_region.src_region.pos.x -= delta.x * step_x;
+
+      _interaction_handler.updateRegion(*client, popup);
+    }
+  }
+
+  //----------------------------------------------------------------------------
   LinkDescription::LinkList::iterator
   IPCServer::abortLinking(const LinkDescription::LinkList::iterator& link)
   {
@@ -1549,7 +1477,7 @@ namespace LinksRouting
         w = h * preview_aspect + 0.5;
 
     Rect& src = popup.hover_region.src_region;
-    float2 old_pos = src.pos;
+    //float2 old_pos = src.pos;
 
     src.size.x = w;
     src.size.y = h;
