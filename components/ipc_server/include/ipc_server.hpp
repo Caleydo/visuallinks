@@ -113,6 +113,7 @@ namespace LinksRouting
                               LinkDescription::nodes_t& covered_nodes,
                               bool extend = false );
 
+      void onClick(int x, int y);
       void onMouseMove(int x, int y);
       void onScrollWheel(int delta, const float2& pos, uint32_t mod);
       void onDrag(const float2& delta);

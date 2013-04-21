@@ -94,6 +94,10 @@ namespace LinksRouting
     _subscribe_popups =
       slot_subscriber.getSlot<SlotType::TextPopup>("/popups");
 
+    _subscribe_mouse->_data->_click_callbacks.push_back
+    (
+      std::bind(&IPCServer::onClick, this, _1, _2)
+    );
     _subscribe_mouse->_data->_move_callbacks.push_back
     (
       std::bind(&IPCServer::onMouseMove, this, _1, _2)
@@ -1004,55 +1008,6 @@ namespace LinksRouting
 #endif
     }
 #if 0
-    for( size_t i = 0; i < num_outside_scroll; ++i )
-    {
-        /**
-         * Mouse click callback
-         */
-        _subscribe_mouse->_data->_click_callbacks.push_back(
-        [&,index,client_info](int x, int y)
-        {
-          auto& popup = _subscribe_popups->_data->popups[index];
-          if( !popup.hover_region.visible ||
-              !popup.hover_region.contains(x, y) )
-            return;
-
-          popup.hover_region.visible = false;
-
-          QSize preview_size = client_info->second.preview_size;
-          float scale = (preview_size.height() / pow(2.0f, static_cast<float>(popup.hover_region.zoom)))
-                      / _preview_height;
-          float dy = y - popup.hover_region.region.pos.y,
-                scroll_y = scale * dy + popup.hover_region.src_region.pos.y;
-            
-          for( auto part_src = client_info->second.partitions_src.begin(),
-                    part_dst = client_info->second.partitions_dest.begin();
-                    part_src != client_info->second.partitions_src.end()
-                 && part_dst != client_info->second.partitions_dest.end();
-                  ++part_src,
-                  ++part_dst )
-          {
-            if( scroll_y <= part_dst->y )
-            {
-              scroll_y = part_src->x + (scroll_y - part_dst->x);
-              break;
-            }
-          }
-
-          client_info->first->write(QString(
-          "{"
-            "\"task\": \"SET\","
-            "\"id\": \"scroll-y\","
-            "\"val\": " + QString("%1").arg(scroll_y - 35) +
-          "}"));
-
-          _cond_data_ready->wakeAll();
-        });
-      }
-
-      hedge->addNode( node );
-    }
-
     for( auto node = hedge->getNodes().begin();
               node != hedge->getNodes().end();
             ++node )
@@ -1305,6 +1260,59 @@ namespace LinksRouting
     );
 #endif
     covered_nodes.push_back(node);
+  }
+
+  //----------------------------------------------------------------------------
+  void IPCServer::onClick(int x, int y)
+  {
+    bool changed = false;
+    for(auto& popup: _subscribe_popups->_data->popups)
+    {
+      if(    !popup.client_socket
+          || !popup.hover_region.visible
+          || !popup.hover_region.contains(x, y) )
+        continue;
+
+      popup.hover_region.visible = false;
+      changed = true;
+
+      QWsSocket* client_socket = static_cast<QWsSocket*>(popup.client_socket);
+      ClientInfos::iterator client = _clients.find(client_socket);
+      assert(client != _clients.end());
+
+      QSize preview_size = client->second->preview_size;
+      float scale = (preview_size.height()
+                    / pow(2.0f, static_cast<float>(popup.hover_region.zoom))
+                    )
+                  / _preview_height;
+      float dy = y - popup.hover_region.region.pos.y,
+            scroll_y = scale * dy + popup.hover_region.src_region.pos.y;
+
+      for( auto part_src = client->second->tile_map->partitions_src.begin(),
+                part_dst = client->second->tile_map->partitions_dest.begin();
+                part_src != client->second->tile_map->partitions_src.end()
+             && part_dst != client->second->tile_map->partitions_dest.end();
+              ++part_src,
+              ++part_dst )
+      {
+        if( scroll_y <= part_dst->y )
+        {
+          scroll_y = part_src->x + (scroll_y - part_dst->x);
+          break;
+        }
+      }
+
+      client_socket->write(QString(
+      "{"
+        "\"task\": \"SET\","
+        "\"id\": \"scroll-y\","
+        "\"val\": " + QString("%1").arg(scroll_y - 35) +
+      "}"));
+      client->second->activateWindow();
+    }
+
+    if( changed )
+      _cond_data_ready->wakeAll();
   }
 
   //----------------------------------------------------------------------------
