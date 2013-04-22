@@ -319,6 +319,7 @@ function reportVisLinks(id, found)
     msg['regions'] = bbs;
 
   send(msg);
+  onScroll();
   //alert("time = " + (Date.now() - start) / 10);
 // if( found )
 //    alert('send FOUND: '+selectionId);
