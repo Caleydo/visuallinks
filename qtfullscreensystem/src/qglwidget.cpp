@@ -506,7 +506,7 @@ ShaderPtr loadShader( QString vert, QString frag )
       if( popup->region.visible )
         painter.drawText
         (
-          popup->region.region.pos.x,
+          popup->region.region.pos.x - _window_offset.x(),
           popup->region.region.pos.y - popup->region.region.size.y - 8,
           popup->region.region.size.x,
           popup->region.region.size.y,

@@ -395,10 +395,14 @@ namespace LinksRouting
         GLdouble proj[16];
         glGetDoublev(GL_PROJECTION_MATRIX, proj);
 
+        float offset_x = (proj[12] + 1) / proj[0];
         float offset_y = (proj[13] + 1) / proj[5];
 
         glPushAttrib(GL_VIEWPORT_BIT);
-        glViewport(hover.pos.x, hover.pos.y + offset_y, hover.size.x, hover.size.y);
+        glViewport( hover.pos.x + offset_x,
+                    hover.pos.y + offset_y,
+                    hover.size.x,
+                    hover.size.y );
 
         glMatrixMode(GL_PROJECTION);
         glPushMatrix();

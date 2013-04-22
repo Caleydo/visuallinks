@@ -126,8 +126,9 @@ namespace LinksRouting
         continue;
 
       QRect region = QxtWindowSystem::windowGeometry(id);
+      QString title = QxtWindowSystem::windowTitle(id);
 
-      if( QxtWindowSystem::windowTitle(id) == "unity-launcher" )
+      if( title == "unity-launcher" )
       {
         int launcher_size = region.width() - 17;
         if( _launcher_size != launcher_size )
@@ -138,18 +139,17 @@ namespace LinksRouting
         continue;
       }
 
-      // Ignore small regions (tooltips, etc.) and not visible regions
+      // Ignore small regions (tooltips, etc.)
       if(   region.width() <= 64
          || region.height() <= 64
-         || region.width() * region.height() <= 8192
-         || region.right() <= 0 )
+         || region.width() * region.height() <= 8192 )
         continue;
 
       regions.push_back(WindowInfo(
         id,
-        QxtWindowSystem::isVisible(id),
+        QxtWindowSystem::isVisible(id) && region.right() > 0,
         region,
-        QxtWindowSystem::windowTitle(id)
+        title
       ));
 
       QRect visible_region = _desktop_rect.intersected(region);

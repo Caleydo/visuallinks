@@ -172,6 +172,11 @@ WId QxtWindowSystem::windowAt(const QPoint& pos)
 
 QString QxtWindowSystem::windowTitle(WId window)
 {
+    XTextProperty prop;
+    if( XGetWMName(QX11Info::display(), window, &prop) )
+      return QString::fromLocal8Bit( reinterpret_cast<char*>(prop.value),
+                                     prop.nitems );
+
     QString name;
     char* str = 0;
     if (XFetchName(QX11Info::display(), window, &str))
