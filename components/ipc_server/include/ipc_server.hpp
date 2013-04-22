@@ -78,6 +78,13 @@ namespace LinksRouting
       void removePopup(const PopupIterator& popup);
       void removePopups(const std::list<PopupIterator>& popups);
 
+      typedef SlotType::XRayPopup::Popups::iterator XRayIterator;
+
+      XRayIterator addCoveredPreview( const LinkDescription::NodePtr& node,
+                                      const QRect& viewport,
+                                      const QRect& scroll_region,
+                                      bool extend = false );
+
     private slots:
 
       void onClientConnection();
@@ -106,12 +113,6 @@ namespace LinksRouting
       bool updateRegion( const WindowRegions& regions,
                          LinkDescription::Node* node,
                          WId client_wid );
-
-      void addCoveredPreview( const LinkDescription::NodePtr& node,
-                              const QRect& region,
-                              const QRect& scroll_region,
-                              LinkDescription::nodes_t& covered_nodes,
-                              bool extend = false );
 
       void onClick(int x, int y);
       void onMouseMove(int x, int y);

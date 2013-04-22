@@ -424,12 +424,12 @@ namespace LinksRouting
             ++child;
           }
 
-          if( modified |= updateNode( **region,
-                                      desktop, local_view,
-                                      windows, first_above ) )
+          if(    modified |= updateNode( **region,
+                                         desktop, local_view,
+                                         windows, first_above )
+              && !(*region)->getVertices().empty() )
           {
-            if(   !(*region)->getVertices().empty()
-                && (*region)->get<bool>("hidden")
+            if(    (*region)->get<bool>("hidden")
                 && (*region)->get<bool>("outside") )
             {
               float2 center = (*region)->getCenter();
@@ -446,6 +446,12 @@ namespace LinksRouting
 
                 break;
               }
+            }
+
+            else if(    !(*region)->get<bool>("outside")
+                     &&  (*region)->get<bool>("covered") )
+            {
+              _ipc_server->addCoveredPreview(*region, getViewportAbs(), getScrollRegionAbs());
             }
 
             if(    (*region)->get<bool>("on-screen")
@@ -556,6 +562,9 @@ namespace LinksRouting
     modified |= node.set("covered", covered);
     modified |= node.set("outside", outside);
     modified |= node.set("hidden", hidden);
+
+    if( modified && !covered )
+      node.callExitCallbacks();
 
     return modified;
   }

@@ -201,6 +201,79 @@ namespace LinksRouting
   }
 
   //----------------------------------------------------------------------------
+  IPCServer::XRayIterator
+  IPCServer::addCoveredPreview( const LinkDescription::NodePtr& node,
+                                const QRect& viewport,
+                                const QRect& scroll_region,
+                                bool extend )
+  {
+    QRect preview_region =
+      scroll_region.intersect(extend ? desktopRect() : viewport);
+    QRect source_region
+    (
+      preview_region.topLeft() - scroll_region.topLeft(),
+      preview_region.size()
+    );
+
+    node->set("covered-region", to_string(viewport));
+    node->set("covered-preview-region", to_string(preview_region));
+    node->set("hover", false);
+
+    Rect bb;
+    for( auto vert = node->getVertices().begin();
+              vert != node->getVertices().end();
+            ++vert )
+      bb.expand(*vert);
+
+    SlotType::XRayPopup::HoverRect xray = {
+      bb,
+      preview_region,
+      0,
+      float2()
+    };
+
+    auto& previews = _slot_xray->_data->popups;
+    std::cout << "add preview " << previews.size() << std::endl;
+    auto preview_it = previews.insert(previews.end(), xray);
+    node->addExitCallback([&previews, preview_it]()
+    {
+      std::cout << "erase preview " << previews.size() << std::endl;
+      previews.erase(preview_it);
+    });
+    return preview_it;
+#if 0
+    /**
+     * Mouse move callback
+     */
+    _subscribe_mouse->_data->_move_callbacks.push_back(
+      [&,bb,node,preview_region,scroll_region,source_region](int x, int y)
+      {
+        bool hover = node->get<bool>("hover");
+        if( bb.contains(x, y) )
+        {
+          if( hover )
+            return;
+          hover = true;
+          _slot_xray->_data->img = &_full_preview_img;
+          _slot_xray->_data->viewport = source_region;
+          _slot_xray->_data->pos = preview_region.topLeft() - QPoint(0, 24);
+        }
+        else if( hover )
+        {
+          hover = false;
+          _slot_xray->_data->img = 0;
+        }
+        else
+          return;
+
+        node->set("hover", hover);
+        _cond_data_ready->wakeAll();
+      }
+    );
+#endif
+  }
+
+  //----------------------------------------------------------------------------
   void IPCServer::onClientConnection()
   {
     QWsSocket* client_socket = _server->nextPendingConnection();
@@ -1202,64 +1275,6 @@ namespace LinksRouting
     }
 
     return false;
-  }
-
-  //----------------------------------------------------------------------------
-  void IPCServer::addCoveredPreview( const LinkDescription::NodePtr& node,
-                                     const QRect& region,
-                                     const QRect& scroll_region,
-                                     LinkDescription::nodes_t& covered_nodes,
-                                     bool extend )
-  {
-    QRect preview_region =
-      scroll_region.intersect(extend ? desktopRect() : region);
-    QRect source_region
-    (
-      preview_region.topLeft() - scroll_region.topLeft(),
-      preview_region.size()
-    );
-
-    node->set("covered", true);
-    node->set("covered-region", to_string(region));
-    node->set("covered-preview-region", to_string(preview_region));
-    node->set("hover", false);
-
-    Rect bb;
-    for( auto vert = node->getVertices().begin();
-              vert != node->getVertices().end();
-            ++vert )
-      bb.expand(*vert);
-#if 0
-    /**
-     * Mouse move callback
-     */
-    _subscribe_mouse->_data->_move_callbacks.push_back(
-      [&,bb,node,preview_region,scroll_region,source_region](int x, int y)
-      {
-        bool hover = node->get<bool>("hover");
-        if( bb.contains(x, y) )
-        {
-          if( hover )
-            return;
-          hover = true;
-          _slot_xray->_data->img = &_full_preview_img;
-          _slot_xray->_data->region = source_region;
-          _slot_xray->_data->pos = preview_region.topLeft() - QPoint(0, 24);
-        }
-        else if( hover )
-        {
-          hover = false;
-          _slot_xray->_data->img = 0;
-        }
-        else
-          return;
-
-        node->set("hover", hover);
-        _cond_data_ready->wakeAll();
-      }
-    );
-#endif
-    covered_nodes.push_back(node);
   }
 
   //----------------------------------------------------------------------------

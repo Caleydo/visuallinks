@@ -66,9 +66,15 @@ namespace SlotType
 
   struct XRayPopup
   {
-    QImage* img;
-    Rect region;
-    float2 pos;
+    struct HoverRect
+    {
+      Rect region, preview_region;
+      QImage* img;
+      float2 pos;
+    };
+
+    typedef std::list<HoverRect> Popups;
+    Popups popups;
   };
 
 } // namespace SlotType

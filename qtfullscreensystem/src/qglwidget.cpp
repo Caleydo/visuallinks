@@ -442,9 +442,9 @@ ShaderPtr loadShader( QString vert, QString frag )
       QBitmap mask = QBitmap::fromImage( links.createMaskFromColor( qRgba(0,0,0, 0) ) );
       setMask
       (
-        _subscribe_xray->_data->img
+        /*_subscribe_xray->_data->img
         ? QRegion(mask).unite(_subscribe_xray->_data->region.toQRect())
-        : mask
+        :*/ mask
       );
 //      mask.save(QString("mask%1.png").arg(counter));
     }
@@ -488,14 +488,14 @@ ShaderPtr loadShader( QString vert, QString frag )
   {
     QPainter painter(this);
 
-    if( _subscribe_xray->_data->img )
-    {
-      painter.setOpacity(0.5);
-      painter.drawImage( _subscribe_xray->_data->pos.toQPoint(),
-                         *_subscribe_xray->_data->img,
-                         _subscribe_xray->_data->region.toQRect() );
-      painter.setOpacity(1.0);
-    }
+//    if( _subscribe_xray->_data->img )
+//    {
+//      painter.setOpacity(0.5);
+//      painter.drawImage( _subscribe_xray->_data->pos.toQPoint(),
+//                         *_subscribe_xray->_data->img,
+//                         _subscribe_xray->_data->region.toQRect() );
+//      painter.setOpacity(1.0);
+//    }
 
     painter.drawImage(QPoint(0,0), _image);
 
