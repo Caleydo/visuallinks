@@ -488,6 +488,10 @@ ShaderPtr loadShader( QString vert, QString frag )
   {
     QPainter painter(this);
 
+    for(auto& preview: _subscribe_xray->_data->popups )
+    {
+      //painter.drawRect(preview.preview_region);
+    }
 //    if( _subscribe_xray->_data->img )
 //    {
 //      painter.setOpacity(0.5);

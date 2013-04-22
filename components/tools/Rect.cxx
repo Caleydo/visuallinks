@@ -53,6 +53,12 @@ bool Rect::contains(float x, float y, float margin) const
 }
 
 //------------------------------------------------------------------------------
+bool Rect::contains(const float2& pos, float margin) const
+{
+  return contains(pos.x, pos.y, margin);
+}
+
+//------------------------------------------------------------------------------
 std::string Rect::toString(bool round) const
 {
   std::stringstream strm;

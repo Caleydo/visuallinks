@@ -260,6 +260,7 @@ struct Rect
 
   void expand(const float2& p);
   bool contains(float x, float y, float margin = 0.f) const;
+  bool contains(const float2& pos, float margin = 0.f) const;
 
   std::string toString(bool round = false) const;
 

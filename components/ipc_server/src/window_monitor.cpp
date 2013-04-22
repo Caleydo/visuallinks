@@ -219,16 +219,25 @@ namespace LinksRouting
 
 #ifdef __linux__
     dconf.waitForFinished();
-    JSONParser favorites(dconf.readAllStandardOutput());
-    QStringList launchers =
-      favorites.getRoot().getValue<QStringList>()
-                         .replaceInStrings(".desktop", "")
-                         .replaceInStrings("application://", "");
 
-    if( launchers != _launchers )
+    try
     {
-      _launchers = launchers;
-      _cb_regions_changed( getWindows() );
+      JSONParser favorites(dconf.readAllStandardOutput());
+      QStringList launchers =
+        favorites.getRoot().getValue<QStringList>()
+                           .replaceInStrings(".desktop", "")
+                           .replaceInStrings("application://", "");
+
+      if( launchers != _launchers )
+      {
+        _launchers = launchers;
+        _cb_regions_changed( getWindows() );
+      }
+    }
+    catch(std::runtime_error& ex)
+    {
+      LOG_WARN( "Failed to parse '/com/canonical/unity/launcher/favorites': "
+                << ex.what() );
     }
 #endif
 

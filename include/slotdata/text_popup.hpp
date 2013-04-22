@@ -69,6 +69,7 @@ namespace SlotType
     struct HoverRect
     {
       Rect region, preview_region;
+      LinkDescription::Node* node;
       QImage* img;
       float2 pos;
     };

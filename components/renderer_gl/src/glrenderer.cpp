@@ -559,9 +559,14 @@ namespace LinksRouting
         auto fork = hedge->getHyperEdgeDescription();
         if( !fork )
         {
-          float2 offset = hedge->get<float2>("screen-offset");
-          glPushMatrix();
-          glTranslatef(offset.x, offset.y, 0);
+          if( pass > 0 )
+          {
+            // First pass is used by xray previews which are given in absolute
+            // coordinates.
+            float2 offset = hedge->get<float2>("screen-offset");
+            glPushMatrix();
+            glTranslatef(offset.x, offset.y, 0);
+          }
           if( renderNodes( hedge->getNodes(),
                            3.f,
                            &hedges_open,
@@ -569,8 +574,10 @@ namespace LinksRouting
                            false,
                            pass ) )
             rendered_anything = true;
-          glPopMatrix();
-
+          if( pass > 0 )
+          {
+            glPopMatrix();
+          }
           continue;
         }
 
@@ -654,8 +661,6 @@ namespace LinksRouting
       if( pass == 0 )
       {
         if(   !render_all
-            && (*node)->get<bool>("hidden")
-            && (*node)->get<bool>("covered")
             && (*node)->get<bool>("hover") )
         {
           const Rect rp = parseRect( (*node)->get<std::string>("covered-preview-region") );

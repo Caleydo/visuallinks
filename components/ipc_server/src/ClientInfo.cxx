@@ -54,7 +54,10 @@ namespace LinksRouting
   //----------------------------------------------------------------------------
   void ClientInfo::setScrollPos( const QPoint& offset )
   {
+    const QSize size = scroll_region.size();
     scroll_region.setTopLeft(offset);
+    scroll_region.setSize(size);
+
     _dirty |= SCROLL_POS;
 
     for(auto& popup: _popups)
@@ -448,12 +451,6 @@ namespace LinksRouting
               }
             }
 
-            else if(    !(*region)->get<bool>("outside")
-                     &&  (*region)->get<bool>("covered") )
-            {
-              _ipc_server->addCoveredPreview(*region, getViewportAbs(), getScrollRegionAbs());
-            }
-
             if(    (*region)->get<bool>("on-screen")
                 && (*region)->get<bool>("outside") )
             {
@@ -473,6 +470,23 @@ namespace LinksRouting
               hedge->addNode(new_node);
 #endif
             }
+          }
+
+          // Remove existing xray previews
+          (*region)->callExitCallbacks();
+
+          // and check for new ones
+          if(   (*region)->get<bool>("covered")
+             || (  (*region)->get<bool>("outside")
+                && (*region)->get<bool>("on-screen")) )
+          {
+            _ipc_server->addCoveredPreview
+            (
+              *region,
+              getViewportAbs(),
+              getScrollRegionAbs(),
+              (*region)->get<bool>("outside")
+            );
           }
 
           ++region;

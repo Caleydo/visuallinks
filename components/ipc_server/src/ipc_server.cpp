@@ -61,7 +61,7 @@ namespace LinksRouting
     registerArg("PreviewWidth", _preview_width = 700);
     registerArg("PreviewHeight", _preview_height = 400);
     registerArg("PreviewAutoWidth", _preview_auto_width = true);
-    registerArg("OutsideSeeThrough", _outside_see_through = false);
+    registerArg("OutsideSeeThrough", _outside_see_through = true);
   }
 
   //----------------------------------------------------------------------------
@@ -228,49 +228,18 @@ namespace LinksRouting
     SlotType::XRayPopup::HoverRect xray = {
       bb,
       preview_region,
+      node.get(),
       0,
       float2()
     };
 
     auto& previews = _slot_xray->_data->popups;
-    std::cout << "add preview " << previews.size() << std::endl;
     auto preview_it = previews.insert(previews.end(), xray);
     node->addExitCallback([&previews, preview_it]()
     {
-      std::cout << "erase preview " << previews.size() << std::endl;
       previews.erase(preview_it);
     });
     return preview_it;
-#if 0
-    /**
-     * Mouse move callback
-     */
-    _subscribe_mouse->_data->_move_callbacks.push_back(
-      [&,bb,node,preview_region,scroll_region,source_region](int x, int y)
-      {
-        bool hover = node->get<bool>("hover");
-        if( bb.contains(x, y) )
-        {
-          if( hover )
-            return;
-          hover = true;
-          _slot_xray->_data->img = &_full_preview_img;
-          _slot_xray->_data->viewport = source_region;
-          _slot_xray->_data->pos = preview_region.topLeft() - QPoint(0, 24);
-        }
-        else if( hover )
-        {
-          hover = false;
-          _slot_xray->_data->img = 0;
-        }
-        else
-          return;
-
-        node->set("hover", hover);
-        _cond_data_ready->wakeAll();
-      }
-    );
-#endif
   }
 
   //----------------------------------------------------------------------------
@@ -1364,6 +1333,31 @@ namespace LinksRouting
         popup.hover_region.visible = false;
         changed = true;
       }
+    }
+
+    for(auto& preview: _slot_xray->_data->popups)
+    {
+      bool hover = preview.node->get<bool>("hover");
+      float2 offset = preview.node->getParent()->get<float2>("screen-offset");
+
+      if( preview.region.contains(float2(x, y) - offset) )
+      {
+        if( hover )
+          continue;
+        hover = true;
+//        _slot_xray->_data->img = &_full_preview_img;
+//        _slot_xray->_data->viewport = source_region;
+//        _slot_xray->_data->pos = preview_region.topLeft() - QPoint(0, 24);
+      }
+      else if( hover )
+      {
+        hover = false;
+//        _slot_xray->_data->img = 0;
+      }
+      else
+        continue;
+
+      changed |= preview.node->set("hover", hover);
     }
 
     if( changed )
