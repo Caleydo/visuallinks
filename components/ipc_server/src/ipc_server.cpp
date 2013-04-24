@@ -810,61 +810,6 @@ namespace LinksRouting
         return buildIcon(new_center, normal, triangle);
       }
 
-      /**
-       * Get intersection/hide behind icon from inside to outside
-       */
-      LinkDescription::NodePtr getInsideIntersect( const float2& p_out,
-                                                   const float2& p_cov,
-                                                   const QRect& reg,
-                                                   bool triangle = false )
-      {
-        float2 dir = (p_out - p_cov).normalize();
-
-        float2 normal;
-        float fac = -1;
-
-        if( std::fabs(dir.x) > 0.01 )
-        {
-          // if not too close to vertical try intersecting left or right
-          if( dir.x > 0 )
-          {
-            fac = (reg.left() - p_cov.x) / dir.x;
-            normal.x = 1;
-          }
-          else
-          {
-            fac = (reg.right() - p_cov.x) / dir.x;
-            normal.x = -1;
-          }
-
-          // check if vertically inside the region
-          float y = p_cov.y + fac * dir.y;
-          if( y < reg.top() || y > reg.bottom() )
-            fac = -1;
-        }
-
-        if( fac < 0 )
-        {
-          // nearly vertical or horizontal hit outside of vertical region
-          // boundaries -> intersect with top or bottom
-          normal.x = 0;
-
-          if( dir.y < 0 )
-          {
-            fac = (reg.bottom() - p_cov.y) / dir.y;
-            normal.y = -1;
-          }
-          else
-          {
-            fac = (reg.top() - p_cov.y) / dir.y;
-            normal.y = 1;
-          }
-        }
-
-        float2 new_center = p_cov + fac * dir;
-        return buildIcon(new_center, normal, triangle);
-      }
-
     protected:
       const WindowInfos::const_iterator& _begin,
                                          _end;
@@ -1078,9 +1023,6 @@ namespace LinksRouting
   //----------------------------------------------------------------------------
   bool IPCServer::updateCenter(LinkDescription::HyperEdge* hedge)
   {
-    const LinkDescription::Node* p = hedge->getParent();
-    const LinkDescription::HyperEdge* pp = p ? p->getParent() : 0;
-//    std::cout << hedge << ", p=" << p << ", pp=" << pp << std::endl;
     float2 hedge_center;
     size_t num_visible = 0;
 

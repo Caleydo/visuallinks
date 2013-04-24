@@ -84,6 +84,12 @@ namespace LinkDescription
   }
 
   //----------------------------------------------------------------------------
+  void Node::setLinkPoints(const points_t& points)
+  {
+    _link_points = points;
+  }
+
+  //----------------------------------------------------------------------------
   points_t& Node::getLinkPoints()
   {
     return _link_points.empty() ? _points : _link_points;
@@ -241,6 +247,12 @@ namespace LinkDescription
   const float2& HyperEdge::getCenter() const
   {
     return _center;
+  }
+
+  //----------------------------------------------------------------------------
+  const float2 HyperEdge::getCenterAbs() const
+  {
+    return _center + get<float2>("screen-offset");
   }
 
   //----------------------------------------------------------------------------

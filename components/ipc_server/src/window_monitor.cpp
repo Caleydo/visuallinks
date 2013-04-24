@@ -81,11 +81,16 @@ namespace LinksRouting
 
   //----------------------------------------------------------------------------
   bool WindowRegions::hit( const WindowInfos::const_iterator& first_above,
-                           const QPoint& point ) const
+                           const QPoint& point,
+                           Rect* reg ) const
   {
     for(auto it = first_above; it != _windows.end(); ++it)
       if( it->region.contains(point) )
+      {
+        if( reg )
+          *reg = it->region;
         return true;
+      }
     return false;
   }
 

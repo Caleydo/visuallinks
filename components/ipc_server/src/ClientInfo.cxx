@@ -350,11 +350,15 @@ namespace LinksRouting
         icon.push_back( pos + QPoint(ICON_SIZE, ICON_SIZE) );
         icon.push_back( pos + QPoint(ICON_SIZE,-ICON_SIZE) );
 
+        LinkDescription::points_t link_points(1);
+        link_points.push_back(pos + QPoint(ICON_SIZE, 0));
+        _minimized_icon->setLinkPoints(link_points);
+
         createPopup
         (
           pos,
           float2(1,0),
-          "5",
+          std::to_string(_nodes.front()->getChildren().front()->getNodes().size()),
           _nodes.front()->getChildren().front()->getNodes(),
           _nodes.front()->getParent()->get<std::string>("link-id"),
           false
@@ -584,8 +588,9 @@ namespace LinksRouting
            center_abs = center_rel
                       + getScrollRegionAbs().topLeft();
 
+    Rect covering_region;
     bool onscreen   = desktop.contains(center_rel),
-         covered    = windows.hit(first_above, center_abs),
+         covered    = windows.hit(first_above, center_abs, &covering_region),
          outside    = !view.contains(center_rel),
          hidden     =   !onscreen
                     || (!_ipc_server->getOutsideSeeThrough() && outside);
@@ -594,6 +599,9 @@ namespace LinksRouting
     modified |= node.set("covered", covered);
     modified |= node.set("outside", outside);
     modified |= node.set("hidden", hidden);
+
+    if( covered )
+      node.set("covering-region", covering_region);
 
     return modified;
   }

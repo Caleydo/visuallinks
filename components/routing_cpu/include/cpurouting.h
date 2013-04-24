@@ -32,7 +32,9 @@ namespace LinksRouting
     private:
 
       slot_t<LinkDescription::LinkList>::type _subscribe_links;
-      float2 route(LinkDescription::HyperEdge* hedge);
+
+      float2 updateCenter(LinkDescription::HyperEdge* hedge);
+      void route(LinkDescription::HyperEdge* hedge);
 
   };
 }

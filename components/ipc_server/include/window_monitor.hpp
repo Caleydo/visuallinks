@@ -16,6 +16,8 @@
 #include <iostream>
 #include <map>
 
+#include "float2.hpp"
+
 namespace LinksRouting
 {
   struct WindowInfo
@@ -70,7 +72,8 @@ namespace LinksRouting
       WId windowIdAt(const QPoint& point) const;
 
       bool hit( const WindowInfos::const_iterator& first_above,
-                const QPoint& point ) const;
+                const QPoint& point,
+                Rect* reg = 0 ) const;
 
     private:
       const WindowInfos _windows;

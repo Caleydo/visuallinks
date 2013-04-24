@@ -5,6 +5,167 @@
 
 namespace LinksRouting
 {
+
+
+  LinkDescription::NodePtr buildIcon( float2 center,
+                                      const float2& normal,
+                                      bool triangle )
+  {
+    LinkDescription::points_t link_points, link_points_children;
+    link_points_children.push_back(center);
+    link_points.push_back(center += 12 * normal);
+
+    LinkDescription::points_t points;
+
+    if( triangle )
+    {
+      points.push_back(center += 6 * normal.normal());
+      points.push_back(center -= 6 * normal.normal() + 12 * normal);
+      points.push_back(center -= 6 * normal.normal() - 12 * normal);
+    }
+    else
+    {
+      points.push_back(center += 0.5 * normal.normal());
+      points.push_back(center -= 9 * normal);
+
+      points.push_back(center += 2.5 * normal.normal());
+      points.push_back(center += 6   * normal.normal() + 3 * normal);
+      points.push_back(center += 1.5 * normal.normal() - 3 * normal);
+      points.push_back(center -= 6   * normal.normal() + 3 * normal);
+      points.push_back(center -= 9   * normal.normal());
+      points.push_back(center -= 6   * normal.normal() - 3 * normal);
+      points.push_back(center += 1.5 * normal.normal() + 3 * normal);
+      points.push_back(center += 6   * normal.normal() - 3 * normal);
+      points.push_back(center += 2.5 * normal.normal());
+
+      points.push_back(center += 9 * normal);
+    }
+
+    auto node = std::make_shared<LinkDescription::Node>(
+      points,
+      link_points,
+      link_points_children
+    );
+    //node->set("covered", true);
+    //node->set("filled", true);
+
+    return node;
+  }
+
+  /**
+   * Get intersection/hide behind icon from inside to outside
+   */
+  LinkDescription::NodePtr getInsideIntersect( const float2& p_out,
+                                               const float2& p_cov,
+                                               const Rect& reg,
+                                               bool triangle = false )
+  {
+    float2 dir = (p_out - p_cov).normalize();
+
+    float2 normal;
+    float fac = -1;
+
+    if( std::fabs(dir.x) > 0.01 )
+    {
+      // if not too close to vertical try intersecting left or right
+      if( dir.x > 0 )
+      {
+        fac = (reg.l() - p_cov.x) / dir.x;
+        normal.x = 1;
+      }
+      else
+      {
+        fac = (reg.r() - p_cov.x) / dir.x;
+        normal.x = -1;
+      }
+
+      // check if vertically inside the region
+      float y = p_cov.y + fac * dir.y;
+      if( y < reg.t() || y > reg.b() )
+        fac = -1;
+    }
+
+    if( fac < 0 )
+    {
+      // nearly vertical or horizontal hit outside of vertical region
+      // boundaries -> intersect with top or bottom
+      normal.x = 0;
+
+      if( dir.y < 0 )
+      {
+        fac = (reg.b() - p_cov.y) / dir.y;
+        normal.y = -1;
+      }
+      else
+      {
+        fac = (reg.t() - p_cov.y) / dir.y;
+        normal.y = 1;
+      }
+    }
+
+    float2 new_center = p_cov + fac * dir;
+    return buildIcon(new_center, normal, triangle);
+  }
+
+  /**
+   *
+   * @param p_out       Outside point
+   * @param p_cov       Covered point
+   * @param triangle
+   * @return
+   */
+  LinkDescription::NodePtr getVisibleIntersect( const float2& p_out,
+                                                const float2& p_cov,
+                                                const Rect& reg,
+                                                bool triangle = false )
+  {
+    float2 dir = (p_out - p_cov).normalize();
+
+    float2 normal;
+    float fac = -1;
+
+    if( std::fabs(dir.x) > 0.01 )
+    {
+      // if not too close to vertical try intersecting left or right
+      if( dir.x > 0 )
+      {
+        fac = (reg.r() - p_cov.x) / dir.x;
+        normal.x = 1;
+      }
+      else
+      {
+        fac = (reg.l() - p_cov.x) / dir.x;
+        normal.x = -1;
+      }
+
+      // check if vertically inside the region
+      float y = p_cov.y + fac * dir.y;
+      if( y < reg.t() || y > reg.b() )
+        fac = -1;
+    }
+
+    if( fac < 0 )
+    {
+      // nearly vertical or horizontal hit outside of vertical region
+      // boundaries -> intersect with top or bottom
+      normal.x = 0;
+
+      if( dir.y < 0 )
+      {
+        fac = (reg.t() - p_cov.y) / dir.y;
+        normal.y = -1;
+      }
+      else
+      {
+        fac = (reg.b() - p_cov.y) / dir.y;
+        normal.y = 1;
+      }
+    }
+
+    float2 new_center = p_cov + fac * dir;
+    return buildIcon(new_center, normal, triangle);
+  }
+
   //----------------------------------------------------------------------------
   CPURouting::CPURouting() :
     Configurable("CPURouting")
@@ -55,6 +216,7 @@ namespace LinksRouting
     LinkDescription::LinkList& links = *_subscribe_links->_data;
     for( auto it = links.begin(); it != links.end(); ++it )
     {
+      updateCenter(it->_link.get());
       route(it->_link.get());
 
 //      auto info = _link_infos.find(it->_id);
@@ -70,7 +232,46 @@ namespace LinksRouting
   }
 
   //----------------------------------------------------------------------------
-  float2 CPURouting::route(LinkDescription::HyperEdge* hedge)
+  float2 CPURouting::updateCenter(LinkDescription::HyperEdge* hedge)
+  {
+    float2 offset = hedge->get<float2>("screen-offset");
+
+    float2 center;
+    size_t num_visible = 0;
+
+    // add regions
+    for( auto& node: hedge->getNodes() )
+    {
+      if( node->get<bool>("hidden") )
+        continue;
+
+      // add children (hyperedges)
+      for( auto& child: node->getChildren() )
+      {
+        center += updateCenter(child.get());
+        num_visible += 1;
+      }
+
+      if( node->getVertices().empty() )
+        continue;
+
+      if(    !node->get<bool>("outside")
+          && !node->get<bool>("covered") )
+      {
+        center += node->getCenter();
+        num_visible += 1;
+      }
+    }
+
+    if( num_visible )
+      center /= num_visible;
+
+    hedge->setCenter(center);
+    return center + offset;
+  }
+
+  //----------------------------------------------------------------------------
+  void CPURouting::route(LinkDescription::HyperEdge* hedge)
   {
     auto fork =
       std::make_shared<LinkDescription::HyperEdgeDescriptionForkation>();
@@ -79,25 +280,36 @@ namespace LinksRouting
     std::vector<LinkDescription::points_t> regions;
     std::vector<LinkDescription::NodePtr> nodes;
 
+    float2 offset = hedge->get<float2>("screen-offset");
+    fork->position = hedge->getCenter();
+
+    if( hedge->getParent() )
+    {
+      auto p = hedge->getParent()->getParent();
+      if( p )
+      {
+        if( fork->position == float2(0,0) )
+          fork->position = p->getCenter() - offset;
+        else
+          fork->position = 0.5 * (fork->position + p->getCenter() - offset);
+
+        hedge->setCenter(fork->position);
+      }
+    }
+
     // add regions
     for( auto& node: hedge->getNodes() )
     {
       if( node->get<bool>("hidden") )
         continue;
-//      if( (    (*node)->get<bool>("hidden", false)
-//           && !(*node)->get<bool>("covered", false)
-//          ) || (*node)->getParent() != hedge )
-//        continue;
 
       // add children (hyperedges)
       for( auto& child: node->getChildren() )
       {
-        LinkDescription::points_t center(1);
-        center[0] = route(child.get());
-        if( center[0] == float2(0,0) || child->get<bool>("no-parent-route") )
-          continue;
+        route(child.get());
 
-        fork->position += center[0];
+        LinkDescription::points_t center(1);
+        center[0] = child->getCenterAbs();
         regions.push_back(center);
         nodes.push_back(node);
       }
@@ -105,27 +317,9 @@ namespace LinksRouting
       if( node->getVertices().empty() )
         continue;
 
-      fork->position += node->getCenter();
       regions.push_back(node->getLinkPoints());
       nodes.push_back(node);
     }
-
-    if( !regions.empty() )
-      fork->position /= regions.size();
-
-    //fork->position = hedge->getCenter();
-
-//    if( hedge->getParent() )
-//    {
-//      auto p = hedge->getParent()->getParent();
-//      if( p )
-//      {
-//        if( fork->position == float2(0,0) )
-//          fork->position = p->getCenter();
-//        else
-//          fork->position = 0.5 * (fork->position + p->getCenter());
-//      }
-//    }
 
     //copy routes to hyperedge
     for(size_t i = 0; i < regions.size(); ++i )
@@ -144,17 +338,39 @@ namespace LinksRouting
         }
       }
 
-      fork->outgoing.push_back(LinkDescription::HyperEdgeDescriptionSegment());
-      //fork->outgoing.back().parent = fork;
+      bool outside = nodes[i]->get<bool>("outside"),
+           covered = nodes[i]->get<bool>("covered");
 
-      //if( regions.size() > 1 || !hedge->getParent() )
-        // Only add route if at least one other node exists
-        fork->outgoing.back().trail.push_back(min_vert);
+      LinkDescription::HyperEdgeDescriptionSegment segment;
+      //segment.parent = fork;
+      segment.trail.push_back(fork->position);
 
-      fork->outgoing.back().nodes.push_back(nodes[i]);
+      if( outside || covered )
+      {
+        Rect cover_reg = nodes[i]->get<Rect>("covered-region") - offset,
+             covering_reg = nodes[i]->get<Rect>("covering-region") - offset;
+        auto icon = outside
+                  ? getInsideIntersect(fork->position, min_vert, cover_reg)
+                  : getVisibleIntersect(fork->position, min_vert, covering_reg);
+        segment.trail.push_back( icon->getLinkPoints().front() );
+        segment.nodes.push_back(icon);
+        segment.set("widen-end", false);
+
+        fork->outgoing.push_back(segment);
+
+        segment.trail.clear();
+        segment.nodes.clear();
+
+        segment.trail.push_back(icon->getLinkPointsChildren().front());
+
+        segment.set("covered", true);
+      }
+
+      segment.trail.push_back(min_vert);
+      segment.nodes.push_back(nodes[i]);
+
+      fork->outgoing.push_back(segment);
     }
-
-    return fork->position;
   }
 
 } // namespace LinksRouting

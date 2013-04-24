@@ -171,14 +171,6 @@ namespace LinksRouting
     return ret;
   }
 
-  Rect parseRect(const std::string& str)
-  {
-    float l, r, t, b;
-    std::stringstream strm(str);
-    strm >> l >> t >> r >> b;
-    return Rect( float2(l, t), float2(r - l, b - t) );
-  }
-
   //----------------------------------------------------------------------------
   GlRenderer::GlRenderer():
     Configurable("GLRenderer"),
@@ -556,21 +548,21 @@ namespace LinksRouting
                 && segment.trail.front().y >= 24*/ )
             {
               // Draw path
-              std::vector<float2> points;
-              points.reserve(segment.trail.size() + 1);
-              points.push_back(fork->position);
-              points.insert(points.end(), segment.trail.begin(), segment.trail.end());
-  //            std::cout << "path: " << points << ", " << fork->position << std::endl;
               //points = smooth(points, 0.4, 10);
               float widen_size = 0.f;
-              if( segment.nodes.back()->getChildren().empty() )
+              if(    segment.nodes.back()->getChildren().empty()
+                  && segment.get<bool>("widen-end", true) )
               {
                 if( !segment.nodes.back()->get<std::string>("virtual-outside").empty() )
                   widen_size = 13;
                 else
                   widen_size = 55;
               }
-              line_borders_t region = calcLineBorders(points, 3, false, widen_size);
+              line_borders_t region = calcLineBorders(segment.trail, 3, false, widen_size);
+
+              glColor4fv(   segment.get<bool>("covered")
+                          ? _color_covered_cur
+                          : _color_cur );
               glBegin(GL_TRIANGLE_STRIP);
               for( auto first = std::begin(region.first),
                         second = std::begin(region.second);
@@ -636,9 +628,9 @@ namespace LinksRouting
         if(   !render_all
             && (*node)->get<bool>("hover") )
         {
-          const Rect rp = parseRect( (*node)->get<std::string>("covered-preview-region") );
+          const Rect rp = (*node)->get<Rect>("covered-preview-region");
           renderRect(rp, 2.f, 0, 0.07 * _color_cur, 2 * _color_cur);
-          const Rect r = parseRect( (*node)->get<std::string>("covered-region") );
+          const Rect r = (*node)->get<Rect>("covered-region");
           renderRect(r, 3.f, 0, 0.2 * _color_cur, 2 * _color_cur);
           rendered_anything = true;
         }

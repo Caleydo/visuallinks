@@ -138,6 +138,7 @@ namespace LinkDescription
       points_t& getVertices();
       const points_t& getVertices() const;
 
+      void setLinkPoints(const points_t& points);
       points_t& getLinkPoints();
       const points_t& getLinkPoints() const;
 
@@ -184,6 +185,7 @@ namespace LinkDescription
 
       void setCenter(const float2& center);
       const float2& getCenter() const;
+      const float2 getCenterAbs() const;
 
       uint32_t getRevision() const;
 
@@ -213,7 +215,8 @@ namespace LinkDescription
   };
 
 
-  struct HyperEdgeDescriptionSegment
+  struct HyperEdgeDescriptionSegment:
+    public PropertyElement
   {
       nodes_t nodes;
       points_t trail;

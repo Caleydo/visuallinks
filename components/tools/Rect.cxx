@@ -78,3 +78,30 @@ Rect& Rect::operator *=(float a)
   size *= a;
   return *this;
 }
+
+//------------------------------------------------------------------------------
+Rect Rect::operator+(const float2& offset) const
+{
+  return Rect( pos + offset, size );
+}
+
+//------------------------------------------------------------------------------
+Rect Rect::operator-(const float2& offset) const
+{
+  return Rect( pos - offset, size );
+}
+
+//------------------------------------------------------------------------------
+std::istream& operator>>(std::istream& strm, Rect& rect)
+{
+  float l, r, t, b;
+  strm >> l >> t >> r >> b;
+  rect = Rect( float2(l, t), float2(r - l, b - t) );
+  return strm;
+}
+
+//------------------------------------------------------------------------------
+std::ostream& operator<<(std::ostream& strm, const Rect& r)
+{
+  return (strm << r.l() << ' ' << r.t() << ' ' << r.r() << ' ' << r.b());
+}

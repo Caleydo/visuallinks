@@ -265,16 +265,16 @@ struct Rect
   std::string toString(bool round = false) const;
 
   Rect& operator *=(float a);
+  Rect operator+(const float2& offset) const;
+  Rect operator-(const float2& offset) const;
+
+  friend std::istream& operator>>(std::istream& strm, Rect& rect);
+  friend std::ostream& operator<<(std::ostream& strm, const Rect& r);
 };
 
 inline const Rect operator *(float a, const Rect& r)
 {
   return Rect(r) *= a;
-}
-
-inline std::ostream& operator<<(std::ostream& strm, const Rect& r)
-{
-  return strm << r.pos << " -> " << r.size;
 }
 
 #endif /* _FLOAT2_HPP_ */
