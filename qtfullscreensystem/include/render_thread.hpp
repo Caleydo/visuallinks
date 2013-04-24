@@ -35,7 +35,8 @@ namespace qtfullscreensystem
     private:
 
       GLWidget *_gl_widget;
-      QSharedPointer<QGLPixelBuffer> _pbuffer;
+      QSharedPointer<QGLPixelBuffer> _pbuffer,
+                                     _pbuffer_preview;
       int       _w, _h;
 
       bool      _do_render,

@@ -150,8 +150,12 @@ HierarchicTileMap::HierarchicTileMap( unsigned int width,
 //------------------------------------------------------------------------------
 MapRect HierarchicTileMap::requestRect(const Rect& rect, size_t zoom)
 {
+
+  float scale = 1.f;
+  if( zoom != static_cast<size_t>(-1) )
+    scale = (std::pow(2.0f, static_cast<float>(zoom)) * _tile_height) / _height;
+
   Layer& layer = getLayer(zoom);
-  float scale = (std::pow(2.0f, static_cast<float>(zoom)) * _tile_height) / _height;
 
   Rect layer_rect = scale * rect;
   size_t min_tile_x = std::floor((layer_rect.l() + 1) / _tile_width),
@@ -194,9 +198,14 @@ void HierarchicTileMap::setTileData( size_t x, size_t y, size_t zoom,
 }
 
 //------------------------------------------------------------------------------
-float HierarchicTileMap::getLayerScale(size_t level) const
+float HierarchicTileMap::getLayerScale(size_t zoom) const
 {
-  return std::pow(2.0f, static_cast<float>(level) ) * _tile_height / static_cast<float>(_height);
+  if( zoom == static_cast<size_t>(-1) )
+    return 1;
+  else
+    return std::pow(2.0f, static_cast<float>(zoom))
+         * _tile_height
+         / static_cast<float>(_height);
 }
 
 //------------------------------------------------------------------------------
@@ -214,17 +223,18 @@ void HierarchicTileMap::setHeight(size_t height)
 }
 
 //------------------------------------------------------------------------------
-Layer& HierarchicTileMap::getLayer(size_t level)
+Layer& HierarchicTileMap::getLayer(size_t zoom)
 {
+  size_t level = (zoom != static_cast<size_t>(-1)) ? zoom : 0;
   if( level >= _layers.size() )
     _layers.resize(level + 1, Layer(this));
 
-  Layer& layer = _layers[level];
+  Layer& layer = _layers.at(level);
   if( !layer.isInit() )
   {
-    unsigned int num_tiles_y = 1 << level;
-    float scale = getLayerScale(level);
-    unsigned int num_tiles_x = std::ceil(scale * _width / _tile_width);
+    float scale = getLayerScale(zoom);
+    unsigned int num_tiles_x = std::ceil(scale * _width / _tile_width),
+                 num_tiles_y = std::ceil(scale * _height / _tile_height);
 
     layer.init( num_tiles_x, num_tiles_y,
                 _tile_width, _tile_height,

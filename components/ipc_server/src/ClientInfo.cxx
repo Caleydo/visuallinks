@@ -482,7 +482,9 @@ namespace LinksRouting
           {
             _ipc_server->addCoveredPreview
             (
+              *this,
               *region,
+              tile_map_uncompressed,
               getViewportAbs(),
               getScrollRegionAbs(),
               (*region)->get<bool>("outside")
@@ -699,7 +701,18 @@ namespace LinksRouting
     tile_map->partitions_dest = partitions_dest;
 
     for(auto& popup: _popups)
-      popup->hover_region.tile_map = tile_map;
+          popup->hover_region.tile_map = tile_map;
+
+    const unsigned int TILE_SIZE = 512;
+    tile_map_uncompressed =
+      std::make_shared<HierarchicTileMap>( scroll_region.width(),
+                                           scroll_region.height(),
+                                           TILE_SIZE,
+                                           TILE_SIZE );
+    tile_map_uncompressed->partitions_src
+      .push_back(float2(0, scroll_region.height()));
+    tile_map_uncompressed->partitions_dest =
+      tile_map_uncompressed->partitions_src;
   }
 
 } // namespace LinksRouting

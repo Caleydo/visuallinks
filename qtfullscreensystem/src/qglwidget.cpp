@@ -241,8 +241,8 @@ ShaderPtr loadShader( QString vert, QString frag )
   {
     _subscribe_links =
       slot_subscriber.getSlot<LinksRouting::SlotType::Image>("/rendered-links");
-    _subscribe_xray =
-      slot_subscriber.getSlot<LinksRouting::SlotType::XRayPopup>("/x-ray");
+    _subscribe_xray_fbo =
+      slot_subscriber.getSlot<LinksRouting::SlotType::Image>("/rendered-xray");
 #ifdef USE_GPU_ROUTING
     _subscribe_costmap =
       slot_subscriber.getSlot<LinksRouting::SlotType::Image>("/costmap");
@@ -338,20 +338,30 @@ ShaderPtr loadShader( QString vert, QString frag )
 
     // normal draw...
     glClear(GL_COLOR_BUFFER_BIT);
-    glActiveTexture(GL_TEXTURE0);
-
     glMatrixMode(GL_PROJECTION);
     glLoadIdentity();
-    glBindTexture(GL_TEXTURE_2D, _subscribe_links->_data->id);
 
+    GLuint tex_ids[] = {
+      _subscribe_xray_fbo->_data->id,
+      _subscribe_links->_data->id,
 #ifndef USE_DESKTOP_BLEND
+      _slot_desktop->_data->id
+#endif
+    };
+    size_t num_textures = sizeof(tex_ids)/sizeof(tex_ids[0]);
+
+    for(size_t i = 0; i < num_textures; ++i)
+    {
+      glActiveTexture(GL_TEXTURE0 + i);
+      glBindTexture(GL_TEXTURE_2D, tex_ids[i]);
+    }
+
     shader_blend->bind();
-
-	glActiveTexture(GL_TEXTURE1);
-	glBindTexture(GL_TEXTURE_2D, _slot_desktop->_data->id);
-
-	shader_blend->setUniformValue("links", 0);
-	shader_blend->setUniformValue("desktop", 1);
+	shader_blend->setUniformValue("xray", 0);
+	shader_blend->setUniformValue("links", 1);
+#ifndef USE_DESKTOP_BLEND
+	shader_blend->setUniformValue("desktop", 2);
+#endif
 
 	glBegin( GL_QUADS );
 
@@ -369,31 +379,9 @@ ShaderPtr loadShader( QString vert, QString frag )
 
     glEnd();
 
-	glActiveTexture(GL_TEXTURE0);
-
 	shader_blend->release();
-#else
-	glEnable(GL_TEXTURE_2D);
-    glBegin( GL_QUADS );
 
-      glColor3f(1,1,1);
-
-      glTexCoord2f(0,1);
-      glVertex2f(-1,-1);
-
-      glTexCoord2f(1,1);
-      glVertex2f(1,-1);
-
-      glTexCoord2f(1,0);
-      glVertex2f(1,1);
-
-      glTexCoord2f(0,0);
-      glVertex2f(-1,1);
-
-    glEnd();
-    glDisable(GL_TEXTURE_2D);
-#endif
-
+    glActiveTexture(GL_TEXTURE0);
     glBindTexture(GL_TEXTURE_2D, 0);
 
 //    static QImage links(size(), QImage::Format_RGB888);
@@ -487,20 +475,6 @@ ShaderPtr loadShader( QString vert, QString frag )
   void GLWidget::paintEvent(QPaintEvent *event)
   {
     QPainter painter(this);
-
-    for(auto& preview: _subscribe_xray->_data->popups )
-    {
-      //painter.drawRect(preview.preview_region);
-    }
-//    if( _subscribe_xray->_data->img )
-//    {
-//      painter.setOpacity(0.5);
-//      painter.drawImage( _subscribe_xray->_data->pos.toQPoint(),
-//                         *_subscribe_xray->_data->img,
-//                         _subscribe_xray->_data->region.toQRect() );
-//      painter.setOpacity(1.0);
-//    }
-
     painter.drawImage(QPoint(0,0), _image);
 
     for( auto popup = _slot_popups->_data->popups.begin();
@@ -517,20 +491,6 @@ ShaderPtr loadShader( QString vert, QString frag )
           Qt::AlignCenter,
           QString::fromStdString(popup->text)
         );
-
-      if( !popup->hover_region.visible )
-        continue;
-
-//      const LinksRouting::SlotType::Image* img = _slot_image->_data.get();
-//      const float2& pos = popup->hover_region.region.pos;
-//      if( img->pdata )
-//      {
-//        painter.drawImage(
-//          QRect(pos.x + 8, pos.y - _window_offset.y() + 8, 256, 384),
-//          QImage(img->pdata, img->width, img->height, QImage::Format_ARGB32),
-//          QRect(0, 0, 128, 192)
-//        );
-//      }
     }
   }
 

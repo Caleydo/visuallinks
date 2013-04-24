@@ -74,7 +74,7 @@ namespace LinksRouting
   void IPCServer::publishSlots(SlotCollector& slot_collector)
   {
     _slot_links = slot_collector.create<LinkDescription::LinkList>("/links");
-    _slot_xray = slot_collector.create<SlotType::XRayPopup>("/x-ray");
+    _slot_xray = slot_collector.create<SlotType::XRayPopup>("/xray");
   }
 
   //----------------------------------------------------------------------------
@@ -202,7 +202,9 @@ namespace LinksRouting
 
   //----------------------------------------------------------------------------
   IPCServer::XRayIterator
-  IPCServer::addCoveredPreview( const LinkDescription::NodePtr& node,
+  IPCServer::addCoveredPreview( const ClientInfo& client_info,
+                                const LinkDescription::NodePtr& node,
+                                const HierarchicTileMapWeakPtr& tile_map,
                                 const QRect& viewport,
                                 const QRect& scroll_region,
                                 bool extend )
@@ -228,9 +230,10 @@ namespace LinksRouting
     SlotType::XRayPopup::HoverRect xray = {
       bb,
       preview_region,
+      source_region,
       node.get(),
-      0,
-      float2()
+      tile_map,
+      getSocketByWId(client_info.getWindowInfo().id)
     };
 
     auto& previews = _slot_xray->_data->popups;
@@ -911,6 +914,25 @@ namespace LinksRouting
   }
 
   //----------------------------------------------------------------------------
+  QWsSocket* IPCServer::getSocketByWId(WId wid)
+  {
+    auto client = findClientInfo(wid);
+    (
+      _clients.begin(),
+      _clients.end(),
+      [wid](const ClientInfos::value_type& c)
+      {
+        return c.second->getWindowInfo().id == wid;
+      }
+    );
+
+    if( client == _clients.end() )
+      return 0;
+
+    return client->first;
+  }
+
+  //----------------------------------------------------------------------------
   bool IPCServer::updateHedge( const WindowRegions& regions,
                                LinkDescription::HyperEdge* hedge )
   {
@@ -957,75 +979,11 @@ namespace LinksRouting
 #endif
     }
 
-#if 0
-    LinkDescription::nodes_t covered_nodes;
-    struct OutsideScroll
-    {
-      float2 pos;
-      float2 normal;
-      size_t num_outside;
-    } outside_scroll[] = {
-      {float2(0, region.top()),    float2( 0, 1), 0},
-      {float2(0, region.bottom()), float2( 0,-1), 0},
-      {float2(region.left(),  0),  float2( 1, 0), 0},
-      {float2(region.right(), 0),  float2(-1, 0), 0}
-    };
-    const size_t num_outside_scroll = sizeof(outside_scroll)
-                                    / sizeof(outside_scroll[0]);
-
-//    std::vector<LinkDescription::nodes_t::iterator> old_outside_nodes;
-
-    for( auto node = hedge->getNodes().begin();
-              node != hedge->getNodes().end();
-            ++node )
-      if( (*node)->get<bool>("virtual-covered", false) )
-        node = hedge->getNodes().erase(node);
-    // TODO check why still sometimes regions don't get removed immediately
-
-    float2 hedge_center;
-    size_t num_visible = 0;
-#endif
     const LinkDescription::nodes_t nodes = hedge->getNodes();
     for( auto node = hedge->getNodes().begin();
               node != hedge->getNodes().end();
             ++node )
     {
-#if 0
-      if(    !(*node)->get<std::string>("virtual-outside").empty()
-          || (*node)->get<bool>("virtual-covered", false) )
-      {
-        //old_outside_nodes.push_back(node);
-        node = hedge->getNodes().erase(node);
-        modified = true;
-        continue;
-      }
-
-      if( (*node)->get<bool>("outside", false) )
-      {
-        float2 center = (*node)->getCenter();
-        if( center != float2(0,0) )
-        {
-          if( desktopRect().contains(center.x, center.y) )
-            addCoveredPreview(*node, region, scroll_region, covered_nodes, true);
-          else
-            for( size_t i = 0; i < num_outside_scroll; ++i )
-            {
-              OutsideScroll& out = outside_scroll[i];
-              if( (center - out.pos) * out.normal > 0 )
-                continue;
-
-              if( out.normal.x == 0 )
-                out.pos.x += center.x;
-              else
-                out.pos.y += center.y;
-              out.num_outside += 1;
-            }
-        }
-
-        (*node)->set("hidden", true);
-        continue;
-      }
-#endif
       for(auto child = (*node)->getChildren().begin();
                child != (*node)->getChildren().end();
              ++child )
@@ -1057,32 +1015,6 @@ namespace LinksRouting
         node = hedge->getNodes().erase(node);
 
     CoverWindows cover_windows(first_above, regions.end());
-    if( cover_windows.valid() )
-    {
-      // Show regions covered by other windows
-      for( auto node = hedge->getNodes().begin();
-                node != hedge->getNodes().end();
-              ++node )
-      {
-        bool covered = !(*node)->get<bool>("outside", false)
-                    &&  (*node)->get<bool>("hidden", false);
-        (*node)->set("covered", covered);
-
-        if( !covered )
-        {
-          (*node)->set("covered-region", std::string());
-          (*node)->set("covered-preview-region", std::string());
-          continue;
-        }
-
-        addCoveredPreview(*node, region, scroll_region, covered_nodes);
-
-//        hedge->getNodes().push_back(
-//          cover_windows.getNearestVisible((*node)->getCenter())
-//        );
-      }
-    }
-
     for( auto node = hedge->getNodes().begin();
               node != hedge->getNodes().end();
             ++node )
@@ -1122,63 +1054,6 @@ namespace LinksRouting
       new_hedge->setCenter(new_node->getLinkPointsChildren().front());
       new_node->getChildren().push_back(new_hedge);
       hedge->addNode(new_node);
-      bool is_outside = (*node)->get<bool>("outside");
-
-      float2 center = new_hedge->getCenter();
-      auto client_info = std::find_if
-      (
-        _clients.begin(),
-        _clients.end(),
-        [&client_wid](const ClientInfos::value_type& it)
-        {
-          return it.second.getWindowInfo().id == client_wid;
-        }
-      );
-
-      assert( client_info != _clients.end() );
-      QRect client_region = client_info->second.getViewportAbs();
-
-      /**
-       * Mouse click callback
-       */
-      _subscribe_mouse->_data->_click_callbacks.push_back(
-      [center,client_info,client_region,is_outside](int x, int y)
-      {
-//          if( (center - float2(x,y)).length() > 10 )
-//            return;
-
-        client_info->second.activateWindow();
-
-        if( !is_outside )
-          return;
-
-        const bool scroll_center = true;
-        int scroll_y = y;
-
-        if( scroll_center )
-        {
-          scroll_y -= (client_region.top() + client_region.bottom()) / 2;
-        }
-        else
-        {
-          scroll_y -= client_region.top();
-          if( scroll_y > 0 )
-            // if below scroll up until region is visible
-            scroll_y = y - client_region.bottom() + 35;
-          else
-            // if above scroll down until region is visible
-            scroll_y -= 35;
-        }
-
-        scroll_y += client_info->second.scroll_region.top();
-
-        client_info->first->write(QString(
-          "{"
-            "\"task\": \"SET\","
-            "\"id\": \"scroll-y\","
-            "\"val\": " + QString("%1").arg(scroll_y) +
-          "}"));
-      });
     }
 #endif
     return modified;
@@ -1189,7 +1064,7 @@ namespace LinksRouting
   {
     const LinkDescription::Node* p = hedge->getParent();
     const LinkDescription::HyperEdge* pp = p ? p->getParent() : 0;
-    std::cout << hedge << ", p=" << p << ", pp=" << pp << std::endl;
+//    std::cout << hedge << ", p=" << p << ", pp=" << pp << std::endl;
     float2 hedge_center;
     size_t num_visible = 0;
 
@@ -1214,7 +1089,7 @@ namespace LinksRouting
       return false;
 
     hedge->setCenter(hedge_center / num_visible);
-    std::cout << " - center = " << hedge_center << hedge_center/num_visible << std::endl;
+//    std::cout << " - center = " << hedge_center << hedge_center/num_visible << std::endl;
 
     return true;
   }
@@ -1295,6 +1170,55 @@ namespace LinksRouting
       client->second->activateWindow();
     }
 
+    for(auto& preview: _slot_xray->_data->popups)
+    {
+      float2 offset = preview.node->getParent()->get<float2>("screen-offset");
+      if( !preview.region.contains(float2(x, y) - offset) )
+        continue;
+
+      changed = true;
+
+      QWsSocket* client_socket = static_cast<QWsSocket*>(preview.client_socket);
+      ClientInfos::iterator client = _clients.find(client_socket);
+      assert(client != _clients.end());
+
+      preview.node->set("hover", false);
+      client->second->activateWindow();
+
+      if( !preview.node->get<bool>("outside") )
+        // We need to scroll only for regions outside the viewport
+        continue;
+
+      QRect client_region = client->second->getViewportAbs();
+
+      const bool scroll_center = true;
+      int scroll_y = y;
+
+      if( scroll_center )
+      {
+        scroll_y -= (client_region.top() + client_region.bottom()) / 2;
+      }
+      else
+      {
+        scroll_y -= client_region.top();
+        if( scroll_y > 0 )
+          // if below scroll up until region is visible
+          scroll_y = y - client_region.bottom() + 35;
+        else
+          // if above scroll down until region is visible
+          scroll_y -= 35;
+      }
+
+      scroll_y -= client->second->scroll_region.top();
+
+      client_socket->write(QString(
+        "{"
+          "\"task\": \"SET\","
+          "\"id\": \"scroll-y\","
+          "\"val\": " + QString("%1").arg(scroll_y) +
+        "}"));
+    }
+
     if( changed )
       _cond_data_ready->wakeAll();
   }
@@ -1345,14 +1269,11 @@ namespace LinksRouting
         if( hover )
           continue;
         hover = true;
-//        _slot_xray->_data->img = &_full_preview_img;
-//        _slot_xray->_data->viewport = source_region;
-//        _slot_xray->_data->pos = preview_region.topLeft() - QPoint(0, 24);
+        _interaction_handler.updateRegion(preview);
       }
       else if( hover )
       {
         hover = false;
-//        _slot_xray->_data->img = 0;
       }
       else
         continue;
@@ -1523,9 +1444,33 @@ namespace LinksRouting
 //    if( old_pos == src.pos )
 //      return;
 
+    if( !updateTileMap( tile_map,
+                        client_info.first,
+                        src,
+                        popup.hover_region.zoom ) )
+      _server->_cond_data_ready->wakeAll();
+  }
 
+  //----------------------------------------------------------------------------
+  void IPCServer::InteractionHandler::updateRegion(
+    SlotType::XRayPopup::HoverRect& popup )
+  {
+    updateTileMap( popup.tile_map.lock(),
+                   static_cast<QWsSocket*>(popup.client_socket),
+                   popup.source_region,
+                   -1 );
+  }
+
+  //----------------------------------------------------------------------------
+  bool IPCServer::InteractionHandler::updateTileMap(
+    const HierarchicTileMapPtr& tile_map,
+    QWsSocket* socket,
+    const Rect& src,
+    int zoom )
+  {
     bool sent = false;
-    MapRect rect = tile_map->requestRect(src, popup.hover_region.zoom);
+    float scale = 1/tile_map->getLayerScale(zoom);
+    MapRect rect = tile_map->requestRect(src, zoom);
     rect.foreachTile([&](Tile& tile, size_t x, size_t y)
     {
       if( tile.type == Tile::NONE )
@@ -1539,7 +1484,7 @@ namespace LinksRouting
           //[&](const TileRequests::value_type& tile_req)
           {
             return (tile_req.second.tile_map.lock() == tile_map)
-                && (tile_req.second.zoom == popup.hover_region.zoom)
+                && (tile_req.second.zoom == zoom)
                 && (tile_req.second.x == x)
                 && (tile_req.second.y == y);
           }
@@ -1556,14 +1501,16 @@ namespace LinksRouting
 
         TileRequest tile_req = {
           tile_map,
-          popup.hover_region.zoom,
+          zoom,
           x, y,
           clock::now()
         };
         uint8_t req_id = ++_tile_request_id;
         _tile_requests[req_id] = tile_req;
 
-        client_info.first->write(QString(
+        std::cout << "request tile " << src.toString(true) << std::endl;
+
+        socket->write(QString(
         "{"
           "\"task\": \"GET\","
           "\"id\": \"preview-tile\","
@@ -1578,9 +1525,7 @@ namespace LinksRouting
         sent = true;
       }
     });
-
-    if( !sent )
-      _server->_cond_data_ready->wakeAll();
+    return sent;
   }
 
 } // namespace LinksRouting

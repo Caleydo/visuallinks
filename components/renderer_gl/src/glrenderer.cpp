@@ -199,6 +199,9 @@ namespace LinksRouting
   {
     _slot_links = slots.create<SlotType::Image>("/rendered-links");
     _slot_links->_data->type = SlotType::Image::OpenGLTexture;
+
+    _slot_xray = slots.create<SlotType::Image>("/rendered-xray");
+    _slot_xray->_data->type = SlotType::Image::OpenGLTexture;
   }
 
   //----------------------------------------------------------------------------
@@ -208,6 +211,8 @@ namespace LinksRouting
       slot_subscriber.getSlot<LinkDescription::LinkList>("/links");
     _subscribe_popups =
       slot_subscriber.getSlot<SlotType::TextPopup>("/popups");
+    _subscribe_xray =
+      slot_subscriber.getSlot<SlotType::XRayPopup>("/xray");
   }
 
   //----------------------------------------------------------------------------
@@ -234,6 +239,9 @@ namespace LinksRouting
 
     _links_fbo.init(vp[2], vp[3], GL_RGBA8, 2, false, GL_NEAREST);
     *_slot_links->_data = SlotType::Image(vp[2], vp[3], _links_fbo.colorBuffers.at(0));
+
+    _xray_fbo.init(vp[2], vp[3], GL_RGBA8, 1, false, GL_NEAREST);
+    *_slot_xray->_data = SlotType::Image(vp[2], vp[3], _xray_fbo.colorBuffers.at(0));
 
     _blur_x_shader = _shader_manager.loadfromFile(0, "blurX.glsl");
     _blur_y_shader = _shader_manager.loadfromFile(0, "blurY.glsl");
@@ -299,75 +307,11 @@ namespace LinksRouting
                   & scroll = popup.hover_region.scroll_region;
 
         HierarchicTileMapPtr tile_map = popup.hover_region.tile_map.lock();
-        if( tile_map )
-        {
-          MapRect rect = tile_map->requestRect(src, popup.hover_region.zoom);
-          float2 rect_size = rect.getSize();
-          MapRect::QuadList quads = rect.getQuads();
-          for(auto quad = quads.begin(); quad != quads.end(); ++quad)
-          {
-            if( quad->first->type == Tile::ImageRGBA8 )
-            {
-              std::cout << "load tile to GPU (" << quad->first->width
-                                         << "x" << quad->first->height
-                                         << ")" << std::endl;
-              GLuint tex_id;
-              glGenTextures(1, &tex_id);
-              glBindTexture(GL_TEXTURE_2D, tex_id);
-
-              glTexParameterf( GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR );
-              glTexParameterf( GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR );
-              glTexParameterf( GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP );
-              glTexParameterf( GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP );
-              glPixelStorei(GL_UNPACK_ALIGNMENT, 4);
-
-              glTexImage2D(
-                GL_TEXTURE_2D,
-                0,
-                GL_RGBA,
-                quad->first->width,
-                quad->first->height,
-                0,
-                GL_RGBA,
-                GL_UNSIGNED_BYTE,
-                quad->first->pdata
-              );
-
-              delete[] quad->first->pdata;
-              quad->first->id = tex_id;
-              quad->first->type = Tile::OpenGLTexture;
-            }
-
-            if( quad->first->type != Tile::OpenGLTexture )
-              continue;
-
-            glEnable(GL_TEXTURE_2D);
-            glBindTexture(GL_TEXTURE_2D, quad->first->id);
-
-            float offset_x = 0;
-            if( !popup.auto_resize && hover.size.x > rect_size.x )
-              offset_x = (hover.size.x - rect_size.x) / 2;
-
-            glPushMatrix();
-            glTranslatef( popup.hover_region.region.pos.x + offset_x,
-                          popup.hover_region.region.pos.y,
-                          0 );
-
-            glColor4f(1,1,1,1);
-            glBegin(GL_QUADS);
-            for(size_t i = 0; i < quad->second._coords.size(); ++i)
-            {
-              glTexCoord2fv(quad->second._tex_coords[i].ptr());
-              glVertex2fv(quad->second._coords[i].ptr());
-            }
-            glEnd();
-
-            glPopMatrix();
-
-            glDisable(GL_TEXTURE_2D);
-            glBindTexture(GL_TEXTURE_2D, 0);
-          }
-        }
+        renderTileMap( tile_map,
+                       src,
+                       hover,
+                       popup.hover_region.zoom,
+                       popup.auto_resize );
 
         // ---------
         // Scrollbar
@@ -459,8 +403,35 @@ namespace LinksRouting
     glColor4f(1,1,1,1);
 
     blur(_links_fbo);
-
     _slot_links->setValid(true);
+
+    // Now the xray previews
+    _slot_xray->setValid(false);
+    _xray_fbo.bind();
+
+    glClearColor(0,0,0,0);
+    glClear(GL_COLOR_BUFFER_BIT);
+
+    for(auto const& preview: _subscribe_xray->_data->popups)
+    {
+      if( !preview.node->get<bool>("hover") )
+        continue;
+
+      HierarchicTileMapPtr tile_map = preview.tile_map.lock();
+      if( !tile_map )
+      {
+        LOG_WARN("Preview tile_map expired!");
+        continue;
+      }
+
+//      renderRect( preview.preview_region );
+      renderTileMap( preview.tile_map.lock(),
+                     preview.source_region,
+                     preview.preview_region );
+    }
+
+    _xray_fbo.unbind();
+    _slot_xray->setValid(true);
   }
 
   //----------------------------------------------------------------------------
@@ -666,7 +637,7 @@ namespace LinksRouting
           const Rect rp = parseRect( (*node)->get<std::string>("covered-preview-region") );
           renderRect(rp, 2.f, 0, 0.07 * _color_cur, 2 * _color_cur);
           const Rect r = parseRect( (*node)->get<std::string>("covered-region") );
-          renderRect(r, 3.f, 0, 0.5 * _color_cur, 2 * _color_cur);
+          renderRect(r, 3.f, 0, 0.2 * _color_cur, 2 * _color_cur);
           rendered_anything = true;
         }
         continue;
@@ -758,6 +729,87 @@ namespace LinksRouting
     return true;
   }
 
+  //----------------------------------------------------------------------------
+  bool GlRenderer::renderTileMap( const HierarchicTileMapPtr& tile_map,
+                                  const Rect& src_region,
+                                  const Rect& target_region,
+                                  size_t zoom,
+                                  bool auto_center )
+  {
+    if( !tile_map )
+      return false;
+
+    MapRect rect = tile_map->requestRect(src_region, zoom);
+    float2 rect_size = rect.getSize();
+    MapRect::QuadList quads = rect.getQuads();
+    for(auto quad = quads.begin(); quad != quads.end(); ++quad)
+    {
+      if( quad->first->type == Tile::ImageRGBA8 )
+      {
+        std::cout << "load tile to GPU (" << quad->first->width
+                                   << "x" << quad->first->height
+                                   << ")" << std::endl;
+        GLuint tex_id;
+        glGenTextures(1, &tex_id);
+        glBindTexture(GL_TEXTURE_2D, tex_id);
+
+        glTexParameterf( GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR );
+        glTexParameterf( GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR );
+        glTexParameterf( GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP );
+        glTexParameterf( GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP );
+        glPixelStorei(GL_UNPACK_ALIGNMENT, 4);
+
+        glTexImage2D(
+          GL_TEXTURE_2D,
+          0,
+          GL_RGBA,
+          quad->first->width,
+          quad->first->height,
+          0,
+          GL_RGBA,
+          GL_UNSIGNED_BYTE,
+          quad->first->pdata
+        );
+
+        delete[] quad->first->pdata;
+        quad->first->id = tex_id;
+        quad->first->type = Tile::OpenGLTexture;
+      }
+
+      if( quad->first->type != Tile::OpenGLTexture )
+        continue;
+
+      glEnable(GL_TEXTURE_2D);
+      glBindTexture(GL_TEXTURE_2D, quad->first->id);
+
+      float offset_x = 0;
+      if( !auto_center && target_region.size.x > rect_size.x )
+        offset_x = (target_region.size.x - rect_size.x) / 2;
+
+      glPushMatrix();
+      glTranslatef( target_region.pos.x + offset_x,
+                    target_region.pos.y,
+                    0 );
+
+      glColor4f(1,1,1,1);
+      glBegin(GL_QUADS);
+      for(size_t i = 0; i < quad->second._coords.size(); ++i)
+      {
+        glTexCoord2fv(quad->second._tex_coords[i].ptr());
+        glVertex2fv(quad->second._coords[i].ptr());
+      }
+      glEnd();
+
+      glPopMatrix();
+
+      glDisable(GL_TEXTURE_2D);
+      glBindTexture(GL_TEXTURE_2D, 0);
+    }
+
+    return true;
+  }
+
+  //----------------------------------------------------------------------------
   float2 GlRenderer::glVertex2f(float x, float y)
   {
 #if 1

@@ -100,8 +100,8 @@ namespace qtfullscreensystem
       QPixmap _screenshot;
 
       // TODO make readonly
-      LinksRouting::slot_t<LinksRouting::SlotType::Image>::type _subscribe_links;
-      LinksRouting::slot_t<LinksRouting::SlotType::XRayPopup>::type _subscribe_xray;
+      LinksRouting::slot_t<LinksRouting::SlotType::Image>::type _subscribe_links,
+                                                                _subscribe_xray_fbo;
       LinksRouting::slot_t<LinksRouting::SlotType::Image>::type _subscribe_costmap;
       LinksRouting::slot_t<LinksRouting::LinkDescription::LinkList>::type _subscribe_routed_links;
 

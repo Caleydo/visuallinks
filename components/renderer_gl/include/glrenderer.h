@@ -51,13 +51,16 @@ namespace LinksRouting
 
       /** Subscribe to the routed links */
       slot_t<LinkDescription::LinkList>::type _subscribe_links;
-      slot_t<LinksRouting::SlotType::TextPopup>::type _subscribe_popups;
+      slot_t<SlotType::TextPopup>::type _subscribe_popups;
+      slot_t<SlotType::XRayPopup>::type _subscribe_xray;
 
       /** Publish the links rendered to fbo */
-      slot_t<SlotType::Image>::type _slot_links;
+      slot_t<SlotType::Image>::type _slot_links,
+                                    _slot_xray;
 
       /** Frame buffer object where links get rendered to */
-      gl::FBO   _links_fbo;
+      gl::FBO   _links_fbo,
+                _xray_fbo;
 
       cwc::glShaderManager  _shader_manager;
       cwc::glShader*        _blur_x_shader;
@@ -83,6 +86,11 @@ namespace LinksRouting
                        GLuint tex = 0,
                        const Color& fill = Color(1, 1, 1, 1),
                        const Color& border = Color(0.3, 0.3, 0.3, 0.8) );
+      bool renderTileMap( const HierarchicTileMapPtr& tile_map,
+                          const Rect& src_region,
+                          const Rect& target_region,
+                          size_t zoom = -1,
+                          bool auto_center = false );
 
       float2 glVertex2f(float x, float y);
   };

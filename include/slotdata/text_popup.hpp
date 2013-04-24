@@ -68,10 +68,18 @@ namespace SlotType
   {
     struct HoverRect
     {
-      Rect region, preview_region;
+      /** Region to check for mouse over */
+      Rect region,
+
+      /** Region to show preview within */
+           preview_region,
+
+      /** Source region within document/scrollable region */
+           source_region;
+
       LinkDescription::Node* node;
-      QImage* img;
-      float2 pos;
+      HierarchicTileMapWeakPtr tile_map;
+      void* client_socket;
     };
 
     typedef std::list<HoverRect> Popups;

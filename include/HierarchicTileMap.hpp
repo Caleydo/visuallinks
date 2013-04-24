@@ -72,7 +72,8 @@ class HierarchicTileMap
                        unsigned int tile_width,
                        unsigned int tile_height );
     
-    MapRect requestRect(const Rect& rect, size_t zoom);
+    MapRect requestRect( const Rect& rect,
+                         size_t zoom = -1 );
 
     void setTileData( size_t x, size_t y, size_t zoom,
                       const char* data,

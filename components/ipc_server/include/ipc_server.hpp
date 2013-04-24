@@ -80,7 +80,9 @@ namespace LinksRouting
 
       typedef SlotType::XRayPopup::Popups::iterator XRayIterator;
 
-      XRayIterator addCoveredPreview( const LinkDescription::NodePtr& node,
+      XRayIterator addCoveredPreview( const ClientInfo& client_info,
+                                      const LinkDescription::NodePtr& node,
+                                      const HierarchicTileMapWeakPtr& tile_map,
                                       const QRect& viewport,
                                       const QRect& scroll_region,
                                       bool extend = false );
@@ -107,6 +109,8 @@ namespace LinksRouting
 
       void regionsChanged(const WindowRegions& regions);
       ClientInfos::iterator findClientInfo(WId wid);
+      QWsSocket* getSocketByWId(WId wid);
+
       bool updateHedge( const WindowRegions& regions,
                         LinkDescription::HyperEdge* hedge );
       bool updateCenter(LinkDescription::HyperEdge* hedge);
@@ -192,6 +196,13 @@ namespace LinksRouting
                            SlotType::TextPopup::Popup& popup,
                            float2 center = float2(-9999, -9999),
                            float2 rel_pos = float2() );
+        void updateRegion( SlotType::XRayPopup::HoverRect& popup );
+
+        protected:
+          bool updateTileMap( const HierarchicTileMapPtr& tile_map,
+                              QWsSocket* socket,
+                              const Rect& rect,
+                              int zoom );
       } _interaction_handler;
   };
 
