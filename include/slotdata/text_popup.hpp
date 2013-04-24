@@ -68,6 +68,8 @@ namespace SlotType
   {
     struct HoverRect
     {
+      std::string link_id;
+
       /** Region to check for mouse over */
       Rect region,
 

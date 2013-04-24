@@ -52,8 +52,6 @@ namespace LinksRouting
       return;
     }
 
-    return;
-
     LinkDescription::LinkList& links = *_subscribe_links->_data;
     for( auto it = links.begin(); it != links.end(); ++it )
     {
@@ -82,54 +80,52 @@ namespace LinksRouting
     std::vector<LinkDescription::NodePtr> nodes;
 
     // add regions
-    for( auto node = hedge->getNodes().begin();
-              node != hedge->getNodes().end();
-            ++node )
+    for( auto& node: hedge->getNodes() )
     {
-      if( (    (*node)->get<bool>("hidden", false)
-           && !(*node)->get<bool>("covered", false)
-          ) || (*node)->getParent() != hedge )
+      if( node->get<bool>("hidden") )
         continue;
+//      if( (    (*node)->get<bool>("hidden", false)
+//           && !(*node)->get<bool>("covered", false)
+//          ) || (*node)->getParent() != hedge )
+//        continue;
 
       // add children (hyperedges)
-      for( auto child = (*node)->getChildren().begin();
-                child != (*node)->getChildren().end();
-              ++child )
+      for( auto& child: node->getChildren() )
       {
         LinkDescription::points_t center(1);
-        center[0] = route(child->get());
-        if( center[0] == float2(0,0) || (*child)->get<bool>("no-parent-route") )
+        center[0] = route(child.get());
+        if( center[0] == float2(0,0) || child->get<bool>("no-parent-route") )
           continue;
 
         fork->position += center[0];
         regions.push_back(center);
-        nodes.push_back(*node);
+        nodes.push_back(node);
       }
 
-      if( (*node)->getVertices().empty() )
+      if( node->getVertices().empty() )
         continue;
 
-      fork->position += (*node)->getCenter();
-      regions.push_back((*node)->getLinkPoints());
-      nodes.push_back(*node);
+      fork->position += node->getCenter();
+      regions.push_back(node->getLinkPoints());
+      nodes.push_back(node);
     }
 
     if( !regions.empty() )
       fork->position /= regions.size();
 
-    fork->position = hedge->getCenter();
+    //fork->position = hedge->getCenter();
 
-    if( hedge->getParent() )
-    {
-      auto p = hedge->getParent()->getParent();
-      if( p )
-      {
-        if( fork->position == float2(0,0) )
-          fork->position = p->getCenter();
-        else
-          fork->position = 0.5 * (fork->position + p->getCenter());
-      }
-    }
+//    if( hedge->getParent() )
+//    {
+//      auto p = hedge->getParent()->getParent();
+//      if( p )
+//      {
+//        if( fork->position == float2(0,0) )
+//          fork->position = p->getCenter();
+//        else
+//          fork->position = 0.5 * (fork->position + p->getCenter());
+//      }
+//    }
 
     //copy routes to hyperedge
     for(size_t i = 0; i < regions.size(); ++i )

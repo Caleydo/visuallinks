@@ -135,9 +135,6 @@ namespace LinkDescription
             const PropertyMap& props = PropertyMap() );
       explicit Node(HyperEdgePtr hedge);
 
-      ~Node();
-      void callExitCallbacks();
-
       points_t& getVertices();
       const points_t& getVertices() const;
 
@@ -160,8 +157,6 @@ namespace LinkDescription
       void addChild(const HyperEdgePtr& hedge);
       void clearChildren();
 
-      void addExitCallback(const ExitCallback& cb);
-
     private:
 
       points_t _points;
@@ -169,9 +164,6 @@ namespace LinkDescription
       points_t _link_points_children;
       HyperEdge* _parent;
       hedges_t _children;
-
-      typedef std::vector<ExitCallback> ExitCallbacks;
-      ExitCallbacks _exit_callbacks;
   };
 
   typedef std::shared_ptr<Node> NodePtr;

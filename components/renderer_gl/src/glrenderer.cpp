@@ -38,7 +38,7 @@ namespace LinksRouting
     out.push_back(*p0);
 
     for(; p2 != end; ++p0, ++p1, ++p2)
-      out.push_back(f_other*(*p0 + *p2) + f_this*(*p1));
+      out.push_back(f_other * (*p0 + *p2) + f_this * (*p1));
 
     out.push_back(*p1);
   }
@@ -527,17 +527,18 @@ namespace LinksRouting
         else
           glColor4fv(_color_cur);
 
+        if( pass > 0 )
+        {
+          // First pass is used by xray previews which are given in absolute
+          // coordinates.
+          float2 offset = hedge->get<float2>("screen-offset");
+          glPushMatrix();
+          glTranslatef(offset.x, offset.y, 0);
+        }
+
         auto fork = hedge->getHyperEdgeDescription();
         if( !fork )
         {
-          if( pass > 0 )
-          {
-            // First pass is used by xray previews which are given in absolute
-            // coordinates.
-            float2 offset = hedge->get<float2>("screen-offset");
-            glPushMatrix();
-            glTranslatef(offset.x, offset.y, 0);
-          }
           if( renderNodes( hedge->getNodes(),
                            3.f,
                            &hedges_open,
@@ -545,55 +546,56 @@ namespace LinksRouting
                            false,
                            pass ) )
             rendered_anything = true;
-          if( pass > 0 )
-          {
-            glPopMatrix();
-          }
-          continue;
         }
-
-        for( auto segment = fork->outgoing.begin();
-             segment != fork->outgoing.end();
-             ++segment )
-        {
-          if( pass == 1 && !segment->trail.empty() && segment->trail.front().x >= 0 && segment->trail.front().y >= 24 )
+        else
+          for( auto& segment: fork->outgoing )
           {
-            // Draw path
-            std::vector<float2> points;
-            points.reserve(segment->trail.size() + 1);
-            points.push_back(fork->position);
-            points.insert(points.end(), segment->trail.begin(), segment->trail.end());
-//            std::cout << "path: " << points << ", " << fork->position << std::endl;
-            //points = smooth(points, 0.4, 10);
-            float widen_size = 0.f;
-            if( segment->nodes.back()->getChildren().empty() )
+            if(     pass == 1
+                && !segment.trail.empty()
+                /*&& segment.trail.front().x >= 0
+                && segment.trail.front().y >= 24*/ )
             {
-              if( !segment->nodes.back()->get<std::string>("virtual-outside").empty() )
-                widen_size = 13;
-              else
-                widen_size = 55;
+              // Draw path
+              std::vector<float2> points;
+              points.reserve(segment.trail.size() + 1);
+              points.push_back(fork->position);
+              points.insert(points.end(), segment.trail.begin(), segment.trail.end());
+  //            std::cout << "path: " << points << ", " << fork->position << std::endl;
+              //points = smooth(points, 0.4, 10);
+              float widen_size = 0.f;
+              if( segment.nodes.back()->getChildren().empty() )
+              {
+                if( !segment.nodes.back()->get<std::string>("virtual-outside").empty() )
+                  widen_size = 13;
+                else
+                  widen_size = 55;
+              }
+              line_borders_t region = calcLineBorders(points, 3, false, widen_size);
+              glBegin(GL_TRIANGLE_STRIP);
+              for( auto first = std::begin(region.first),
+                        second = std::begin(region.second);
+                   first != std::end(region.first);
+                   ++first,
+                   ++second )
+              {
+                glVertex2f(first->x, first->y);
+                glVertex2f(second->x, second->y);
+              }
+              glEnd();
             }
-            line_borders_t region = calcLineBorders(points, 3, false, widen_size);
-            glBegin(GL_TRIANGLE_STRIP);
-            for( auto first = std::begin(region.first),
-                      second = std::begin(region.second);
-                 first != std::end(region.first);
-                 ++first,
-                 ++second )
-            {
-              glVertex2f(first->x, first->y);
-              glVertex2f(second->x, second->y);
-            }
-            glEnd();
+
+            if( renderNodes( segment.nodes,
+                             3.f,
+                             &hedges_open,
+                             &hedges_done,
+                             false,
+                             pass ) )
+              rendered_anything = true;
           }
 
-          if( renderNodes( segment->nodes,
-                           3.f,
-                           &hedges_open,
-                           &hedges_done,
-                           false,
-                           pass ) )
-            rendered_anything = true;
+        if( pass > 0 )
+        {
+          glPopMatrix();
         }
 
         hedges_done.insert(hedge);

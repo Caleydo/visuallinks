@@ -80,12 +80,15 @@ namespace LinksRouting
 
       typedef SlotType::XRayPopup::Popups::iterator XRayIterator;
 
-      XRayIterator addCoveredPreview( const ClientInfo& client_info,
+      XRayIterator addCoveredPreview( const std::string& link_id,
+                                      const ClientInfo& client_info,
                                       const LinkDescription::NodePtr& node,
                                       const HierarchicTileMapWeakPtr& tile_map,
                                       const QRect& viewport,
                                       const QRect& scroll_region,
                                       bool extend = false );
+      void removeCoveredPreview(const XRayIterator& preview);
+      void removeCoveredPreviews(const std::list<XRayIterator>& previews);
 
     private slots:
 

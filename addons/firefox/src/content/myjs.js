@@ -146,6 +146,40 @@ window.addEventListener("load", function window_load()
       appcontent.addEventListener("DOMContentLoaded", onPageLoad, true);
 });
 
+/**
+ * https://github.com/danro/jquery-easing/blob/master/jquery.easing.js
+ *
+ * @param t current time
+ * @param b begInnIng value
+ * @param c change In value
+ * @param d duration
+ */
+function easeInOutQuint(t, b, c, d)
+{
+  if ((t/=d/2) < 1) return c/2*t*t*t*t*t + b;
+  return c/2*((t-=2)*t*t*t*t + 2) + b;
+}
+
+/**
+ *
+ */
+function smoothScrollTo(y_target)
+{
+  var x_cur = content.scrollX;
+  var y_cur = content.scrollY;
+  var delta = y_target - y_cur;
+  var duration = Math.max(400, Math.min(Math.abs(delta), 1500));
+  for( var t = 0; t <= duration; t += 50 )
+  {
+    if( t + 49 > duration )
+      t = duration;
+
+    var y = easeInOutQuint(t, y_cur, delta, duration);
+    setTimeout("content.scrollTo("+x_cur+","+y+")", t);
+  }
+}
+
+
 //------------------------------------------------------------------------------
 function onVisLinkButton()
 {
@@ -479,7 +513,7 @@ function register()
         else if( msg.task == 'SET' )
         {
           if( msg.id == 'scroll-y' )
-            content.scrollTo(content.scrollX, msg.val);
+            smoothScrollTo(msg.val);
         }
         else
           alert(event.data);

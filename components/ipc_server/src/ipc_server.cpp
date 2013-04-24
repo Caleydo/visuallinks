@@ -202,7 +202,8 @@ namespace LinksRouting
 
   //----------------------------------------------------------------------------
   IPCServer::XRayIterator
-  IPCServer::addCoveredPreview( const ClientInfo& client_info,
+  IPCServer::addCoveredPreview( const std::string& link_id,
+                                const ClientInfo& client_info,
                                 const LinkDescription::NodePtr& node,
                                 const HierarchicTileMapWeakPtr& tile_map,
                                 const QRect& viewport,
@@ -228,6 +229,7 @@ namespace LinksRouting
       bb.expand(*vert);
 
     SlotType::XRayPopup::HoverRect xray = {
+      link_id,
       bb,
       preview_region,
       source_region,
@@ -237,12 +239,21 @@ namespace LinksRouting
     };
 
     auto& previews = _slot_xray->_data->popups;
-    auto preview_it = previews.insert(previews.end(), xray);
-    node->addExitCallback([&previews, preview_it]()
-    {
-      previews.erase(preview_it);
-    });
-    return preview_it;
+    return previews.insert(previews.end(), xray);
+  }
+
+  //----------------------------------------------------------------------------
+  void IPCServer::removeCoveredPreview(const XRayIterator& preview)
+  {
+    _slot_xray->_data->popups.erase(preview);
+  }
+
+  //----------------------------------------------------------------------------
+  void IPCServer::removeCoveredPreviews(const std::list<XRayIterator>& previews)
+  {
+    auto& popups = _slot_xray->_data->popups;
+    for(auto const& it: previews)
+      popups.erase(it);
   }
 
   //----------------------------------------------------------------------------
@@ -282,24 +293,29 @@ namespace LinksRouting
       JSONParser msg(data);
 
       QString task = msg.getValue<QString>("task");
-      if( task == "REGISTER" || task == "RESIZE" )
-      {
-        const WindowRegions& windows = _window_monitor.getWindows();
-        client_info.viewport = msg.getValue<QRect>("viewport");
 
-        if( task == "REGISTER" )
-        {
-          const WId wid = windows.windowIdAt(msg.getValue<QPoint>("pos"));
-          client_info.setWindowId(wid);
-        }
-        client_info.update(windows);
-        return;
-      }
-      else if( task == "SCROLL" )
       {
-        client_info.setScrollPos( msg.getValue<QPoint>("pos") );
-        client_info.update(_window_monitor.getWindows());
-        return _cond_data_ready->wakeAll();;
+        QMutexLocker lock_links(_mutex_slot_links);
+
+        if( task == "REGISTER" || task == "RESIZE" )
+        {
+          const WindowRegions& windows = _window_monitor.getWindows();
+          client_info.viewport = msg.getValue<QRect>("viewport");
+
+          if( task == "REGISTER" )
+          {
+            const WId wid = windows.windowIdAt(msg.getValue<QPoint>("pos"));
+            client_info.setWindowId(wid);
+          }
+          client_info.update(windows);
+          return;
+        }
+        else if( task == "SCROLL" )
+        {
+          client_info.setScrollPos( msg.getValue<QPoint>("pos") );
+          client_info.update(_window_monitor.getWindows());
+          return _cond_data_ready->wakeAll();;
+        }
       }
 
       QString id = msg.getValue<QString>("id").trimmed().toLower(),
@@ -1124,6 +1140,8 @@ namespace LinksRouting
   //----------------------------------------------------------------------------
   void IPCServer::onClick(int x, int y)
   {
+    QMutexLocker lock_links(_mutex_slot_links);
+
     bool changed = false;
     for(auto& popup: _subscribe_popups->_data->popups)
     {
@@ -1226,17 +1244,23 @@ namespace LinksRouting
   //----------------------------------------------------------------------------
   void IPCServer::onMouseMove(int x, int y)
   {
+    QMutexLocker lock_links(_mutex_slot_links);
+
     bool changed = false;
+    bool popup_visible = false;
     for(auto& popup: _subscribe_popups->_data->popups)
     {
       if( !popup.client_socket )
         continue;
 
-      if(    popup.region.contains(x, y)
-          || (  popup.hover_region.visible
-             && popup.hover_region.contains(x,y)
+      if(    !popup_visible // Only one popup/preview at the same time
+          && (  popup.region.contains(x, y)
+             || (  popup.hover_region.visible
+                && popup.hover_region.contains(x,y)
+                )
              ) )
       {
+        popup_visible = true;
         if( popup.hover_region.visible )
           continue;
 
@@ -1264,7 +1288,8 @@ namespace LinksRouting
       bool hover = preview.node->get<bool>("hover");
       float2 offset = preview.node->getParent()->get<float2>("screen-offset");
 
-      if( preview.region.contains(float2(x, y) - offset) )
+      if(   !popup_visible // Only one popup/preview at the same time
+          && preview.region.contains(float2(x, y) - offset) )
       {
         if( hover )
           continue;
@@ -1288,6 +1313,8 @@ namespace LinksRouting
   //----------------------------------------------------------------------------
   void IPCServer::onScrollWheel(int delta, const float2& pos, uint32_t mod)
   {
+    QMutexLocker lock_links(_mutex_slot_links);
+
     float preview_aspect = _preview_width
                          / static_cast<float>(_preview_height);
 
@@ -1345,6 +1372,8 @@ namespace LinksRouting
   //----------------------------------------------------------------------------
   void IPCServer::onDrag(const float2& delta)
   {
+    QMutexLocker lock_links(_mutex_slot_links);
+
     float preview_aspect = _preview_width
                          / static_cast<float>(_preview_height);
 
@@ -1468,6 +1497,12 @@ namespace LinksRouting
     const Rect& src,
     int zoom )
   {
+    if( !tile_map )
+    {
+      LOG_WARN("Tilemap has expired!");
+      return false;
+    }
+
     bool sent = false;
     float scale = 1/tile_map->getLayerScale(zoom);
     MapRect rect = tile_map->requestRect(src, zoom);

@@ -211,6 +211,18 @@ namespace LinksRouting
       else
         ++popup;
     }
+
+    for( auto preview = _xray_previews.begin();
+              preview != _xray_previews.end(); )
+    {
+      if( (*preview)->link_id == id )
+      {
+        _ipc_server->removeCoveredPreview( *preview );
+        preview = _xray_previews.erase(preview);
+      }
+      else
+        ++preview;
+    }
   }
 
   //----------------------------------------------------------------------------
@@ -315,6 +327,8 @@ namespace LinksRouting
   {
     _ipc_server->removePopups(_popups);
     _popups.clear();
+    _ipc_server->removeCoveredPreviews(_xray_previews);
+    _xray_previews.clear();
 
     if( true ) //_dirty & WINDOW )
     {
@@ -364,6 +378,7 @@ namespace LinksRouting
       for(auto& hedge: node->getChildren())
       {
         LinkDescription::nodes_t changed_nodes;
+        const std::string& link_id = hedge->get<std::string>("link-id");
 
         /*
          * Check for regions scrolled away and not visualized by any see-
@@ -472,22 +487,23 @@ namespace LinksRouting
             }
           }
 
-          // Remove existing xray previews
-          (*region)->callExitCallbacks();
-
           // and check for new ones
           if(   (*region)->get<bool>("covered")
              || (  (*region)->get<bool>("outside")
                 && (*region)->get<bool>("on-screen")) )
           {
-            _ipc_server->addCoveredPreview
+            _xray_previews.push_back
             (
-              *this,
-              *region,
-              tile_map_uncompressed,
-              getViewportAbs(),
-              getScrollRegionAbs(),
-              (*region)->get<bool>("outside")
+              _ipc_server->addCoveredPreview
+              (
+                link_id,
+                *this,
+                *region,
+                tile_map_uncompressed,
+                getViewportAbs(),
+                getScrollRegionAbs(),
+                (*region)->get<bool>("outside")
+              )
             );
           }
 
@@ -543,7 +559,7 @@ namespace LinksRouting
                        out.normal,
                        std::to_string(static_cast<unsigned long long>(out.num_outside)),
                        hedge->getNodes(),
-                       node->getParent()->get<std::string>("link-id") );
+                       link_id );
         }
       }
 
@@ -578,9 +594,6 @@ namespace LinksRouting
     modified |= node.set("covered", covered);
     modified |= node.set("outside", outside);
     modified |= node.set("hidden", hidden);
-
-    if( modified && !covered )
-      node.callExitCallbacks();
 
     return modified;
   }
@@ -701,7 +714,7 @@ namespace LinksRouting
     tile_map->partitions_dest = partitions_dest;
 
     for(auto& popup: _popups)
-          popup->hover_region.tile_map = tile_map;
+      popup->hover_region.tile_map = tile_map;
 
     const unsigned int TILE_SIZE = 512;
     tile_map_uncompressed =
@@ -713,6 +726,9 @@ namespace LinksRouting
       .push_back(float2(0, scroll_region.height()));
     tile_map_uncompressed->partitions_dest =
       tile_map_uncompressed->partitions_src;
+
+    for(auto& preview: _xray_previews)
+      preview->tile_map = tile_map_uncompressed;
   }
 
 } // namespace LinksRouting

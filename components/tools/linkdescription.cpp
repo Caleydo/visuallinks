@@ -72,20 +72,6 @@ namespace LinkDescription
   }
 
   //----------------------------------------------------------------------------
-  Node::~Node()
-  {
-    callExitCallbacks();
-  }
-
-  //----------------------------------------------------------------------------
-  void Node::callExitCallbacks()
-  {
-    for(auto& cb: _exit_callbacks)
-      cb();
-    _exit_callbacks.clear();
-  }
-
-  //----------------------------------------------------------------------------
   points_t& Node::getVertices()
   {
     return _points;
@@ -210,12 +196,6 @@ namespace LinkDescription
     for(auto& node: _children)
       node->_parent = 0;
     _children.clear();
-  }
-
-  //----------------------------------------------------------------------------
-  void Node::addExitCallback(const ExitCallback& cb)
-  {
-    _exit_callbacks.push_back(cb);
   }
 
   //----------------------------------------------------------------------------
