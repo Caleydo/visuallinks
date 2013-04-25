@@ -115,8 +115,9 @@ function onPageLoad(event)
 {
   var doc = event.originalTarget;
   var loc = doc.defaultView.location;
-  
-  setTimeout("resize();", 500);
+
+  if( socket )
+    setTimeout("resize();", 500);
 
   // Match google desktop search
   if( loc.host != "127.0.0.1:30828" || loc.pathname != "/search" )
