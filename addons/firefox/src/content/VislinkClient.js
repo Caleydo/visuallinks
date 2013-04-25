@@ -49,7 +49,7 @@ function VislinkClient(application_name)
           task: 'REGISTER',
           name: application_name,
           pos: options.pos || [],
-          region: $this.getRegion()
+          viewport: $this.getRegion()
         });/*
         send({
           task: 'GET',

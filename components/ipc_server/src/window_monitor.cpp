@@ -186,10 +186,19 @@ namespace LinksRouting
     {
       for(WindowInfo& winfo: regions)
       {
-        QStringList title_words =
-          winfo.title.split(' ', QString::SkipEmptyParts);
-        if(  !title_words.empty()
-          && launcher.contains(title_words.last(), Qt::CaseInsensitive) )
+        bool match = false;
+        if( winfo.title.contains("Google Maps") )
+        {
+          match = launcher == "Map";
+        }
+        else
+        {
+          QStringList title_words =
+            winfo.title.split(' ', QString::SkipEmptyParts);
+          match = !title_words.empty()
+               && launcher.contains(title_words.last(), Qt::CaseInsensitive);
+        }
+        if( match )
         {
           winfo.region_launcher =
             QRect(9, pos_y, _launcher_size, _launcher_size);

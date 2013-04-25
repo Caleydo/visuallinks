@@ -336,6 +336,11 @@
             });
           }
         };
+        
+                    var Unity = external.getUnityObject(1.0); 
+
+      Unity.init({name: "Map",
+                  iconUrl: "http://maps.gstatic.com/favicon3.ico"});
       }
 
       google.maps.event.addDomListener(window, 'load', initialize);
