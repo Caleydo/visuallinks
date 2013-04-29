@@ -21,6 +21,11 @@ var prefs = Components.classes["@mozilla.org/fuel/application;1"]
                       .getService(Components.interfaces.fuelIApplication)
                       .prefs;
 
+Array.prototype.contains = function(obj)
+{
+  return this.indexOf(obj) > -1;
+};
+
 /**
  * Get value of a preference
  */
@@ -114,13 +119,13 @@ function getScrollRegion()
 function onPageLoad(event)
 {
   var doc = event.originalTarget;
-  var loc = doc.defaultView.location;
+  var loc = doc.defaultView ? doc.defaultView.location : null;
 
   if( socket )
-    setTimeout("resize();", 500);
+    setTimeout("resize();", 250);
 
   // Match google desktop search
-  if( loc.host != "127.0.0.1:30828" || loc.pathname != "/search" )
+  if( !loc || loc.host != "127.0.0.1:30828" || loc.pathname != "/search" )
     return;
 
   alert("search...");
@@ -137,16 +142,61 @@ function onPageLoad(event)
   var myDiv = doc.getElementById("myDiv");
 }
 
+var tab_changed = false;
+var tab_event = 0;
+function onTabChange(e)
+{
+  tab_changed = true;
+  tab_event = e;
+  setTimeout("onTabChangeImpl();", 1);
+}
+
+function onTabChangeImpl()
+{
+  if( !tab_changed )
+    return;
+  tab_changed = false;
+
+  if( content.document.readyState != "complete" )
+    return;
+  
+  onPageLoad(tab_event);
+}
+
+function onLoad(e)
+{
+  if(    e.originalTarget.defaultView.frameElement
+      || e.originalTarget != content.document )
+    // Ignore frame and background tab load events
+    return;
+
+  tab_changed = false;
+  onPageLoad(e);
+}
+
+function onUnload(e)
+{
+  if(    e.originalTarget.defaultView.frameElement
+      || e.originalTarget != content.document )
+    // Ignore frame and background tab unload events
+    return;
+
+  tab_changed = true;
+  tab_event = e;
+  setTimeout("onTabChangeImpl();", 1);
+}
+
 /**
  * Load window hook
  */
 window.addEventListener("load", function window_load()
 {
+  gBrowser.addEventListener("load", onLoad, true);
+  gBrowser.addEventListener("beforeunload", onUnload, true);
   //gBrowser.addTab("http://127.0.0.1:30828/search?flags=8&num=10&q=america&start=0&s=yksDNyehVZo2SvO2BRHGoLhH26k");
 
-  var appcontent = document.getElementById("appcontent");
-  if( appcontent )
-      appcontent.addEventListener("DOMContentLoaded", onPageLoad, true);
+  var container = gBrowser.tabContainer;
+  container.addEventListener("TabSelect", onTabChange, false);
 });
 
 /**
@@ -552,8 +602,30 @@ function handleTileRequest()
 //------------------------------------------------------------------------------
 function attrModified(e)
 {
-  if( e.attrName == "screenX" || e.attrName == "screenY" )
-    windowChanged();
+  if( e.attrName.lastIndexOf('treestyletab', 0) === 0 )
+    return;
+  if( [ 'actiontype', 'afterselected', 'align',
+        'beforeselected', 'busy', 'buttonover',
+        'class', 'collapsed', 'crop', 'curpos',
+        'dir', 'disabled',
+        'fadein', 'feed', 'focused', 'forwarddisabled',
+        'hidden',
+        'ignorefocus', 'image', 'inactive',
+        'label', 'last-tab', 'level', 'linkedpanel',
+        'maxpos', 'maxwidth', 'minwidth',
+        'nomatch',
+        'ordinal',
+        'pageincrement', 'parentfocused', 'pending', 'previoustype', 'progress',
+        'src',
+        'selected', 'style',
+        'text', 'title', 'tooltiptext', 'type',
+        'url',
+        'value',
+        'width' ].contains(e.attrName.trim()) )
+    return;
+  alert("'" + e.attrName + "': " + e.prevValue + " -> " + e.newValue + " " + content.document.readyState);
+/*  if( e.attrName == "screenX" || e.attrName == "screenY" )
+    windowChanged();*/
 }
 
 //------------------------------------------------------------------------------

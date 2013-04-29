@@ -54,7 +54,7 @@ void Layer::init( size_t num_tiles_x,
 //------------------------------------------------------------------------------
 Tile& Layer::getTile(size_t x, size_t y)
 {
-  return _tiles[x][y];
+  return _tiles.at(x).at(y);
 }
 
 //------------------------------------------------------------------------------
@@ -81,9 +81,6 @@ MapRect::QuadList MapRect::getQuads() const
                     float(min_y - y * tile_height) / tile.height ),
            tex_max( float(max_x - x * tile_width) / tile.width,
                     float(max_y - y * tile_height) / tile.height );
-                    
-//    std::cout << float2(min_x, min_y) << " => " << float2(max_x, max_y)
-//              << ", tex: " << tex_min << " => " << tex_max << std::endl;
 
     size_t left = min_x - min[0],
            top = min_y - min[1],
@@ -193,8 +190,6 @@ void HierarchicTileMap::setTileData( size_t x, size_t y, size_t zoom,
   memcpy(tile.pdata, data, data_size);
 
   tile.type = Tile::ImageRGBA8;
-
-  std::cout << "update tile #" << zoom << " (" << x << "|" << y << ")" << std::endl;
 }
 
 //------------------------------------------------------------------------------

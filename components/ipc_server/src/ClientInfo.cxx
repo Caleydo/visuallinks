@@ -48,6 +48,7 @@ namespace LinksRouting
       // accessible
       scroll_region = QRect(QPoint(0,0), viewport.size());
 
+    preview_size = scroll_region.size();
     _dirty |= SCROLL_POS | SCROLL_SIZE;
   }
 
@@ -77,7 +78,14 @@ namespace LinksRouting
     _dirty |= REGIONS;
 
     if( !json.hasChild("regions") )
-      return std::make_shared<LinkDescription::Node>();
+    {
+      if( node )
+        node->getChildren().front()->getNodes().clear();
+      else
+        node = std::make_shared<LinkDescription::Node>();
+
+      return node;
+    }
 
     float2 top_left = getViewportAbs().topLeft(),
            scroll_offset = scroll_region.topLeft();
@@ -722,7 +730,10 @@ namespace LinksRouting
     tile_map->partitions_dest = partitions_dest;
 
     for(auto& popup: _popups)
+    {
       popup->hover_region.tile_map = tile_map;
+      popup->hover_region.scroll_region.size = preview_size;
+    }
 
     const unsigned int TILE_SIZE = 512;
     tile_map_uncompressed =
