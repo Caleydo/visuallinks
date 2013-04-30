@@ -3,6 +3,12 @@
 
 #include <limits>
 
+#ifdef _WIN32
+typedef HWND WId;
+#else
+typedef unsigned long WId;
+#endif
+
 namespace LinksRouting
 {
 
@@ -255,8 +261,8 @@ namespace LinksRouting
       if( node->getVertices().empty() )
         continue;
 
-      if(    !node->get<bool>("outside")
-          && !node->get<bool>("covered") )
+      if(    !node->get<bool>("hidden")
+          /*&& !node->get<bool>("covered")*/ )
       {
         center += node->getCenter();
         num_visible += 1;
@@ -321,55 +327,77 @@ namespace LinksRouting
       nodes.push_back(node);
     }
 
-    //copy routes to hyperedge
+    // Map window id to the regions they cover
+    std::map<WId, std::vector<size_t>> region_covers;
     for(size_t i = 0; i < regions.size(); ++i )
     {
-      auto &reg = regions[i];
-      float2 min_vert;
-      float min_dist = std::numeric_limits<float>::max();
+      WId covering_wid = nodes[i]->get<bool>("covered")
+                       ? nodes[i]->get<WId>("covering-wid")
+                       : 0;
 
-      for( auto p = reg.begin(); p != reg.end(); ++p )
+      region_covers[ covering_wid ].push_back(i);
+    }
+
+    // Create route for each group of regions covered by the same window
+    for(auto& group: region_covers)
+    {
+      assert( !group.second.empty() );
+      float2 center;
+      for(size_t node_id: group.second)
+        center += nodes[ node_id ]->getCenter();
+      center /= group.second.size();
+      // TODO bias to hedge center
+
+      for(size_t node_id: group.second)
       {
-        float dist = (*p - fork->position).length();
-        if( dist < min_dist )
+        auto &reg = regions[ node_id ];
+        float2 min_vert;
+        float min_dist = std::numeric_limits<float>::max();
+
+        for( auto p = reg.begin(); p != reg.end(); ++p )
         {
-          min_vert = *p;
-          min_dist = dist;
+          float dist = (*p - center).length();
+          if( dist < min_dist )
+          {
+            min_vert = *p;
+            min_dist = dist;
+          }
         }
-      }
 
-      bool outside = nodes[i]->get<bool>("outside"),
-           covered = nodes[i]->get<bool>("covered");
+        auto& node = nodes[ node_id ];
+        bool outside = node->get<bool>("outside"),
+             covered = node->get<bool>("covered");
 
-      LinkDescription::HyperEdgeDescriptionSegment segment;
-      //segment.parent = fork;
-      segment.trail.push_back(fork->position);
+        LinkDescription::HyperEdgeDescriptionSegment segment;
+        //segment.parent = fork;
+        segment.trail.push_back(center);
 
-      if( outside || covered )
-      {
-        Rect cover_reg = nodes[i]->get<Rect>("covered-region") - offset,
-             covering_reg = nodes[i]->get<Rect>("covering-region") - offset;
-        auto icon = outside
-                  ? getInsideIntersect(fork->position, min_vert, cover_reg)
-                  : getVisibleIntersect(fork->position, min_vert, covering_reg);
-        segment.trail.push_back( icon->getLinkPoints().front() );
-        segment.nodes.push_back(icon);
-        segment.set("widen-end", false);
+        if( outside || covered )
+        {
+          Rect cover_reg = node->get<Rect>("covered-region") - offset,
+               covering_reg = node->get<Rect>("covering-region") - offset;
+          auto icon = outside
+                    ? getInsideIntersect(fork->position, min_vert, cover_reg)
+                    : getVisibleIntersect(fork->position, min_vert, covering_reg);
+          segment.trail.push_back( icon->getLinkPoints().front() );
+          segment.nodes.push_back(icon);
+          segment.set("widen-end", false);
+
+          fork->outgoing.push_back(segment);
+
+          segment.trail.clear();
+          segment.nodes.clear();
+
+          segment.trail.push_back(icon->getLinkPointsChildren().front());
+
+          segment.set("covered", true);
+        }
+
+        segment.trail.push_back(min_vert);
+        segment.nodes.push_back(node);
 
         fork->outgoing.push_back(segment);
-
-        segment.trail.clear();
-        segment.nodes.clear();
-
-        segment.trail.push_back(icon->getLinkPointsChildren().front());
-
-        segment.set("covered", true);
       }
-
-      segment.trail.push_back(min_vert);
-      segment.nodes.push_back(nodes[i]);
-
-      fork->outgoing.push_back(segment);
     }
   }
 

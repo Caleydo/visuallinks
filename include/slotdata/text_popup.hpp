@@ -79,7 +79,7 @@ namespace SlotType
       /** Source region within document/scrollable region */
            source_region;
 
-      LinkDescription::Node* node;
+      LinkDescription::NodePtr node;
       HierarchicTileMapWeakPtr tile_map;
       void* client_socket;
     };

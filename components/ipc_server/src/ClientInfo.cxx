@@ -597,8 +597,12 @@ namespace LinksRouting
                       + getScrollRegionAbs().topLeft();
 
     Rect covering_region;
+    WId covering_wid = 0;
     bool onscreen   = desktop.contains(center_rel),
-         covered    = windows.hit(first_above, center_abs, &covering_region),
+         covered    = windows.hit( first_above,
+                                   center_abs,
+                                   &covering_region,
+                                   &covering_wid ),
          outside    = !view.contains(center_rel),
          hidden     =   !onscreen
                     || (!_ipc_server->getOutsideSeeThrough() && outside);
@@ -609,7 +613,10 @@ namespace LinksRouting
     modified |= node.set("hidden", hidden);
 
     if( covered )
-      node.set("covering-region", covering_region);
+    {
+      modified |= node.set("covering-region", covering_region);
+      modified |= node.set("covering-wid", covering_wid);
+    }
 
     return modified;
   }

@@ -233,7 +233,7 @@ namespace LinksRouting
       bb,
       preview_region,
       source_region,
-      node.get(),
+      node,
       tile_map,
       getSocketByWId(client_info.getWindowInfo().id)
     };

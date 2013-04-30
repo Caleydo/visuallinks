@@ -73,7 +73,8 @@ namespace LinksRouting
 
       bool hit( const WindowInfos::const_iterator& first_above,
                 const QPoint& point,
-                Rect* reg = 0 ) const;
+                Rect* reg = 0,
+                WId* wid = 0 ) const;
 
     private:
       const WindowInfos _windows;
