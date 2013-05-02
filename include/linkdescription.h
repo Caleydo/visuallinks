@@ -169,6 +169,7 @@ namespace LinkDescription
 
   typedef std::shared_ptr<Node> NodePtr;
   typedef std::list<NodePtr> nodes_t;
+  typedef std::vector<NodePtr> node_vec_t;
 
   class HyperEdge:
     public PropertyElement

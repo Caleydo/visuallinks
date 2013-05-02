@@ -531,15 +531,17 @@ namespace LinksRouting
         auto fork = hedge->getHyperEdgeDescription();
         if( !fork )
         {
-          if( renderNodes( hedge->getNodes(),
-                           3.f,
-                           &hedges_open,
-                           &hedges_done,
-                           false,
-                           pass ) )
-            rendered_anything = true;
+          rendered_anything |=
+           renderNodes( hedge->getNodes(),
+                        3.f,
+                        &hedges_open,
+                        &hedges_done,
+                        false,
+                        pass );
         }
         else
+        {
+          LinkDescription::nodes_t nodes;
           for( auto& segment: fork->outgoing )
           {
             if(     pass == 1
@@ -576,14 +578,16 @@ namespace LinksRouting
               glEnd();
             }
 
-            if( renderNodes( segment.nodes,
-                             3.f,
-                             &hedges_open,
-                             &hedges_done,
-                             false,
-                             pass ) )
-              rendered_anything = true;
+            // Collect nodes for drawing the after the links to prevent links
+            // crossing regions.
+            nodes.insert( nodes.end(),
+                          segment.nodes.begin(),
+                          segment.nodes.end() );
           }
+
+          rendered_anything |=
+            renderNodes(nodes, 3.f, &hedges_open, &hedges_done, false, pass);
+        }
 
         if( pass > 0 )
         {

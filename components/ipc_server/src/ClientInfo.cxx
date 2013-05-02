@@ -386,6 +386,8 @@ namespace LinksRouting
     // Limit outside indicators to desktop region
     local_view = local_view.intersect(desktop);
 
+    qDebug() << "local_view" << local_view;
+
     for(auto& node: _nodes)
       for(auto& hedge: node->getChildren())
       {
@@ -428,39 +430,21 @@ namespace LinksRouting
           }
 
           LinkDescription::hedges_t& children = (*region)->getChildren();
-          for( auto child = children.begin(); child != children.end(); )
+          for(auto& child: children)
           {
-            if( modified |= updateChildren( **child,
-                                            desktop, local_view,
-                                            windows, first_above ) )
-            {
-              if( (*child)->get<bool>("outside") )
-              {
-                assert( (*child)->getNodes().size() == 1 );
-                LinkDescription::NodePtr outside_node =
-                  (*child)->getNodes().front();
-
-                if( !outside_node->get<bool>("outside") )
-                {
-                  // Remove HyperEdge and move node back after it has moved back
-                  // into the viewport.
-                  changed_nodes.push_back( outside_node );
-                  child = children.erase(child);
-                  continue;
-                }
-              }
-            }
-
-            ++child;
+            modified |= updateChildren( *child,
+                                        desktop, local_view,
+                                        windows, first_above );
           }
 
-          if(    modified |= updateNode( **region,
-                                         desktop, local_view,
-                                         windows, first_above )
-              && !(*region)->getVertices().empty() )
+          modified |= updateNode( **region,
+                                  desktop, local_view,
+                                  windows, first_above );
+
+          if( !(*region)->getVertices().empty() )
           {
-            if(    (*region)->get<bool>("hidden")
-                && (*region)->get<bool>("outside") )
+            if(    /*(*region)->get<bool>("hidden")
+                && */(*region)->get<bool>("outside") )
             {
               float2 center = (*region)->getCenter();
               for(auto& out: outside_scroll)
@@ -477,29 +461,8 @@ namespace LinksRouting
                 break;
               }
             }
-
-            if(    (*region)->get<bool>("on-screen")
-                && (*region)->get<bool>("outside") )
-            {
-#if 0
-              // Insert HyperEdge for outside node to allow for special route
-              // with "tunnel" icon
-              LinkDescription::NodePtr outside_node = *region;
-              region = hedge->removeNode(region);
-
-              auto new_hedge = std::make_shared<LinkDescription::HyperEdge>();
-              new_hedge->set("no-parent-route", true);
-              new_hedge->set("outside", true);
-              new_hedge->addNode(outside_node);
-
-              auto new_node = std::make_shared<LinkDescription::Node>();
-              new_node->addChild(new_hedge);
-              hedge->addNode(new_node);
-#endif
-            }
           }
 
-          // and check for new ones
           if(   (*region)->get<bool>("covered")
              || (  (*region)->get<bool>("outside")
                 && (*region)->get<bool>("on-screen")) )

@@ -169,7 +169,40 @@ namespace LinksRouting
     }
 
     float2 new_center = p_cov + fac * dir;
-    return buildIcon(new_center, normal, triangle);
+    float cx = (p_out.x + p_cov.x) / 2,
+          cy = (p_out.y + p_cov.y) / 2;
+
+    float2 positions[5] = {
+      new_center,
+      float2(cx, reg.t()),
+      float2(cx, reg.b()),
+      float2(reg.l(), cy),
+      float2(reg.r(), cy)
+    };
+
+    float2 normals[5] = {
+      normal,
+      float2(0, -1),
+      float2(0, 1),
+      float2(-1, 0),
+      float2(1, 0)
+    };
+
+    float min_dist = std::numeric_limits<float>::max();
+    int min_index = 0;
+    for(int i = 0; i < 5; ++i)
+    {
+      float dist = (p_out - positions[i]).length()
+                 + (p_cov - positions[i]).length();
+
+      if( dist < min_dist )
+      {
+        min_index = i;
+        min_dist = dist;
+      }
+    }
+
+    return buildIcon(positions[min_index], normals[min_index], triangle);
   }
 
   //----------------------------------------------------------------------------
@@ -237,10 +270,30 @@ namespace LinksRouting
     }
   }
 
+  typedef std::map<WId, std::vector<size_t>> RegionGroups;
+  RegionGroups regionGroupsByCoverWindow(
+    const LinkDescription::node_vec_t& nodes
+  )
+  {
+    // Map window id to the regions they cover
+    RegionGroups region_covers;
+    for(size_t i = 0; i < nodes.size(); ++i )
+    {
+      WId covering_wid = nodes[i]->get<bool>("covered")
+                       ? nodes[i]->get<WId>("covering-wid")
+                       : 0;
+
+      region_covers[ covering_wid ].push_back(i);
+    }
+
+    return region_covers;
+  }
+
   //----------------------------------------------------------------------------
   float2 CPURouting::updateCenter(LinkDescription::HyperEdge* hedge)
   {
     float2 offset = hedge->get<float2>("screen-offset");
+    LinkDescription::node_vec_t nodes;
 
     float2 center;
     size_t num_visible = 0;
@@ -256,23 +309,50 @@ namespace LinksRouting
       {
         center += updateCenter(child.get());
         num_visible += 1;
+        nodes.push_back(node);
       }
 
-      if( node->getVertices().empty() )
-        continue;
+      if( !node->getVertices().empty() )
+        nodes.push_back(node);
+    }
 
-      if(    !node->get<bool>("hidden")
-          /*&& !node->get<bool>("covered")*/ )
+    if( !num_visible )
+    {
+      for(auto const& group: regionGroupsByCoverWindow(nodes))
       {
-        center += node->getCenter();
-        num_visible += 1;
+        bool link_covered = group.first != 0;
+        assert( !group.second.empty() );
+
+        float2 group_center;
+        int weight = link_covered ? 1 : 100;
+
+        size_t group_num_visible = 0;
+        for(size_t node_id: group.second)
+        {
+          auto const& node = nodes[ node_id ];
+          if( !node->get<bool>("outside") )
+          {
+            group_center += node->getCenter();
+            group_num_visible += 1;
+          }
+        }
+
+        if( group_num_visible )
+        {
+          group_center /= group_num_visible;
+
+          center += weight * group_center;
+          num_visible += weight;
+        }
+
+        // TODO bias to hedge center
       }
     }
 
     if( num_visible )
       center /= num_visible;
-
     hedge->setCenter(center);
+
     return center + offset;
   }
 
@@ -284,7 +364,8 @@ namespace LinksRouting
     hedge->setHyperEdgeDescription(fork);
 
     std::vector<LinkDescription::points_t> regions;
-    std::vector<LinkDescription::NodePtr> nodes;
+    LinkDescription::node_vec_t nodes,
+                                outside_nodes;
 
     float2 offset = hedge->get<float2>("screen-offset");
     fork->position = hedge->getCenter();
@@ -323,30 +404,54 @@ namespace LinksRouting
       if( node->getVertices().empty() )
         continue;
 
+      if( !node->get<std::string>("outside-scroll").empty() )
+        outside_nodes.push_back(node);
+
+      if( node->get<bool>("outside") )
+      {
+        Rect cover_reg = node->get<Rect>("covered-region") - offset;
+        //auto icon = getInsideIntersect(fork->position, min_vert, cover_reg);
+#if 0
+//        auto& node = nodes[ group.second.at(0) ];
+        Rect covering_reg = node->get<Rect>("covering-region") - offset;
+
+        segment.trail.push_back( icon->getLinkPoints().front() );
+        segment.nodes.push_back(icon);
+        segment.set("widen-end", false);
+#endif
+      }
+
       regions.push_back(node->getLinkPoints());
       nodes.push_back(node);
     }
 
-    // Map window id to the regions they cover
-    std::map<WId, std::vector<size_t>> region_covers;
-    for(size_t i = 0; i < regions.size(); ++i )
-    {
-      WId covering_wid = nodes[i]->get<bool>("covered")
-                       ? nodes[i]->get<WId>("covering-wid")
-                       : 0;
-
-      region_covers[ covering_wid ].push_back(i);
-    }
-
     // Create route for each group of regions covered by the same window
-    for(auto& group: region_covers)
+    for(auto const& group: regionGroupsByCoverWindow(nodes))
     {
+      bool link_covered = group.first != 0;
+
       assert( !group.second.empty() );
       float2 center;
-      for(size_t node_id: group.second)
-        center += nodes[ node_id ]->getCenter();
-      center /= group.second.size();
-      // TODO bias to hedge center
+
+      if( link_covered )
+      {
+        size_t num_visible = 0;
+        for(size_t node_id: group.second)
+        {
+          auto const& node = nodes[node_id];
+          int weight = node->get<bool>("outside") ? 1 : 100;
+          center += weight * node->getCenter();
+          num_visible += weight;
+        }
+
+        if( num_visible )
+          center /= num_visible;
+        // TODO bias to hedge center
+      }
+      else
+      {
+        center = fork->position;
+      }
 
       for(size_t node_id: group.second)
       {
@@ -365,36 +470,61 @@ namespace LinksRouting
         }
 
         auto& node = nodes[ node_id ];
-        bool outside = node->get<bool>("outside"),
-             covered = node->get<bool>("covered");
-
         LinkDescription::HyperEdgeDescriptionSegment segment;
-        //segment.parent = fork;
-        segment.trail.push_back(center);
+        segment.nodes.push_back(node);
 
-        if( outside || covered )
+        if( node->get<bool>("outside") )
         {
-          Rect cover_reg = node->get<Rect>("covered-region") - offset,
-               covering_reg = node->get<Rect>("covering-region") - offset;
-          auto icon = outside
-                    ? getInsideIntersect(fork->position, min_vert, cover_reg)
-                    : getVisibleIntersect(fork->position, min_vert, covering_reg);
-          segment.trail.push_back( icon->getLinkPoints().front() );
-          segment.nodes.push_back(icon);
-          segment.set("widen-end", false);
+          float2 min_vert;
+          float2 node_center = node->getCenter();
+          float min_dist = std::numeric_limits<float>::max();
 
-          fork->outgoing.push_back(segment);
+          for(auto const& out: outside_nodes)
+          {
+            const float2 pos = out->getLinkPointsChildren().front();
+            float dist = (pos - node_center).length();
+            if( dist < min_dist )
+            {
+              min_vert = pos;
+              min_dist = dist;
+            }
+          }
 
-          segment.trail.clear();
-          segment.nodes.clear();
-
-          segment.trail.push_back(icon->getLinkPointsChildren().front());
-
+          segment.trail.push_back(min_vert);
           segment.set("covered", true);
+        }
+        else
+        {
+          segment.trail.push_back(center);
+          segment.set("covered", link_covered);
         }
 
         segment.trail.push_back(min_vert);
-        segment.nodes.push_back(node);
+        fork->outgoing.push_back(segment);
+      }
+
+      // Connect to visible links
+      if( link_covered )
+      {
+        auto& node = nodes[ group.second.at(0) ];
+        Rect covering_reg = node->get<Rect>("covering-region") - offset;
+        auto icon = getVisibleIntersect(fork->position, center, covering_reg);
+
+        LinkDescription::HyperEdgeDescriptionSegment segment;
+        segment.nodes.push_back(icon);
+        segment.trail.push_back(center);
+        segment.trail.push_back( icon->getLinkPointsChildren().front() );
+        segment.set("covered", true);
+        segment.set("widen-end", false);
+
+        fork->outgoing.push_back(segment);
+
+        segment.trail.clear();
+        segment.nodes.clear();
+
+        segment.trail.push_back(icon->getLinkPoints().front());
+        segment.trail.push_back(fork->position);
+        segment.set("covered", false);
 
         fork->outgoing.push_back(segment);
       }
