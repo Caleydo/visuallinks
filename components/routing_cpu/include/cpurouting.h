@@ -33,7 +33,8 @@ namespace LinksRouting
 
       slot_t<LinkDescription::LinkList>::type _subscribe_links;
 
-      float2 updateCenter(LinkDescription::HyperEdge* hedge);
+      bool updateCenter( LinkDescription::HyperEdge* hedge,
+                         float2* center = nullptr );
       void route(LinkDescription::HyperEdge* hedge);
 
   };

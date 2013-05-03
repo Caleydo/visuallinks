@@ -9,6 +9,24 @@ typedef HWND WId;
 typedef unsigned long WId;
 #endif
 
+template<typename T>
+void clamp(T& val, T min, T max)
+{
+  val = std::max(min, std::min(val, max));
+}
+
+/**
+ * Same as clamp but automatically detect which of the limits is min and max.
+ */
+template<typename T>
+void autoClamp(T& val, T l1, T l2)
+{
+  if( l1 < l2 )
+    clamp(val, l1, l2);
+  else
+    clamp(val, l2, l1);
+}
+
 namespace LinksRouting
 {
 
@@ -202,7 +220,16 @@ namespace LinksRouting
       }
     }
 
-    return buildIcon(positions[min_index], normals[min_index], triangle);
+    float2 min_pos = positions[min_index],
+           min_norm = normals[min_index];
+
+    // Prevent non optimal routes if direct route is shorter than midpoint route
+    if( min_norm.y != 0 )
+      autoClamp(min_pos.x, p_out.x, p_cov.x);
+    else
+      autoClamp(min_pos.y, p_out.y, p_cov.y);
+
+    return buildIcon(min_pos, min_norm, triangle);
   }
 
   //----------------------------------------------------------------------------
@@ -290,7 +317,8 @@ namespace LinksRouting
   }
 
   //----------------------------------------------------------------------------
-  float2 CPURouting::updateCenter(LinkDescription::HyperEdge* hedge)
+  bool CPURouting::updateCenter( LinkDescription::HyperEdge* hedge,
+                                 float2* center_out )
   {
     float2 offset = hedge->get<float2>("screen-offset");
     LinkDescription::node_vec_t nodes;
@@ -307,8 +335,12 @@ namespace LinksRouting
       // add children (hyperedges)
       for( auto& child: node->getChildren() )
       {
-        center += updateCenter(child.get());
-        num_visible += 1;
+        float2 child_center;
+        if( updateCenter(child.get(), &child_center) )
+        {
+          center += child_center;
+          num_visible += 1;
+        }
         nodes.push_back(node);
       }
 
@@ -353,7 +385,9 @@ namespace LinksRouting
       center /= num_visible;
     hedge->setCenter(center);
 
-    return center + offset;
+    if( center_out )
+      *center_out = center + offset;
+    return num_visible > 0;
   }
 
   //----------------------------------------------------------------------------
@@ -362,27 +396,12 @@ namespace LinksRouting
     auto fork =
       std::make_shared<LinkDescription::HyperEdgeDescriptionForkation>();
     hedge->setHyperEdgeDescription(fork);
+    fork->position = hedge->getCenter();
 
     std::vector<LinkDescription::points_t> regions;
     LinkDescription::node_vec_t nodes,
                                 outside_nodes;
-
     float2 offset = hedge->get<float2>("screen-offset");
-    fork->position = hedge->getCenter();
-
-    if( hedge->getParent() )
-    {
-      auto p = hedge->getParent()->getParent();
-      if( p )
-      {
-        if( fork->position == float2(0,0) )
-          fork->position = p->getCenter() - offset;
-        else
-          fork->position = 0.5 * (fork->position + p->getCenter() - offset);
-
-        hedge->setCenter(fork->position);
-      }
-    }
 
     // add regions
     for( auto& node: hedge->getNodes() )
@@ -426,7 +445,27 @@ namespace LinksRouting
     }
 
     // Create route for each group of regions covered by the same window
-    for(auto const& group: regionGroupsByCoverWindow(nodes))
+    RegionGroups region_groups = regionGroupsByCoverWindow(nodes);
+
+    if( hedge->getParent() )
+    {
+      auto p = hedge->getParent()->getParent();
+      if( p )
+      {
+        if(    fork->position == float2(0,0)
+               // If there is only one group of regions we do not need to
+               // connect them to the window center but can instead directly
+               // connect it to the global center
+            || region_groups.size() == 1 )
+          fork->position = p->getCenter() - offset;
+        else
+          fork->position = 0.5 * (fork->position + p->getCenter() - offset);
+
+        hedge->setCenter(fork->position);
+      }
+    }
+
+    for(auto const& group: region_groups)
     {
       bool link_covered = group.first != 0;
 
