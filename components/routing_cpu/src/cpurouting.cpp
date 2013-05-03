@@ -393,6 +393,7 @@ namespace LinksRouting
   //----------------------------------------------------------------------------
   void CPURouting::route(LinkDescription::HyperEdge* hedge)
   {
+    typedef LinkDescription::HyperEdgeDescriptionSegment segment_t;
     auto fork =
       std::make_shared<LinkDescription::HyperEdgeDescriptionForkation>();
     hedge->setHyperEdgeDescription(fork);
@@ -472,6 +473,23 @@ namespace LinksRouting
       assert( !group.second.empty() );
       float2 center;
 
+      struct cmp_by_angle
+      {
+        bool operator()(segment_t const *lhs, segment_t const *rhs) const
+        {
+          return getAngle(lhs) < getAngle(rhs);
+        }
+
+        float getAngle(segment_t const *s) const
+        {
+          assert(s);
+          const float2 dir = s->trail.at(1) - s->trail.at(0);
+          return std::atan2(dir.y, dir.x);
+        }
+      };
+      // TODO use iterator instead of pointer
+      std::set<segment_t*, cmp_by_angle> group_segments;
+
       if( link_covered )
       {
         size_t num_visible = 0;
@@ -509,7 +527,7 @@ namespace LinksRouting
         }
 
         auto& node = nodes[ node_id ];
-        LinkDescription::HyperEdgeDescriptionSegment segment;
+        segment_t segment;
         segment.nodes.push_back(node);
 
         if( node->get<bool>("outside") )
@@ -549,7 +567,7 @@ namespace LinksRouting
         Rect covering_reg = node->get<Rect>("covering-region") - offset;
         auto icon = getVisibleIntersect(fork->position, center, covering_reg);
 
-        LinkDescription::HyperEdgeDescriptionSegment segment;
+        segment_t segment;
         segment.nodes.push_back(icon);
         segment.trail.push_back(center);
         segment.trail.push_back( icon->getLinkPointsChildren().front() );
