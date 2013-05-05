@@ -2,6 +2,7 @@
 #include "log.hpp"
 
 #include <limits>
+#include <set>
 
 #ifdef _WIN32
 typedef HWND WId;
@@ -473,22 +474,22 @@ namespace LinksRouting
       assert( !group.second.empty() );
       float2 center;
 
+      typedef decltype(fork->outgoing.begin()) segment_iterator;
       struct cmp_by_angle
       {
-        bool operator()(segment_t const *lhs, segment_t const *rhs) const
+        bool operator()( segment_iterator const& lhs,
+                         segment_iterator const& rhs ) const
         {
           return getAngle(lhs) < getAngle(rhs);
         }
 
-        float getAngle(segment_t const *s) const
+        static float getAngle( segment_iterator const& s)
         {
-          assert(s);
           const float2 dir = s->trail.at(1) - s->trail.at(0);
           return std::atan2(dir.y, dir.x);
         }
       };
-      // TODO use iterator instead of pointer
-      std::set<segment_t*, cmp_by_angle> group_segments;
+      std::set<segment_iterator, cmp_by_angle> group_segments;
 
       if( link_covered )
       {
@@ -557,9 +558,67 @@ namespace LinksRouting
         }
 
         segment.trail.push_back(min_vert);
-        fork->outgoing.push_back(segment);
+        group_segments.insert(
+          fork->outgoing.insert(fork->outgoing.end(), segment)
+        );
       }
 
+#if 1
+      auto getLength = []( float2 const& center,
+                           float2 const& bundle_point,
+                           float2 const& p1,
+                           float2 const& p2 )
+      {
+        return (p2 - bundle_point).length()
+             + (p1 - bundle_point).length()
+             + (bundle_point - center).length();
+      };
+
+      auto normalizePi = [](float rad)
+      {
+        while(rad < 0)
+          rad += M_PI;
+        while(rad > M_PI)
+          rad -= M_PI;
+        return rad;
+      };
+
+      auto s1 = group_segments.begin(),
+           s2 = ++group_segments.begin();
+      for(; s2 != group_segments.end(); ++s1, ++s2)
+      {
+        if( normalizePi( cmp_by_angle::getAngle(*s2)
+                       - cmp_by_angle::getAngle(*s1) ) > M_PI / 2 )
+          continue;
+
+        float2 const& p1 = (*s1)->trail.at(1),
+                      p2 = (*s2)->trail.at(1),
+                      center = (*s2)->trail.at(0);
+        float2 const dir = (p1 + p2 - 2 * center).normalize();
+        float2 bundle_point = center;
+
+        float cur_cost = -1,
+              prev_cost = -1;
+        const float2 STEP = 3 * dir;
+        for(;;)
+        {
+          prev_cost = cur_cost;
+          cur_cost = getLength(center, bundle_point, p1, p2);
+
+          if( prev_cost < 0 || cur_cost <= prev_cost )
+            bundle_point += STEP;
+          else if( prev_cost > 0 )
+            break;
+        }
+
+        // Revert last step which lead to worse result
+        bundle_point -= STEP;
+
+        (*s1)->trail.at(0) = bundle_point;
+        (*s2)->trail.at(0) = bundle_point;
+        (*s2)->trail.insert((*s2)->trail.begin(), center);
+      }
+#endif
       // Connect to visible links
       if( link_covered )
       {
