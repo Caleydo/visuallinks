@@ -531,9 +531,10 @@ namespace LinksRouting
         segment_t segment;
         segment.nodes.push_back(node);
 
-        if( node->get<bool>("outside") )
+        bool outside = node->get<bool>("outside");
+        if( outside )
         {
-          float2 min_vert;
+          float2 min_pos;
           float2 node_center = node->getCenter();
           float min_dist = std::numeric_limits<float>::max();
 
@@ -543,27 +544,36 @@ namespace LinksRouting
             float dist = (pos - node_center).length();
             if( dist < min_dist )
             {
-              min_vert = pos;
+              min_pos = pos;
               min_dist = dist;
             }
           }
 
+          segment.trail.push_back(min_pos);
           segment.trail.push_back(min_vert);
           segment.set("covered", true);
+
+          fork->outgoing.push_back(segment);
         }
         else
         {
           segment.trail.push_back(center);
           segment.set("covered", link_covered);
-        }
 
-        segment.trail.push_back(min_vert);
-        group_segments.insert(
-          fork->outgoing.insert(fork->outgoing.end(), segment)
-        );
+          float2 dir = min_vert - segment.trail.front();
+          size_t num_segments = outside ? 1 : dir.length() / 12 + 0.5;
+          float2 sub_dir = dir / num_segments,
+                 norm = sub_dir.normal() / 4;
+          for(size_t i = 0; i < num_segments; ++i)
+            segment.trail.push_back( segment.trail.back() + sub_dir + ((i & 1) ? -1 : 1) * norm );
+
+          group_segments.insert(
+            fork->outgoing.insert(fork->outgoing.end(), segment)
+          );
+        }
       }
 
-#if 1
+#if 0
       auto getLength = []( float2 const& center,
                            float2 const& bundle_point,
                            float2 const& p1,
@@ -591,10 +601,12 @@ namespace LinksRouting
                        - cmp_by_angle::getAngle(*s1) ) > M_PI / 2 )
           continue;
 
-        float2 const& p1 = (*s1)->trail.at(1),
-                      p2 = (*s2)->trail.at(1),
+        float2 const& p1 = (*s1)->trail.back(),
+                      p2 = (*s2)->trail.back(),
                       center = (*s2)->trail.at(0);
-        float2 const dir = (p1 + p2 - 2 * center).normalize();
+        float2 const dir = ( (p1 - center).normalize()
+                           + (p2 - center).normalize()
+                           ).normalize();
         float2 bundle_point = center;
 
         float cur_cost = -1,
