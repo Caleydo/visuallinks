@@ -485,7 +485,7 @@ namespace LinksRouting
 
         static float getAngle( segment_iterator const& s)
         {
-          const float2 dir = s->trail.at(1) - s->trail.at(0);
+          const float2 dir = s->trail.back() - s->trail.front();
           return std::atan2(dir.y, dir.x);
         }
       };
