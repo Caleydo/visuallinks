@@ -565,13 +565,44 @@ namespace LinksRouting
           float2 sub_dir = dir / num_segments,
                  norm = sub_dir.normal() / 4;
           for(size_t i = 0; i < num_segments; ++i)
-            segment.trail.push_back( segment.trail.back() + sub_dir + ((i & 1) ? -1 : 1) * norm );
+            segment.trail.push_back( segment.trail.back() + sub_dir /* + ((i & 1) ? -1 : 1) * norm*/ );
 
           group_segments.insert(
             fork->outgoing.insert(fork->outgoing.end(), segment)
           );
         }
       }
+
+      std::vector<segment_iterator> segments( group_segments.begin(),
+                                              group_segments.end() );
+      for(size_t iter = 0; iter < 1000; ++iter)
+        for(int i = 0; i < static_cast<int>(segments.size()); ++i)
+        {
+          auto& trail = segments[i]->trail;
+          for(size_t j = 1; j < trail.size() - 1; ++j)
+          {
+            float2 force;
+//            force += 2 * ( trail[j - 1] - trail[j]
+//                         + trail[j + 1] - trail[j] );
+            for(int offset = -1; offset <= 1; ++offset)
+            {
+              if( !offset )
+                continue;
+
+              auto const& other_trail = segments[(i + offset) % segments.size()]
+                                                ->trail;
+              if( j >= other_trail.size() )
+                continue;
+
+              float2 dir = other_trail[j] - trail[j];
+              float dist = dir.length();
+              dir /= dist;
+              float fac = dist > 5 ? 1/5. : std::min(1/dist, dist);
+              force += fac * dir;
+            }
+            trail[j] += 0.3 * force;
+          }
+        }
 
 #if 0
       auto getLength = []( float2 const& center,
