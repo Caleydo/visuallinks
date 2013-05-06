@@ -565,7 +565,7 @@ namespace LinksRouting
           float2 sub_dir = dir / num_segments,
                  norm = sub_dir.normal() / 4;
           for(size_t i = 0; i < num_segments; ++i)
-            segment.trail.push_back( segment.trail.back() + sub_dir /* + ((i & 1) ? -1 : 1) * norm*/ );
+            segment.trail.push_back( segment.trail.back() + sub_dir + ((i & 1) ? -1 : 1) * norm );
 
           group_segments.insert(
             fork->outgoing.insert(fork->outgoing.end(), segment)
@@ -573,20 +573,52 @@ namespace LinksRouting
         }
       }
 
+      auto normalizePi = [](float rad)
+      {
+        while(rad < M_PI)
+          rad += 2 * M_PI;
+        while(rad > M_PI)
+          rad -= 2 * M_PI;
+        return rad;
+      };
+
+#if 1
+      // Force-Directed Edge Bundling
+      // Danny Holten and Jarke J. van Wijk
+
       std::vector<segment_iterator> segments( group_segments.begin(),
                                               group_segments.end() );
-      for(size_t iter = 0; iter < 1000; ++iter)
+      std::vector<std::vector<float2>> segment_forces(segments.size());
+
+      for(size_t iter = 0; iter < 250; ++iter)
+      {
+        // Calculate forces
         for(int i = 0; i < static_cast<int>(segments.size()); ++i)
         {
           auto& trail = segments[i]->trail;
+          if( trail.size() < 3 )
+            continue;
+
+          auto& forces = segment_forces[i];
+          if( iter == 0 )
+            forces.resize(trail.size() - 2);
+
           for(size_t j = 1; j < trail.size() - 1; ++j)
           {
-            float2 force;
-//            force += 2 * ( trail[j - 1] - trail[j]
-//                         + trail[j + 1] - trail[j] );
-            for(int offset = -1; offset <= 1; ++offset)
+            float2& force = forces[j - 1];
+            force = 1.5 * (trail[j + 1] + trail[j - 1] - 2 * trail[j]);
+            int max_offset = std::min(4, (static_cast<int>(segments.size()) - 1) / 2);
+            for(int offset = -max_offset; offset <= max_offset; ++offset)
             {
               if( !offset )
+                continue;
+
+              int other_i = (i + offset) % segments.size();
+              float delta_angle =
+                normalizePi( cmp_by_angle::getAngle(segments[i])
+                           - cmp_by_angle::getAngle(segments[other_i]) );
+
+              if( std::abs(delta_angle) > M_PI / 2 )
                 continue;
 
               auto const& other_trail = segments[(i + offset) % segments.size()]
@@ -596,15 +628,23 @@ namespace LinksRouting
 
               float2 dir = other_trail[j] - trail[j];
               float dist = dir.length();
-              dir /= dist;
-              float fac = dist > 5 ? 1/5. : std::min(1/dist, dist);
-              force += fac * dir;
+              force += .5 * std::min(400 / (dist * dist), 1.f) * dir;
             }
-            trail[j] += 0.3 * force;
           }
         }
 
-#if 0
+        // Apply forces
+        for(int i = 0; i < static_cast<int>(segments.size()); ++i)
+        {
+          auto& trail = segments[i]->trail;
+          auto const& forces = segment_forces[i];
+
+          for(size_t j = 1; j < trail.size() - 1; ++j)
+            trail[j] += 0.1 * forces[j - 1];
+        }
+      }
+
+#else
       auto getLength = []( float2 const& center,
                            float2 const& bundle_point,
                            float2 const& p1,
@@ -613,15 +653,6 @@ namespace LinksRouting
         return (p2 - bundle_point).length()
              + (p1 - bundle_point).length()
              + (bundle_point - center).length();
-      };
-
-      auto normalizePi = [](float rad)
-      {
-        while(rad < 0)
-          rad += M_PI;
-        while(rad > M_PI)
-          rad -= M_PI;
-        return rad;
       };
 
       auto s1 = group_segments.begin(),
