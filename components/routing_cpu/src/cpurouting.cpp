@@ -485,7 +485,9 @@ namespace LinksRouting
 
         static float getAngle( segment_iterator const& s)
         {
-          const float2 dir = s->trail.back() - s->trail.front();
+          if( s->trail.size() < 2 )
+            return 0;
+          const float2 dir = s->trail.at(1) - s->trail.at(0);
           return std::atan2(dir.y, dir.x);
         }
       };
@@ -561,11 +563,10 @@ namespace LinksRouting
           segment.set("covered", link_covered);
 
           float2 dir = min_vert - segment.trail.front();
-          size_t num_segments = outside ? 1 : dir.length() / 12 + 0.5;
-          float2 sub_dir = dir / num_segments,
-                 norm = sub_dir.normal() / 4;
+          size_t num_segments = outside ? 1 : dir.length() / 9 + 0.5;
+          float2 sub_dir = dir / num_segments;
           for(size_t i = 0; i < num_segments; ++i)
-            segment.trail.push_back( segment.trail.back() + sub_dir + ((i & 1) ? -1 : 1) * norm );
+            segment.trail.push_back(segment.trail.back() + sub_dir);
 
           group_segments.insert(
             fork->outgoing.insert(fork->outgoing.end(), segment)
@@ -607,8 +608,9 @@ namespace LinksRouting
           {
             float2& force = forces[j - 1];
             force = 1.5 * (trail[j + 1] + trail[j - 1] - 2 * trail[j]);
-            int max_offset = std::min(4, (static_cast<int>(segments.size()) - 1) / 2);
-            for(int offset = -max_offset; offset <= max_offset; ++offset)
+            int min_offset = std::min(4, (static_cast<int>(segments.size()) - 1) / 2),
+                max_offset = std::min(4, static_cast<int>(segments.size()) - 1 - min_offset);
+            for(int offset = -min_offset; offset <= max_offset; ++offset)
             {
               if( !offset )
                 continue;
@@ -628,7 +630,7 @@ namespace LinksRouting
 
               float2 dir = other_trail[j] - trail[j];
               float dist = dir.length();
-              force += .5 * std::min(400 / (dist * dist), 1.f) * dir;
+              force += .5 * std::min(400 / (dist * dist), 2.f) * dir;
             }
           }
         }

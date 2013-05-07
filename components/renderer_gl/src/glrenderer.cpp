@@ -441,7 +441,7 @@ namespace LinksRouting
     _colors.push_back( Color( color[0] / 256.f,
                               color[1] / 256.f,
                               color[2] / 256.f,
-                              0.9f ) );
+                              0.7f ) );
     std::cout << "GlRenderer: Added color (" << val << ")" << std::endl;
 
     return true;

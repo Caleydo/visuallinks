@@ -269,7 +269,7 @@ function getSelectionId()
   else
     txt.reset();
 
-  return selid//.replace( /\s+/g, ' ' )
+  return selid.replace(/\s+/g, ' ')
         .toLowerCase();
 }
 
@@ -716,57 +716,33 @@ function searchDocument(doc, id)
 {
   updateScale();
 
-	var	textnodes =	doc.evaluate("//body//*/text()", doc, null,	XPathResult.ANY_TYPE, null);
-	var	result = new Array();
-	while(node = textnodes.iterateNext()) {
-		var	s =	node.nodeValue;
-		var	i =	s.toLowerCase().indexOf(id);
-		if (i != -1) {
-			result[result.length] =	node.parentNode;
-		}
-	}
-//	  alert("hits: " + result.length);
-
+	var id_regex = id.replace(/[\s-._]+/g, "[\\s-._]+");
 	var	bbs	= new Array();
-	for(var	i=0; i<result.length; i++) {
-		var	r =	result[i];
-		for	(var j=0; j<r.childNodes.length; j++) {
-			currentNode	= r.childNodes[j];
-			sourceString = currentNode.nodeValue;
-			if (sourceString !=	null) {
-				var	idx	= sourceString.toLowerCase().indexOf(id);
-				while (idx >= 0) {
-					var	s1 = sourceString.substring(0, idx);
-					var	s2 = sourceString.substring(idx, idx + id.length);
-					var	s3 = sourceString.substr(idx + id.length);
-					
-					var	d2 = doc.createElement("SPAN");
-					d2.style.outline = "2px	solid red";
-					var	t2 = doc.createTextNode(s2);
-					d2.appendChild(t2);
-					var	t3 = doc.createTextNode(s3);
-					
-					currentNode.nodeValue =	s1;
-					var	nextSib	= currentNode.nextSibling
-					if (nextSib	== null) {
-						r.appendChild(d2);
-						r.appendChild(t3);
-					} else {
-						r.insertBefore(d2, nextSib);
-						r.insertBefore(t3, nextSib);
-					}
-					
-					var	bb = findBoundingBox(doc, d2);
-					if (bb != null)	{
-						bbs[bbs.length]	= bb;
-					}
-					
-					r.removeChild(t3);
-					r.removeChild(d2);
-					currentNode.nodeValue =	sourceString;
-					
-					var	idx	= sourceString.toLowerCase().indexOf(id, id.length + idx);
-				};
+	var	textnodes =	doc.evaluate("//body//*/text()", doc, null,	XPathResult.ANY_TYPE, null);
+	while(node = textnodes.iterateNext())
+	{
+		var	s =	node.nodeValue;
+
+    var reg = new RegExp(id_regex, "ig");
+		var m;
+		while( (m = reg.exec(s)) !== null )
+		{
+			var range = document.createRange();
+			range.setStart(node, m.index);
+			range.setEnd(node, m.index + m[0].length);
+
+			var rects = range.getClientRects();
+			for(var i = 0; i < rects.length; ++i)
+			{
+				var bb = rects[i];
+				if( bb.width > 2 && bb.height > 2 )
+		    {
+		      var l = offset[0] + scale * (bb.left - 1);
+		      var r = offset[0] + scale * (bb.right + 1);
+		      var t = offset[1] + scale * (bb.top - 1);
+		      var b = offset[1] + scale * (bb.bottom);
+					bbs[bbs.length] = [[l, t], [r, t], [r, b], [l, b]];
+		    }
 			}
 		}
 	}

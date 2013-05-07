@@ -1210,7 +1210,13 @@ namespace LinksRouting
 
         QWsSocket* client_socket = static_cast<QWsSocket*>(popup.client_socket);
         ClientInfos::iterator client = _clients.find(client_socket);
-        assert(client != _clients.end());
+
+        if( client == _clients.end() )
+        {
+          LOG_WARN("Popup without valid client_socket");
+          popup.client_socket = 0;
+          continue;
+        }
 
         _interaction_handler.updateRegion(*client, popup);
       }
