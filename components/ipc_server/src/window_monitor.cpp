@@ -173,7 +173,7 @@ namespace LinksRouting
       // Mark all windows below maximized window as minimized
       for(WindowInfo& winfo: regions)
         if( maximized_wid != winfo.id )
-          winfo.minimized = true;
+          winfo.covered = true;
         else
           break;
     }

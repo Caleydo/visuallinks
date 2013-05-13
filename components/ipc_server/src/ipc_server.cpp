@@ -75,6 +75,8 @@ namespace LinksRouting
   {
     _slot_links = slot_collector.create<LinkDescription::LinkList>("/links");
     _slot_xray = slot_collector.create<SlotType::XRayPopup>("/xray");
+    _slot_outlines =
+      slot_collector.create<SlotType::CoveredOutline>("/covered-outlines");
   }
 
   //----------------------------------------------------------------------------
@@ -254,6 +256,40 @@ namespace LinksRouting
     auto& popups = _slot_xray->_data->popups;
     for(auto const& it: previews)
       popups.erase(it);
+  }
+
+  //----------------------------------------------------------------------------
+  IPCServer::OutlineIterator
+  IPCServer::addOutline(const ClientInfo& client_info)
+  {
+    auto const& winfo = client_info.getWindowInfo();
+    SlotType::CoveredOutline::Outline outline;
+    outline.title = to_string(winfo.title);
+    outline.region_outline.pos = winfo.region.topLeft();
+    outline.region_outline.size = winfo.region.size();
+    outline.region_title.pos = winfo.region.topLeft();
+    outline.region_title.size.x = outline.title.size() * 7;
+    outline.region_title.size.y = 25;
+
+    auto& outlines = _slot_outlines->_data->popups;
+    return outlines.insert(outlines.end(), outline);
+  }
+
+  //----------------------------------------------------------------------------
+  void IPCServer::removeOutline(const OutlineIterator& outline)
+  {
+    _slot_outlines->_data->popups.erase(outline);
+  }
+
+  //----------------------------------------------------------------------------
+  void IPCServer::removeOutlines(const std::list<OutlineIterator>& outlines_it)
+  {
+    auto& outlines = _slot_outlines->_data->popups;
+    for(auto const& it: outlines_it)
+    {
+      removeCoveredPreview(it->preview);
+      outlines.erase(it);
+    }
   }
 
   //----------------------------------------------------------------------------

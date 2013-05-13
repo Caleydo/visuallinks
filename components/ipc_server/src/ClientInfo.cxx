@@ -21,9 +21,15 @@ namespace LinksRouting
     _ipc_server(ipc_server),
     _window_info(wid),
     _minimized_icon(std::make_shared<LinkDescription::Node>()),
+    _covered_outline(std::make_shared<LinkDescription::Node>()),
     _avg_region_height(0)
   {
     _minimized_icon->set("filled", true);
+    _minimized_icon->set("show-in-preview", false);
+    _covered_outline->set("covered", true);
+    _covered_outline->set("outline-only", true);
+    _covered_outline->set("show-in-preview", false);
+    _covered_outline->set("visible", false);
   }
 
   //----------------------------------------------------------------------------
@@ -153,6 +159,7 @@ namespace LinksRouting
 
     auto hedge = std::make_shared<LinkDescription::HyperEdge>(nodes);
     hedge->addNode(_minimized_icon);
+    hedge->addNode(_covered_outline);
     //updateHedge(_window_monitor.getWindows(), hedge.get());
 
     if( !node )
@@ -337,11 +344,40 @@ namespace LinksRouting
     _popups.clear();
     _ipc_server->removeCoveredPreviews(_xray_previews);
     _xray_previews.clear();
+    _ipc_server->removeOutlines(_outlines);
+    _outlines.clear();
 
     if( true ) //_dirty & WINDOW )
     {
       LinkDescription::points_t& icon = _minimized_icon->getVertices();
       icon.clear();
+
+      LinkDescription::points_t& outline = _covered_outline->getVertices();
+      outline.clear();
+
+      if( _window_info.covered )
+      {
+        _outlines.push_back( _ipc_server->addOutline(*this) );
+        QPoint offset = _window_info.minimized
+            ? QPoint()
+            : getScrollRegionAbs().topLeft();
+
+        const Rect reg_title = _outlines.back()->region_title - offset;
+        outline.push_back(reg_title.topLeft());
+        outline.push_back(reg_title.topRight());
+        outline.push_back(reg_title.bottomRight());
+        outline.push_back(reg_title.bottomLeft());
+
+        _outlines.back()->preview = _ipc_server->addCoveredPreview
+        (
+          _nodes.front()->getParent()->get<std::string>("link-id"),
+          *this,
+          _covered_outline,
+          tile_map_uncompressed,
+          getViewportAbs(),
+          getScrollRegionAbs()
+        );
+      }
 
       if( _window_info.minimized )
       {
@@ -386,8 +422,6 @@ namespace LinksRouting
     // Limit outside indicators to desktop region
     local_view = local_view.intersect(desktop);
 
-    qDebug() << "local_view" << local_view;
-
     for(auto& node: _nodes)
       for(auto& hedge: node->getChildren())
       {
@@ -409,15 +443,16 @@ namespace LinksRouting
         for( auto region = hedge->getNodes().begin();
                   region != hedge->getNodes().end(); )
         {
-          if( *region == _minimized_icon )
+          if(    *region == _minimized_icon
+              || *region == _covered_outline )
           {
             ++region;
             continue;
           }
 
-          modified |= (*region)->set("hidden", _window_info.minimized);
+          modified |= (*region)->set("hidden", _window_info.minimized || _window_info.covered);
 
-          if( _window_info.minimized )
+          if( _window_info.minimized  || _window_info.covered )
           {
             ++region;
             continue;
@@ -526,6 +561,7 @@ namespace LinksRouting
           auto new_node = std::make_shared<LinkDescription::Node>(points, link_points);
           new_node->set("outside-scroll", "side[" + std::to_string(static_cast<unsigned long long>(i)) + "]");
           new_node->set("filled", true);
+          new_node->set("show-in-preview", false);
 
           updateNode(*new_node, desktop, local_view, windows, first_above);
           hedge->addNode(new_node);

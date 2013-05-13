@@ -249,6 +249,8 @@ ShaderPtr loadShader( QString vert, QString frag )
 #endif
     _subscribe_routed_links =
       slot_subscriber.getSlot<LinksRouting::LinkDescription::LinkList>("/links");
+    _subscribe_outlines =
+      slot_subscriber.getSlot<LinksRouting::SlotType::CoveredOutline>("/covered-outlines");
   }
 
   //----------------------------------------------------------------------------
@@ -491,6 +493,18 @@ ShaderPtr loadShader( QString vert, QString frag )
           Qt::AlignCenter,
           QString::fromStdString(popup->text)
         );
+    }
+
+    painter.setPen(Qt::white);
+    for( auto const& outline: _subscribe_outlines->_data->popups )
+    {
+      painter.drawText( outline.region_title.pos.x - _window_offset.x() + 5,
+                        outline.region_title.pos.y - outline.region_title.size.y,
+                        outline.region_title.size.x,
+                        outline.region_title.size.y,
+                        Qt::AlignLeft | Qt::AlignVCenter,
+                        QString::fromStdString(outline.title)
+                      );
     }
   }
 

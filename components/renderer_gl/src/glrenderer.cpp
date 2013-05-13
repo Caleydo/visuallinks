@@ -205,6 +205,8 @@ namespace LinksRouting
       slot_subscriber.getSlot<SlotType::TextPopup>("/popups");
     _subscribe_xray =
       slot_subscriber.getSlot<SlotType::XRayPopup>("/xray");
+    _subscribe_outlines =
+      slot_subscriber.getSlot<SlotType::CoveredOutline>("/covered-outlines");
   }
 
   //----------------------------------------------------------------------------
@@ -263,10 +265,28 @@ namespace LinksRouting
     if( _subscribe_links->_data->empty() )
       return _links_fbo.unbind();
 
+    bool rendered_anything = false;
+    if( !_subscribe_outlines->_data->popups.empty() )
+    {
+      rendered_anything = true;
+
+      for( auto const& outline: _subscribe_outlines->_data->popups )
+      {
+        renderRect( outline.region_outline,
+                    2,
+                    0,
+                    Color(0,0,0,0),
+                    0.4 * _colors.front() );
+        renderRect( outline.region_title,
+                    0,
+                    0,
+                    0.6 * _colors.front() );
+      }
+    }
+
     _partitions_src = 0;
     _partitions_dest = 0;
 
-    bool rendered_anything = false;
     for(int pass = 0; pass <= 1; ++pass)
       rendered_anything |= renderLinks(*_subscribe_links->_data, pass);
 
@@ -624,7 +644,8 @@ namespace LinksRouting
           hedges_open->push( child->get() );
       }
 
-      if( (*node)->getVertices().empty() )
+      if(    (*node)->getVertices().empty()
+          || (render_all && !(*node)->get<bool>("show-in-preview", true)) )
         continue;
 
       if( pass == 0 )
@@ -648,7 +669,7 @@ namespace LinksRouting
                       : _color_cur;
 
       bool filled = (*node)->get<bool>("filled", false);
-      if( !filled && !render_all )
+      if( !filled && !render_all && !(*node)->get<bool>("outline-only") )
       {
         Color light = 0.5 * color_cur;
         light.a *= 0.6;
@@ -692,13 +713,16 @@ namespace LinksRouting
     if( b )
     {
       glColor4fv(border);
-      glBegin(GL_QUADS);
+      glBegin(fill.a < 0.5 ? GL_LINE_LOOP : GL_QUADS);
         glVertex2f(rect.pos.x - b,               rect.pos.y - b);
         glVertex2f(rect.pos.x + rect.size.x + b, rect.pos.y - b);
         glVertex2f(rect.pos.x + rect.size.x + b, rect.pos.y + rect.size.y + b);
         glVertex2f(rect.pos.x - b,               rect.pos.y + rect.size.y + b);
       glEnd();
     }
+
+    if( fill.a < 0.05 )
+      return b > 0;
 
     if( tex )
     {

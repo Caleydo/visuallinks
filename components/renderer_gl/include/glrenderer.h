@@ -53,6 +53,7 @@ namespace LinksRouting
       slot_t<LinkDescription::LinkList>::type _subscribe_links;
       slot_t<SlotType::TextPopup>::type _subscribe_popups;
       slot_t<SlotType::XRayPopup>::type _subscribe_xray;
+      slot_t<SlotType::CoveredOutline>::type _subscribe_outlines;
 
       /** Publish the links rendered to fbo */
       slot_t<SlotType::Image>::type _slot_links,

@@ -23,7 +23,8 @@ namespace LinksRouting
   struct WindowInfo
   {
     WId         id;
-    bool        minimized;
+    bool        minimized,
+                covered;
     QRect       region,
                 region_launcher;
     QString     title;
@@ -34,6 +35,7 @@ namespace LinksRouting
                          const QString& title = "" ):
       id(id),
       minimized(minimized),
+      covered(false),
       region(region),
       title(title)
     {}
@@ -44,6 +46,7 @@ namespace LinksRouting
       return id == rhs.id
           && region == rhs.region
           && minimized == rhs.minimized
+          && covered == rhs.covered
           && region_launcher == rhs.region_launcher;
     }
 

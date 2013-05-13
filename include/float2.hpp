@@ -258,6 +258,11 @@ struct Rect
   float t() const { return pos.y; }
   float b() const { return pos.y + size.y; }
 
+  float2 topLeft() const { return pos; }
+  float2 topRight() const { return float2(r(), t()); }
+  float2 bottomLeft() const { return float2(l(), b()); }
+  float2 bottomRight() const { return float2(r(), b()); }
+
   void expand(const float2& p);
   bool contains(float x, float y, float margin = 0.f) const;
   bool contains(const float2& pos, float margin = 0.f) const;

@@ -125,13 +125,18 @@ namespace LinksRouting
       typedef SlotType::XRayPopup::Popups::iterator XRayIterator;
       typedef std::list<XRayIterator> XRayPreviews;
 
+      typedef SlotType::CoveredOutline::List::iterator OutlineIterator;
+      typedef std::list<OutlineIterator> Outlines;
+
       uint32_t                      _dirty;
       IPCServer                    *_ipc_server;
       WindowInfo                    _window_info;
       LinkDescription::nodes_t      _nodes;
-      LinkDescription::NodePtr      _minimized_icon;
+      LinkDescription::NodePtr      _minimized_icon,
+                                    _covered_outline;
       Popups                        _popups;
       XRayPreviews                  _xray_previews;
+      Outlines                      _outlines;
       float                         _avg_region_height;
 
       float2 getPreviewSize() const;

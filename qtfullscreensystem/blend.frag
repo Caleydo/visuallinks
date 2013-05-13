@@ -13,7 +13,7 @@ void main()
 #endif
   vec4 color = vec4(0,0,0,0);
 
-  color = 0.5 * xray_color + link_color;
+  color = 0.75 * xray_color + link_color;
 
 #if !USE_DESKTOP_BLEND
   if( link_color.a >= 0.001 )

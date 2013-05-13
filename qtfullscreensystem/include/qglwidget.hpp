@@ -104,6 +104,7 @@ namespace qtfullscreensystem
                                                                 _subscribe_xray_fbo;
       LinksRouting::slot_t<LinksRouting::SlotType::Image>::type _subscribe_costmap;
       LinksRouting::slot_t<LinksRouting::LinkDescription::LinkList>::type _subscribe_routed_links;
+      LinksRouting::slot_t<LinksRouting::SlotType::CoveredOutline>::type _subscribe_outlines;
 
       /** And now the components */
       LinksRouting::StaticCore      _core;

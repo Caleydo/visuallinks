@@ -88,6 +88,20 @@ namespace SlotType
     Popups popups;
   };
 
+  struct CoveredOutline
+  {
+    struct Outline
+    {
+      std::string   title;
+      Rect          region_title,
+                    region_outline;
+      XRayPopup::Popups::iterator preview;
+    };
+
+    typedef std::list<Outline> List;
+    List popups;
+  };
+
 } // namespace SlotType
 } // namespace LinksRouting
 

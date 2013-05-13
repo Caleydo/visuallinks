@@ -90,6 +90,12 @@ namespace LinksRouting
       void removeCoveredPreview(const XRayIterator& preview);
       void removeCoveredPreviews(const std::list<XRayIterator>& previews);
 
+      typedef SlotType::CoveredOutline::List::iterator OutlineIterator;
+
+      OutlineIterator addOutline(const ClientInfo& client_info);
+      void removeOutline(const OutlineIterator& outline);
+      void removeOutlines(const std::list<OutlineIterator>& outlines);
+
     private slots:
 
       void onClientConnection();
@@ -140,6 +146,7 @@ namespace LinksRouting
 
       /* Outside x-ray popup */
       slot_t<SlotType::XRayPopup>::type _slot_xray;
+      slot_t<SlotType::CoveredOutline>::type _slot_outlines;
 
       /* List of available routing components */
       slot_t<SlotType::ComponentSelection>::type _subscribe_routing;
