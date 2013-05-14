@@ -297,6 +297,12 @@ namespace LinkDescription
   }
 
   //----------------------------------------------------------------------------
+  Node* HyperEdge::getParent()
+  {
+    return _parent;
+  }
+
+  //----------------------------------------------------------------------------
   const Node* HyperEdge::getParent() const
   {
     return _parent;

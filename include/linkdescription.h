@@ -195,6 +195,7 @@ namespace LinkDescription
       void resetNodeParents();
       nodes_t::iterator removeNode(const nodes_t::iterator& node);
 
+      Node* getParent();
       const Node* getParent() const;
 
       void setHyperEdgeDescription(HyperEdgeDescriptionForkationPtr desc);

@@ -1288,6 +1288,8 @@ namespace LinksRouting
         continue;
 
       changed |= preview.node->set("hover", hover);
+      changed |= preview.node->getParent()->getParent()->set("hidden", !hover);
+      changed |= preview.node->getParent()->getParent()->set("hover", hover);
     }
 
     if( changed )

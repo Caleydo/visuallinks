@@ -368,6 +368,9 @@ namespace LinksRouting
         outline.push_back(reg_title.bottomRight());
         outline.push_back(reg_title.bottomLeft());
 
+        for(auto& node: _nodes)
+          node->set("hidden", true);
+
         _outlines.back()->preview = _ipc_server->addCoveredPreview
         (
           _nodes.front()->getParent()->get<std::string>("link-id"),
@@ -450,9 +453,9 @@ namespace LinksRouting
             continue;
           }
 
-          modified |= (*region)->set("hidden", _window_info.minimized || _window_info.covered);
+          modified |= (*region)->set("hidden", _window_info.minimized);// || _window_info.covered);
 
-          if( _window_info.minimized  || _window_info.covered )
+          if( _window_info.minimized )// || _window_info.covered )
           {
             ++region;
             continue;
