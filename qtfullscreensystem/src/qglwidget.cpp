@@ -315,6 +315,9 @@ ShaderPtr loadShader( QString vert, QString frag )
   {
     PROFILE_START()
 
+    QPoint pos = QCursor::pos();
+    _slot_mouse->_data->triggerMove(pos.x(), pos.y());
+
 #ifdef USE_GPU_ROUTING
     if( pass == 0 )
     {

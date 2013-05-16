@@ -1287,6 +1287,8 @@ namespace LinksRouting
       else
         continue;
 
+      std::cout << "hidden = " << !hover << std::endl;
+
       changed |= preview.node->set("hover", hover);
       changed |= preview.node->getParent()->getParent()->set("hidden", !hover);
       changed |= preview.node->getParent()->getParent()->set("hover", hover);

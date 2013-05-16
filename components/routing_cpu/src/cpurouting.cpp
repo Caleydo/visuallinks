@@ -705,6 +705,7 @@ namespace LinksRouting
         segment_t segment;
         segment.nodes.push_back(icon);
         segment.trail.push_back(center);
+#if 0
         segment.trail.push_back( icon->getLinkPointsChildren().front() );
         segment.set("covered", true);
         segment.set("widen-end", false);
@@ -715,6 +716,7 @@ namespace LinksRouting
         segment.nodes.clear();
 
         segment.trail.push_back(icon->getLinkPoints().front());
+#endif
         segment.trail.push_back(fork->position);
         segment.set("covered", false);
 
