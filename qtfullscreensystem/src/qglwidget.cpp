@@ -315,7 +315,7 @@ ShaderPtr loadShader( QString vert, QString frag )
   {
     PROFILE_START()
 
-    QPoint pos = QCursor::pos();
+    QPoint pos = QCursor::pos() - _window_offset;
     _slot_mouse->_data->triggerMove(pos.x(), pos.y());
 
 #ifdef USE_GPU_ROUTING
@@ -367,6 +367,7 @@ ShaderPtr loadShader( QString vert, QString frag )
 #ifndef USE_DESKTOP_BLEND
 	shader_blend->setUniformValue("desktop", 2);
 #endif
+	shader_blend->setUniformValue("mouse_pos", pos);
 
 	glBegin( GL_QUADS );
 

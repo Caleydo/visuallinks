@@ -591,7 +591,7 @@ namespace LinksRouting
                                               group_segments.end() );
       std::vector<std::vector<float2>> segment_forces(segments.size());
 
-      for(size_t iter = 0; iter < 250; ++iter)
+      for(size_t iter = 0; iter < 50; ++iter)
       {
         // Calculate forces
         for(int i = 0; i < static_cast<int>(segments.size()); ++i)
