@@ -30,6 +30,8 @@
 #include <QGLShader>
 #include <QGLPixelBuffer>
 
+#include <QxtGui/QxtGlobalShortcut>
+
 #define LOG_ENTER_FUNC() qDebug() << __FUNCTION__
 
 namespace qtfullscreensystem
@@ -198,6 +200,10 @@ ShaderPtr loadShader( QString vert, QString frag )
     //std::cout << "Is virtual desktop: "
     //          << QApplication::desktop()->isVirtualDesktop()
     //          << std::endl;
+
+    QxtGlobalShortcut* shortcut = new QxtGlobalShortcut(this);
+    connect(shortcut, SIGNAL(activated()), this, SLOT(onGlobalLinkShortcut()));
+    qDebug() << shortcut->setShortcut(QKeySequence("ctrl+|"));
   }
 
   //----------------------------------------------------------------------------
@@ -692,6 +698,12 @@ ShaderPtr loadShader( QString vert, QString frag )
 //      _fbo_desktop->toImage().save( QString("desktop%1.png").arg(counter++) );
 
     _screenshot = QPixmap();
+  }
+
+  //----------------------------------------------------------------------------
+  void GLWidget::onGlobalLinkShortcut()
+  {
+    qDebug() << "link!";
   }
 
 } // namespace qtfullscreensystem

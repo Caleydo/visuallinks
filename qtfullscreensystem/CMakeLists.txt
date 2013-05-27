@@ -1,10 +1,11 @@
 # files
 set( HEADER_FILES
-  include/qglwidget.hpp
+  
 )
 
 set( HEADER_FILES_MOC
   include/application.hpp
+  include/qglwidget.hpp
 )
 
 set( SOURCE_FILES

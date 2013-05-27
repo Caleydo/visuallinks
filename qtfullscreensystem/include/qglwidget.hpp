@@ -30,6 +30,8 @@ namespace qtfullscreensystem
     public LinksRouting::Component,
     public LinksRouting::ComponentArguments
   {
+    Q_OBJECT
+
     public:
 
       GLWidget(int& argc, char *argv[]);
@@ -79,6 +81,10 @@ namespace qtfullscreensystem
       void updateScreenShot( QPoint window_offset,
                              QPoint window_end,
                              QGLPixelBuffer* pbuffer );
+
+    protected slots:
+
+      void onGlobalLinkShortcut();
 
     private:
 
