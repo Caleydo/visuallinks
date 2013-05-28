@@ -5,7 +5,9 @@ uniform sampler2D links;
 #if !USE_DESKTOP_BLEND
   uniform sampler2D desktop;
 #endif
+#if 0
 uniform vec2 mouse_pos;
+#endif
 
 void main()
 {
@@ -27,8 +29,10 @@ void main()
   
   color.a = 1.0;
 #endif
+#if 0
   vec2 tex_size = vec2(textureSize(links, 0));
   float d = length(mouse_pos - gl_TexCoord[0].xy * tex_size);
   color.r *= min(250.0 / d, 1.0);
+#endif
   gl_FragColor = color;
 }
