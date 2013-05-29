@@ -654,9 +654,9 @@ namespace LinksRouting
             && (*node)->get<bool>("hover") )
         {
           const Rect rp = (*node)->get<Rect>("covered-preview-region");
-          renderRect(rp, 2.f, 0, 0.07 * _color_cur, 2 * _color_cur);
+          renderRect(rp, 2.f, 0, 0.05 * _color_cur, 2 * _color_cur);
           const Rect r = (*node)->get<Rect>("covered-region");
-          renderRect(r, 3.f, 0, 0.2 * _color_cur, 2 * _color_cur);
+          renderRect(r, 3.f, 0, 0.15 * _color_cur, 2 * _color_cur);
           rendered_anything = true;
         }
         continue;

@@ -17,13 +17,20 @@ void main()
   vec4 desktop_color = texture2D(desktop, gl_TexCoord[0].xy);
 #endif
   vec4 color = vec4(0,0,0,0);
+  float fac = min(2.0 * link_color.a, 1.0);
 
-  color = 0.75 * xray_color + link_color;
+  if( xray_color.a >= 0.001 )
+  {
+    color = (1.0 - fac) * 0.85 * xray_color
+          + fac * link_color;
+    color.a = max(color.a, link_color.a);
+  }
+  else
+    color = link_color;
 
 #if !USE_DESKTOP_BLEND
   if( link_color.a >= 0.001 )
   {
-    float fac = min(2.0 * link_color.a, 1.0);
     color = fac * link_color + (1.0 - fac) * desktop_color;
   }
   

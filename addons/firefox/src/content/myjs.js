@@ -124,6 +124,9 @@ function onPageLoad(event)
   if( socket )
     setTimeout("resize();", 250);
 
+  content.addEventListener("keydown", onKeyDown, false);
+  content.addEventListener("keyup", onKeyUp, false);
+
   // Match google desktop search
   if( !loc || loc.host != "127.0.0.1:30828" || loc.pathname != "/search" )
     return;
@@ -181,9 +184,33 @@ function onUnload(e)
     // Ignore frame and background tab unload events
     return;
 
+  content.removeEventListener("keydown", onKeyDown, false);
+  content.removeEventListener("keyup", onKeyUp, false);
+
   tab_changed = true;
   tab_event = e;
   setTimeout("onTabChangeImpl();", 1);
+}
+
+var last_ctrl_down = 0;
+function onKeyDown(e)
+{
+  // [Ctrl]
+  if( e.keyCode == 17 )
+    last_ctrl_down = e.timeStamp;
+}
+
+function onKeyUp(e)
+{
+  // [Ctrl]
+  if( e.keyCode == 17 )
+  {
+    if( e.timeStamp - last_ctrl_down > 300 )
+      return;
+
+    if( status == 'active')
+      selectVisLink();
+  }
 }
 
 /**

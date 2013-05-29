@@ -552,26 +552,26 @@ namespace LinksRouting
           }
 
           segment.trail.push_back(min_pos);
-          segment.trail.push_back(min_vert);
+//          segment.trail.push_back(min_vert);
           segment.set("covered", true);
 
-          fork->outgoing.push_back(segment);
+          //fork->outgoing.push_back(segment);
         }
         else
         {
           segment.trail.push_back(center);
           segment.set("covered", link_covered);
-
-          float2 dir = min_vert - segment.trail.front();
-          size_t num_segments = outside ? 1 : dir.length() / 9 + 0.5;
-          float2 sub_dir = dir / num_segments;
-          for(size_t i = 0; i < num_segments; ++i)
-            segment.trail.push_back(segment.trail.back() + sub_dir);
-
-          group_segments.insert(
-            fork->outgoing.insert(fork->outgoing.end(), segment)
-          );
         }
+
+        float2 dir = min_vert - segment.trail.front();
+        size_t num_segments = /*outside ? 1 :*/ dir.length() / 9 + 0.5;
+        float2 sub_dir = dir / num_segments;
+        for(size_t i = 0; i < num_segments; ++i)
+          segment.trail.push_back(segment.trail.back() + sub_dir);
+
+        group_segments.insert(
+          fork->outgoing.insert(fork->outgoing.end(), segment)
+        );
       }
 
       auto normalizePi = [](float rad)
@@ -620,7 +620,11 @@ namespace LinksRouting
                 normalizePi( cmp_by_angle::getAngle(segments[i])
                            - cmp_by_angle::getAngle(segments[other_i]) );
 
-              if( std::abs(delta_angle) > M_PI / 2 )
+              if( std::abs(delta_angle) > 0.7 * M_PI )
+                continue;
+
+              if(    segments[i]->get<bool>("covered")
+                  != segments[other_i]->get<bool>("covered") )
                 continue;
 
               auto const& other_trail = segments[(i + offset) % segments.size()]

@@ -407,8 +407,7 @@ namespace LinksRouting
           float2(1,0),
           std::to_string(_nodes.front()->getChildren().front()->getNodes().size()),
           _nodes.front()->getChildren().front()->getNodes(),
-          _nodes.front()->getParent()->get<std::string>("link-id"),
-          false
+          _nodes.front()->getParent()->get<std::string>("link-id")
         );
       }
     }
@@ -553,7 +552,8 @@ namespace LinksRouting
           }
 
           float2 pos = out.pos;
-          LinkDescription::points_t link_points;
+          LinkDescription::points_t link_points, link_points_children;
+          link_points_children.push_back(pos);
           link_points.push_back(pos += 7 * out.normal);
 
           LinkDescription::points_t points;
@@ -561,7 +561,7 @@ namespace LinksRouting
           points.push_back(pos -= 10 * out.normal + 12 * out.normal.normal());
           points.push_back(pos += 10 * out.normal - 12 * out.normal.normal());
 
-          auto new_node = std::make_shared<LinkDescription::Node>(points, link_points);
+          auto new_node = std::make_shared<LinkDescription::Node>(points, link_points, link_points_children);
           new_node->set("outside-scroll", "side[" + std::to_string(static_cast<unsigned long long>(i)) + "]");
           new_node->set("filled", true);
           new_node->set("show-in-preview", false);

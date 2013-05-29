@@ -1445,9 +1445,21 @@ namespace LinksRouting
           popup_width = std::min(_server->_preview_width, real_width);
 
       Rect& popup_region = popup.hover_region.region;
-      int center_x = popup_region.pos.x + 0.5 * popup_region.size.x;
-      popup_region.size.x = popup_width;
-      popup_region.pos.x = center_x - popup_width / 2;
+      const Rect& icon_region = popup.region.region;
+
+      if(    icon_region.pos.x >= popup_region.pos.x
+          && icon_region.pos.x <= popup_region.pos.x + popup_region.size.x )
+      {
+        int center_x = popup_region.pos.x + 0.5 * popup_region.size.x;
+        popup_region.size.x = popup_width;
+        popup_region.pos.x = center_x - popup_width / 2;
+      }
+      else
+      {
+        if( icon_region.pos.x > popup_region.pos.x )
+          popup_region.pos.x += popup_region.size.x - popup_width;
+        popup_region.size.x = popup_width;
+      }
     }
 
     if( center.x > -9999 && center.y > -9999 )
