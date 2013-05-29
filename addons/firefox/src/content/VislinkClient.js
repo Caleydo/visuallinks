@@ -100,7 +100,7 @@ function VislinkClient(application_name)
     }
     catch(e)
     {
-      alert(e);
+//      alert(e);
 //      throw e;
     }
   }

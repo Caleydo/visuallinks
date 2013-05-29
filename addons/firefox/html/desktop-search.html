@@ -1,0 +1,107 @@
+<html>
+<head>
+  <meta charset="utf-8"/>
+  <style>
+    html, body { margin:0; }
+    iframe { border: none; }
+
+    #vislink
+    {
+      position: absolute;
+      top: 5px;
+      right: 12px;
+      width: 16px;
+      height: 16px;
+      border: 1px solid #999;
+      cursor: pointer;
+      background-image: url("../src/content/icon-16.png");
+    }
+
+    #vislink.active
+    {
+      background-image: url("../src/content/icon-active-16.png");
+    }
+
+    #vislink.error
+    {
+      background-image: url("../src/content/icon-error-16.png");
+    }
+  </style>
+  <script type="text/javascript" src="../src/content/VislinkClient.js"></script>
+  <script>
+    var last_id = "";
+    var last_stamp = 0;
+    var Unity = external.getUnityObject(1.0);
+    Unity.init({ name: "Desktop Search",
+                 iconUrl: "http://localhost:8080/static/recoll.png",
+                 onInit: function(){ Unity.Launcher.clearCount(); } });
+
+    // Listen for recoll in frame to report number of matching documents
+    window.addEventListener("message", function(e)
+    {
+      var cnt = parseInt(e.data);
+      if( cnt > 0 )
+        Unity.Launcher.setCount(cnt);
+      else
+        Unity.Launcher.clearCount();
+    });
+
+    // Initializer visual links and recoll frame connection
+    var client;
+    window.addEventListener("load", function load(e)
+    {
+      window.removeEventListener("load", load);
+
+      var frame_win = document.getElementById("content-frame").contentWindow;
+      var link_btn = document.getElementById("vislink");
+
+      client = new VislinkClient("Desktop Search");
+      client.onstatus = function(status) link_btn.className = status;
+      client.getRegion = function()
+        [
+          Math.round(window.mozInnerScreenX - window.screenX),
+          Math.round(window.mozInnerScreenY - window.screenY),
+          Math.round(window.innerWidth),
+          Math.round(window.innerHeight)
+        ];
+      client.onmessage = function(msg)
+      {
+        if( msg.task == 'REQUEST' )
+        {
+          last_id = msg.id;
+          var stamp = msg.stamp;
+
+          frame_win.postMessage(last_id, "*");
+/*
+          client.reportLink
+          (
+            id,
+            stamp,
+            [ createRegionForPoint
+              (
+                contextMenu
+                  .getProjection()
+                  .fromLatLngToContainerPixel
+                  (
+                    results[0].geometry.location
+                  )
+              )
+            ]
+          );*/
+        }
+      }
+
+      link_btn.addEventListener("click", function(e)
+      {
+        client.connect({pos: [e.screenX, e.screenY]});
+      });
+    });
+  </script>
+</head>
+<body>
+<div id="vislink"></div>
+<iframe id="content-frame"
+        src="http://localhost:8080"
+        style="width:100%; height:100%; margin:0;"></iframe>
+</body>
+</html>
