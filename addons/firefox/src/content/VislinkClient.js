@@ -108,6 +108,11 @@ function VislinkClient(application_name)
   this.replaceLink = function(id, regions)
   {
     this.send({
+      'task': 'ABORT',
+      'id': '',
+      'stamp': -1
+    });
+    this.send({
       'task': 'INITIATE',
       'title': document.title,
       'id': id,

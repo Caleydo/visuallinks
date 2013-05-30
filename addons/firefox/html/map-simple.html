@@ -113,12 +113,18 @@
                   [x,     y + h],
                   {rel: true} ];*/
       }
+      
+      function simplifyId(id)
+      {
+        return id.trim().replace(/\s+/g, ' ').toLowerCase();
+      }
 
       // -----------------------------------------------------------------------
       var geocoder;
       var map;
       var client;
       var contextMenu;
+      var last_id;
       
       var max_menu_entries = 5;
       var route_menu_entries = [];
@@ -245,8 +251,9 @@
             case 'center_map_click':
               map.panTo(latLng); break;
             case 'route-to':
+              last_id = simplifyId(route_menu_entries[value]);
               client.replaceLink(
-                route_menu_entries[value],
+                last_id,
                 [ createRegionForPoint(
                     this.getProjection().fromLatLngToContainerPixel(latLng)
                   )
@@ -292,6 +299,8 @@
           {
             var id = msg.id;
             var stamp = msg.stamp;
+            if( id == last_id )
+              return;
             // Ask geocoder for locations matching the name
             geocoder.geocode({'address': id}, function(results, status)
             {

@@ -1,5 +1,6 @@
 <html>
 <head>
+ <title>Desktop Search</title>
   <meta charset="utf-8"/>
   <style>
     html, body { margin:0; }
@@ -31,6 +32,8 @@
   <script>
     var last_id = "";
     var last_stamp = 0;
+    var client;
+
     var Unity = external.getUnityObject(1.0);
     Unity.init({ name: "Desktop Search",
                  iconUrl: "http://localhost:8080/static/recoll.png",
@@ -44,10 +47,14 @@
         Unity.Launcher.setCount(cnt);
       else
         Unity.Launcher.clearCount();
+
+      var bbs = [{'no-route': 1}];
+      for(var i = 0; i < cnt; i += 1)
+        bbs[ bbs.length ] = [[-10,-10], [-10,-10]];
+      client.reportLink(last_id, last_stamp, bbs);
     });
 
     // Initializer visual links and recoll frame connection
-    var client;
     window.addEventListener("load", function load(e)
     {
       window.removeEventListener("load", load);
@@ -72,22 +79,6 @@
           var stamp = msg.stamp;
 
           frame_win.postMessage(last_id, "*");
-/*
-          client.reportLink
-          (
-            id,
-            stamp,
-            [ createRegionForPoint
-              (
-                contextMenu
-                  .getProjection()
-                  .fromLatLngToContainerPixel
-                  (
-                    results[0].geometry.location
-                  )
-              )
-            ]
-          );*/
         }
       }
 

@@ -97,10 +97,19 @@ namespace LinksRouting
            scroll_offset = scroll_region.topLeft();
 
     LinkDescription::nodes_t nodes;
+    LinkDescription::PropertyMap node_props;
 
     QVariantList regions = json.getValue<QVariantList>("regions");
     for(auto region = regions.begin(); region != regions.end(); ++region)
     {
+      if( region->type() == QVariant::Map )
+      {
+        auto map = region->toMap();
+        for( auto it = map.constBegin(); it != map.constEnd(); ++it )
+          node_props.set(to_string(it.key()), it->toString());
+        continue;
+      }
+
       LinkDescription::points_t points;
       LinkDescription::PropertyMap props;
 
@@ -157,7 +166,7 @@ namespace LinksRouting
     if( !nodes.empty() )
       _avg_region_height /= nodes.size();
 
-    auto hedge = std::make_shared<LinkDescription::HyperEdge>(nodes);
+    auto hedge = std::make_shared<LinkDescription::HyperEdge>(nodes, node_props);
     hedge->addNode(_minimized_icon);
     hedge->addNode(_covered_outline);
     //updateHedge(_window_monitor.getWindows(), hedge.get());
@@ -326,7 +335,7 @@ namespace LinksRouting
       link_id,
       nodes,
       0,
-      TextPopup::HoverRect(popup_pos, popup_size, border_text, true),
+      TextPopup::HoverRect(popup_pos, popup_size, border_text, !text.empty()),
       TextPopup::HoverRect(hover_pos, hover_size, border_preview, false),
       auto_resize && _ipc_server->getPreviewAutoWidth()
     };
@@ -405,7 +414,9 @@ namespace LinksRouting
         (
           pos,
           float2(1,0),
-          std::to_string(_nodes.front()->getChildren().front()->getNodes().size()),
+          _nodes.front()->getChildren().front()->get<bool>("no-route")
+             ? ""
+             : std::to_string(_nodes.front()->getChildren().front()->getNodes().size() - 2),
           _nodes.front()->getChildren().front()->getNodes(),
           _nodes.front()->getParent()->get<std::string>("link-id")
         );
@@ -425,8 +436,12 @@ namespace LinksRouting
     local_view = local_view.intersect(desktop);
 
     for(auto& node: _nodes)
+    {
       for(auto& hedge: node->getChildren())
       {
+//        if( hedge->get<bool>("no-route") )
+//          continue;
+
         LinkDescription::nodes_t changed_nodes;
         const std::string& link_id = hedge->get<std::string>("link-id");
 
@@ -576,6 +591,7 @@ namespace LinksRouting
                        link_id );
         }
       }
+    }
 
     if( modified )
       _dirty |= VISIBLITY;

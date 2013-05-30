@@ -270,7 +270,7 @@ namespace LinksRouting
         for( auto reg = regions.begin(); reg != regions.end(); ++reg )
         {
           std::cout << "(" << reg->id << ' ' << reg->minimized << ") "
-                    << reg->title
+                    << reg->title.left(15)
                     << ", launcher = " << reg->region_launcher
                     << ", reg = " << reg->region
                     << std::endl;
