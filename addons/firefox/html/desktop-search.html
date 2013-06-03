@@ -29,6 +29,7 @@
     }
   </style>
   <script type="text/javascript" src="../src/content/VislinkClient.js"></script>
+  <script type="text/javascript" src="../src/content/throttle.js"></script>
   <script>
     var last_id = "";
     var last_stamp = 0;
@@ -42,16 +43,20 @@
     // Listen for recoll in frame to report number of matching documents
     window.addEventListener("message", function(e)
     {
-      var cnt = parseInt(e.data);
+      var msg = JSON.parse(e.data);
+      if( msg['scroll-pos'] )
+        return client.send({
+          'task': 'SCROLL',
+          'pos': msg['scroll-pos']
+        });
+
+      var cnt = parseInt(msg['display-num']);
       if( cnt > 0 )
         Unity.Launcher.setCount(cnt);
       else
         Unity.Launcher.clearCount();
 
-      var bbs = [{'no-route': 1}];
-      for(var i = 0; i < cnt; i += 1)
-        bbs[ bbs.length ] = [[-10,-10], [-10,-10]];
-      client.reportLink(last_id, last_stamp, bbs);
+      client.reportLink(last_id, last_stamp, msg.regions, cnt);
     });
 
     // Initializer visual links and recoll frame connection

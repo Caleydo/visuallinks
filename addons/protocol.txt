@@ -53,6 +53,10 @@
               identifier to search to the server. Locations inside
               the clients region can be added in the optional 'regions' field.
               
+              Using the optional 'display-num' field the displayed number of
+              occurrences can be specified. If not given the actual number of
+              passed regions is used.
+              
               The following example shows a message to initiate a search for the
               string 'test' with two occurrences bounded by one rectangular and
               one triangular region:

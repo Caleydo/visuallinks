@@ -5,6 +5,7 @@
 
 <script type="application/x-javascript" src="chrome://mypl/content/grab.js" />
 <script type="application/x-javascript" src="chrome://mypl/content/Queue.js" />
+<script type="application/x-javascript" src="chrome://mypl/content/throttle.js" />
 <script type="application/x-javascript" src="chrome://mypl/content/myjs.js" />
 
 <toolbarpalette id="BrowserToolbarPalette">

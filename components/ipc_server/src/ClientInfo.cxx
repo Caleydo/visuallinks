@@ -15,6 +15,8 @@
 namespace LinksRouting
 {
 
+  static ClientInfo* a300_client = 0;
+
   //----------------------------------------------------------------------------
   ClientInfo::ClientInfo(IPCServer* ipc_server, WId wid):
     _dirty(~0),
@@ -78,7 +80,10 @@ namespace LinksRouting
     LinkDescription::NodePtr node
   )
   {
-    std::cout << "Parse regions (" << _window_info.id<< ")" << std::endl;
+    std::cout << "Parse regions ("
+              << to_string(_window_info.title)
+              << ")" << std::endl;
+
     _avg_region_height = 0;
 
     _dirty |= REGIONS;
@@ -90,6 +95,7 @@ namespace LinksRouting
       else
         node = std::make_shared<LinkDescription::Node>();
 
+      node->set("display-num", 0);
       return node;
     }
 
@@ -132,7 +138,7 @@ namespace LinksRouting
 
           if( points.back().y > max_y )
             max_y = points.back().y;
-          else if( points.back().y < min_y )
+          if( points.back().y < min_y )
             min_y = points.back().y;
         }
       }
@@ -166,6 +172,10 @@ namespace LinksRouting
     if( !nodes.empty() )
       _avg_region_height /= nodes.size();
 
+    size_t num_regions = json.getValue<size_t>("display-num", 0);
+    if( !num_regions )
+      num_regions = nodes.size();
+
     auto hedge = std::make_shared<LinkDescription::HyperEdge>(nodes, node_props);
     hedge->addNode(_minimized_icon);
     hedge->addNode(_covered_outline);
@@ -174,7 +184,6 @@ namespace LinksRouting
     if( !node )
     {
       node = std::make_shared<LinkDescription::Node>(hedge);
-      std::cout << "add node " << node.get() << std::endl;
       _nodes.push_back(node);
     }
     else
@@ -182,6 +191,8 @@ namespace LinksRouting
       node->clearChildren();
       node->addChild(hedge);
     }
+
+    node->set("display-num", num_regions);
     return node;
   }
 
@@ -196,6 +207,9 @@ namespace LinksRouting
     {
       _window_info = *window_info;
       _dirty |= WINDOW;
+
+      if( _window_info.title.contains("Airbus A300 - Wikipedia") )
+        a300_client = this;
     }
 
     updateRegions(windows);
@@ -281,7 +295,8 @@ namespace LinksRouting
                                 const std::string& text,
                                 const LinkDescription::nodes_t& nodes,
                                 const std::string& link_id,
-                                bool auto_resize )
+                                bool auto_resize,
+                                ClientInfo* client )
   {
     const QRect& desktop_rect = _ipc_server->desktopRect();
 
@@ -339,11 +354,13 @@ namespace LinksRouting
       TextPopup::HoverRect(hover_pos, hover_size, border_preview, false),
       auto_resize && _ipc_server->getPreviewAutoWidth()
     };
-    popup.hover_region.offset = -scroll_region.topLeft();
-    popup.hover_region.dim = viewport.size();
-    popup.hover_region.scroll_region.size = preview_size;
-    popup.hover_region.tile_map = tile_map;
-    _popups.push_back( _ipc_server->addPopup(*this, popup) );
+
+    ClientInfo* ci = client ? client : this;
+    popup.hover_region.offset = -ci->scroll_region.topLeft();
+    popup.hover_region.dim = ci->viewport.size();
+    popup.hover_region.scroll_region.size = ci->preview_size;
+    popup.hover_region.tile_map = ci->tile_map;
+    _popups.push_back( _ipc_server->addPopup(*ci, popup) );
   }
 
   //----------------------------------------------------------------------------
@@ -380,18 +397,19 @@ namespace LinksRouting
         for(auto& node: _nodes)
           node->set("hidden", true);
 
-        _outlines.back()->preview = _ipc_server->addCoveredPreview
-        (
-          _nodes.front()->getParent()->get<std::string>("link-id"),
-          *this,
-          _covered_outline,
-          tile_map_uncompressed,
-          getViewportAbs(),
-          getScrollRegionAbs()
-        );
+        if( !_nodes.empty() )
+          _outlines.back()->preview = _ipc_server->addCoveredPreview
+          (
+            _nodes.front()->getParent()->get<std::string>("link-id"),
+            *this,
+            _covered_outline,
+            tile_map_uncompressed,
+            getViewportAbs(),
+            getScrollRegionAbs()
+          );
       }
 
-      if( _window_info.minimized )
+      if( _window_info.minimized && !_window_info.title.contains("Airbus A300 - Wikipedia") )
       {
         const QRect& region_launcher = _window_info.region_launcher;
         QPoint pos
@@ -410,16 +428,17 @@ namespace LinksRouting
         link_points.push_back(pos + QPoint(ICON_SIZE, 0));
         _minimized_icon->setLinkPoints(link_points);
 
-        createPopup
-        (
-          pos,
-          float2(1,0),
-          _nodes.front()->getChildren().front()->get<bool>("no-route")
-             ? ""
-             : std::to_string(_nodes.front()->getChildren().front()->getNodes().size() - 2),
-          _nodes.front()->getChildren().front()->getNodes(),
-          _nodes.front()->getParent()->get<std::string>("link-id")
-        );
+        if( !_nodes.empty() )
+          createPopup
+          (
+            pos,
+            float2(1,0),
+            _nodes.front()->getChildren().front()->get<bool>("no-route")
+               ? ""
+               : _nodes.front()->get<std::string>("display-num"),
+            _nodes.front()->getChildren().front()->getNodes(),
+            _nodes.front()->getParent()->get<std::string>("link-id")
+          );
       }
     }
 
@@ -495,6 +514,22 @@ namespace LinksRouting
 
           if( !(*region)->getVertices().empty() )
           {
+            if( a300_client && (*region)->get<bool>("search-preview") )
+            {
+              LinkDescription::nodes_t a300_nodes;
+              if( !a300_client->getNodes().empty() )
+                a300_nodes = a300_client->getNodes().front()
+                                        ->getChildren().front()
+                                        ->getNodes();
+
+              createPopup( getScrollRegionAbs().topLeft() + (*region)->getVertices().front(),
+                           float2(1,0),
+                           std::to_string(static_cast<unsigned long long>(a300_nodes.size())),
+                           a300_nodes,
+                           link_id,
+                           true,
+                           a300_client );
+            }
             if(    /*(*region)->get<bool>("hidden")
                 && */(*region)->get<bool>("outside") )
             {
@@ -698,6 +733,9 @@ namespace LinksRouting
         for(auto const& hedge: node->getChildren())
           for(auto const& region: hedge->getNodes())
           {
+            if( region->getVertices().empty() )
+              continue;
+
             const Rect& bb = region->getBoundingBox();
             part.add( float2( bb.t() - 3 * _avg_region_height,
                               bb.b() + 3 * _avg_region_height ) );
@@ -706,7 +744,7 @@ namespace LinksRouting
       part.clip(0, scroll_region.height(), 2 * _avg_region_height);
       partitions_src = part.getPartitions();
 
-      if( partition_compress )
+      if( partition_compress && !partitions_src.empty() )
       {
         const int compress_size = _avg_region_height * 1.5;
         float cur_pos = 0;
@@ -739,7 +777,8 @@ namespace LinksRouting
       else
         partitions_dest = partitions_src;
     }
-    else
+
+    if( partitions_src.empty() )
     {
       partitions_src.push_back(float2(0, scroll_region.height()));
       partitions_dest = partitions_src;

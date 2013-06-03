@@ -105,7 +105,7 @@ function VislinkClient(application_name)
     }
   }
   
-  this.replaceLink = function(id, regions)
+  this.replaceLink = function(id, regions, num = 0)
   {
     this.send({
       'task': 'ABORT',
@@ -117,11 +117,12 @@ function VislinkClient(application_name)
       'title': document.title,
       'id': id,
       'stamp': 1,//last_stamp,
-      'regions': regions
+      'regions': regions,
+      'display-num': num
     });
   };
   
-  this.reportLink = function(id, stamp, regions)
+  this.reportLink = function(id, stamp, regions, num = 0)
   {
     if( regions.length > 0 )
       this.send({
@@ -129,7 +130,8 @@ function VislinkClient(application_name)
         'title': document.title,
         'id': id,
         'stamp': stamp,
-        'regions': regions
+        'regions': regions,
+        'display-num': num
       });
   };
 }

@@ -248,10 +248,10 @@ function smoothScrollTo(y_target)
   var x_cur = content.scrollX;
   var y_cur = content.scrollY;
   var delta = y_target - y_cur;
-  var duration = Math.max(400, Math.min(Math.abs(delta), 1500));
-  for( var t = 0; t <= duration; t += 50 )
+  var duration = Math.max(500, Math.min(Math.abs(delta), 3000));
+  for( var t = 0; t <= duration; t += 100 )
   {
-    if( t + 49 > duration )
+    if( t + 99 > duration )
       t = duration;
 
     var y = easeInOutQuint(t, y_cur, delta, duration);
@@ -459,13 +459,14 @@ function windowChanged()
 }
 
 //------------------------------------------------------------------------------
-function onScroll()
+function onScrollImpl()
 {
   send({
     'task': 'SCROLL',
     'pos': [-content.scrollX, -content.scrollY]
   });
 }
+var onScroll = throttle(onScrollImpl, 200);
 
 //------------------------------------------------------------------------------
 function reroute()

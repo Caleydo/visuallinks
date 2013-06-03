@@ -71,6 +71,13 @@ uint32_t JSONNode::getValue() const
 
 //------------------------------------------------------------------------------
 template<>
+uint64_t JSONNode::getValue() const
+{
+  return getValue<uint32_t>();
+}
+
+//------------------------------------------------------------------------------
+template<>
 QVariantList JSONNode::getValue() const
 {
   if( _var.type() == QVariant::List )

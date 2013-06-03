@@ -86,6 +86,8 @@ namespace LinksRouting
      */
     void activateWindow();
 
+    LinkDescription::nodes_t& getNodes() { return _nodes; }
+
     private:
 
       enum DirtyFlags
@@ -145,7 +147,8 @@ namespace LinksRouting
                         const std::string& text,
                         const LinkDescription::nodes_t& nodes,
                         const std::string& link_id = "",
-                        bool auto_resize = true );
+                        bool auto_resize = true,
+                        ClientInfo* client = nullptr );
 
       void updateRegions(const WindowRegions& windows);
       bool updateNode( LinkDescription::Node& hedge,
