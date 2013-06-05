@@ -572,7 +572,8 @@ namespace LinksRouting
               // Draw path
               //points = smooth(points, 0.4, 10);
               float widen_size = 0.f;
-              if(    segment.nodes.back()->getChildren().empty()
+              if(   !segment.nodes.empty()
+                  && segment.nodes.back()->getChildren().empty()
                   && segment.get<bool>("widen-end", true) )
               {
                 if( !segment.nodes.back()->get<std::string>("virtual-outside").empty() )

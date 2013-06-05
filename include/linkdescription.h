@@ -20,6 +20,7 @@ namespace LinkDescription
 {
   class HyperEdge;
   typedef std::shared_ptr<HyperEdge> HyperEdgePtr;
+  typedef std::weak_ptr<HyperEdge> HyperEdgeWeakPtr;
   struct HyperEdgeDescriptionSegment;
   struct HyperEdgeDescriptionForkation;
   typedef std::shared_ptr<HyperEdgeDescriptionForkation>
@@ -134,6 +135,7 @@ namespace LinkDescription
             const points_t& link_points_children,
             const PropertyMap& props = PropertyMap() );
       explicit Node(HyperEdgePtr hedge);
+      ~Node();
 
       points_t& getVertices();
       const points_t& getVertices() const;
@@ -148,8 +150,8 @@ namespace LinkDescription
       float2 getCenter() const;
       Rect getBoundingBox() const;
 
-      HyperEdge* getParent();
-      const HyperEdge* getParent() const;
+      HyperEdgePtr getParent();
+      const HyperEdgePtr getParent() const;
 
       const hedges_t& getChildren() const;
       hedges_t& getChildren();
@@ -163,7 +165,7 @@ namespace LinkDescription
       points_t _points;
       points_t _link_points;
       points_t _link_points_children;
-      HyperEdge* _parent;
+      HyperEdgeWeakPtr _parent;
       hedges_t _children;
   };
 
@@ -177,9 +179,14 @@ namespace LinkDescription
     friend class Node;
     public:
 
-      HyperEdge();
-      explicit HyperEdge( const nodes_t& nodes,
-                          const PropertyMap& props = PropertyMap() );
+      template<typename... _Args>
+      static HyperEdgePtr make_shared(_Args&&... __args)
+      {
+        HyperEdgePtr p( new HyperEdge(std::forward<_Args>(__args)...) );
+        p->_self = p;
+        p->resetNodeParents();
+        return p;
+      }
 
       nodes_t& getNodes();
       const nodes_t& getNodes() const;
@@ -194,6 +201,7 @@ namespace LinkDescription
       void addNode(const NodePtr& node);
       void resetNodeParents();
       nodes_t::iterator removeNode(const nodes_t::iterator& node);
+      void removeNode(const NodePtr& node);
 
       Node* getParent();
       const Node* getParent() const;
@@ -206,9 +214,14 @@ namespace LinkDescription
 
     private:
 
+      HyperEdge();
+      explicit HyperEdge( const nodes_t& nodes,
+                          const PropertyMap& props = PropertyMap() );
+
       HyperEdge(const HyperEdge&) /* = delete */;
       HyperEdge& operator=(const HyperEdge&) /* = delete */;
 
+      HyperEdgeWeakPtr _self;
       Node* _parent;
       nodes_t _nodes;
       float2 _center;     ///!< Estimated center

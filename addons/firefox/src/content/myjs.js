@@ -765,10 +765,10 @@ function searchDocument(doc, id)
 				var bb = rects[i];
 				if( bb.width > 2 && bb.height > 2 )
 		    {
-		      var l = offset[0] + scale * (bb.left - 1);
-		      var r = offset[0] + scale * (bb.right + 1);
-		      var t = offset[1] + scale * (bb.top - 1);
-		      var b = offset[1] + scale * (bb.bottom);
+		      var l = Math.round(offset[0] + scale * (bb.left - 1));
+		      var r = Math.round(offset[0] + scale * (bb.right + 1));
+		      var t = Math.round(offset[1] + scale * (bb.top - 1));
+		      var b = Math.round(offset[1] + scale * (bb.bottom));
 					bbs[bbs.length] = [[l, t], [r, t], [r, b], [l, b]];
 		    }
 			}

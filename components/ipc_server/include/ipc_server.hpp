@@ -132,6 +132,16 @@ namespace LinksRouting
       void onScrollWheel(int delta, const float2& pos, uint32_t mod);
       void onDrag(const float2& delta);
 
+      typedef std::function<bool( SlotType::TextPopup::Popup&,
+                                  QWsSocket&,
+                                  ClientInfo& )> popup_callback_t;
+      bool foreachPopup(const popup_callback_t& cb);
+
+      typedef std::function<bool( SlotType::XRayPopup::HoverRect&,
+                                  QWsSocket&,
+                                  ClientInfo& )> preview_callback_t;
+      bool foreachPreview(const preview_callback_t& cb);
+
     private:
 
       QWsServer          *_server;
@@ -202,7 +212,7 @@ namespace LinksRouting
         uint8_t       _tile_request_id;
 
         InteractionHandler(IPCServer* server);
-        void updateRegion( const ClientInfos::value_type& client_info,
+        bool updateRegion( QWsSocket* socket,
                            SlotType::TextPopup::Popup& popup,
                            float2 center = float2(-9999, -9999),
                            float2 rel_pos = float2() );

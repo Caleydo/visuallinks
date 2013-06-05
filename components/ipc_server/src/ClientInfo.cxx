@@ -28,10 +28,23 @@ namespace LinksRouting
   {
     _minimized_icon->set("filled", true);
     _minimized_icon->set("show-in-preview", false);
+    _minimized_icon->set("always-route", true);
     _covered_outline->set("covered", true);
     _covered_outline->set("outline-only", true);
     _covered_outline->set("show-in-preview", false);
     _covered_outline->set("visible", false);
+  }
+
+  //----------------------------------------------------------------------------
+  ClientInfo::~ClientInfo()
+  {
+    clear();
+    for(auto& node: _nodes)
+    {
+      auto p = node->getParent();
+      if( p )
+        p->removeNode(node);
+    }
   }
 
   //----------------------------------------------------------------------------
@@ -176,7 +189,7 @@ namespace LinksRouting
     if( !num_regions )
       num_regions = nodes.size();
 
-    auto hedge = std::make_shared<LinkDescription::HyperEdge>(nodes, node_props);
+    auto hedge = LinkDescription::HyperEdge::make_shared(nodes, node_props);
     hedge->addNode(_minimized_icon);
     hedge->addNode(_covered_outline);
     //updateHedge(_window_monitor.getWindows(), hedge.get());
@@ -232,7 +245,7 @@ namespace LinksRouting
   {
     for( auto node = _nodes.begin(); node != _nodes.end(); )
     {
-      if( (*node)->getParent() == hedge )
+      if( (*node)->getParent().get() == hedge )
         node = _nodes.erase(node);
       else
         ++node;
@@ -366,12 +379,7 @@ namespace LinksRouting
   //----------------------------------------------------------------------------
   void ClientInfo::updateRegions(const WindowRegions& windows)
   {
-    _ipc_server->removePopups(_popups);
-    _popups.clear();
-    _ipc_server->removeCoveredPreviews(_xray_previews);
-    _xray_previews.clear();
-    _ipc_server->removeOutlines(_outlines);
-    _outlines.clear();
+    clear();
 
     if( true ) //_dirty & WINDOW )
     {
@@ -458,8 +466,8 @@ namespace LinksRouting
     {
       for(auto& hedge: node->getChildren())
       {
-//        if( hedge->get<bool>("no-route") )
-//          continue;
+        if( hedge->get<bool>("no-route") )
+          continue;
 
         LinkDescription::nodes_t changed_nodes;
         const std::string& link_id = hedge->get<std::string>("link-id");
@@ -812,6 +820,21 @@ namespace LinksRouting
 
     for(auto& preview: _xray_previews)
       preview->tile_map = tile_map_uncompressed;
+  }
+
+  //----------------------------------------------------------------------------
+  void ClientInfo::clear()
+  {
+    if( _ipc_server )
+    {
+      _ipc_server->removePopups(_popups);
+      _ipc_server->removeCoveredPreviews(_xray_previews);
+      _ipc_server->removeOutlines(_outlines);
+    }
+
+    _popups.clear();
+    _xray_previews.clear();
+    _outlines.clear();
   }
 
 } // namespace LinksRouting

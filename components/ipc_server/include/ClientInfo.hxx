@@ -41,6 +41,7 @@ namespace LinksRouting
 
     explicit ClientInfo(IPCServer* ipc_server = nullptr, WId wid = -1);
     ClientInfo(const ClientInfo&) = delete;
+    ~ClientInfo();
 
     void setWindowId(WId wid);
     const WindowInfo& getWindowInfo() const;
@@ -169,8 +170,7 @@ namespace LinksRouting
        */
       void updateTileMap();
 
-      WindowList::const_iterator findWindow( const WindowRegions& windows,
-                                             WId wid ) const;
+      void clear();
   };
 
 } // namespace LinksRouting

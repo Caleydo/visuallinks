@@ -21,8 +21,7 @@ namespace LinkDescription
   }
 
   //----------------------------------------------------------------------------
-  Node::Node():
-    _parent(0)
+  Node::Node()
   {
 
   }
@@ -31,8 +30,7 @@ namespace LinkDescription
   Node::Node( const points_t& points,
               const PropertyMap& props ):
     PropertyElement( props ),
-    _points( points ),
-    _parent(0)
+    _points( points )
   {
 
   }
@@ -43,8 +41,7 @@ namespace LinkDescription
               const PropertyMap& props ):
     PropertyElement( props ),
     _points( points ),
-    _link_points( link_points ),
-    _parent(0)
+    _link_points( link_points )
   {
 
   }
@@ -57,18 +54,22 @@ namespace LinkDescription
     PropertyElement( props ),
     _points( points ),
     _link_points( link_points ),
-    _link_points_children( link_points_children ),
-    _parent(0)
+    _link_points_children( link_points_children )
   {
 
   }
 
   //----------------------------------------------------------------------------
-  Node::Node(HyperEdgePtr hedge):
-    _parent(0)
+  Node::Node(HyperEdgePtr hedge)
   {
     _children.push_back(hedge);
     hedge->_parent = this;
+  }
+
+  //----------------------------------------------------------------------------
+  Node::~Node()
+  {
+    clearChildren();
   }
 
   //----------------------------------------------------------------------------
@@ -158,15 +159,15 @@ namespace LinkDescription
   }
 
   //----------------------------------------------------------------------------
-  HyperEdge* Node::getParent()
+  HyperEdgePtr Node::getParent()
   {
-    return _parent;
+    return _parent.lock();
   }
 
   //----------------------------------------------------------------------------
-  const HyperEdge* Node::getParent() const
+  const HyperEdgePtr Node::getParent() const
   {
-    return _parent;
+    return _parent.lock();
   }
 
   //----------------------------------------------------------------------------
@@ -202,27 +203,6 @@ namespace LinkDescription
     for(auto& node: _children)
       node->_parent = 0;
     _children.clear();
-  }
-
-  //----------------------------------------------------------------------------
-  HyperEdge::HyperEdge():
-    _parent(0),
-    _revision( 0 )
-  {
-
-  }
-
-  //----------------------------------------------------------------------------
-  HyperEdge::HyperEdge( const nodes_t& nodes,
-                        const PropertyMap& props ):
-    PropertyElement( props ),
-    _parent(0),
-    _nodes( nodes ),
-    _revision( 0 ),
-    _fork( 0 )
-  {
-    for(auto it = _nodes.begin(); it != _nodes.end(); ++it)
-      (*it)->_parent = this;
   }
 
   //----------------------------------------------------------------------------
@@ -270,7 +250,7 @@ namespace LinkDescription
     for(auto it = nodes.begin(); it != nodes.end(); ++it)
     {
       _nodes.push_back(*it);
-      _nodes.back()->_parent = this;
+      _nodes.back()->_parent = _self;
     }
     ++_revision;
   }
@@ -279,21 +259,27 @@ namespace LinkDescription
   void HyperEdge::addNode(const NodePtr& node)
   {
     _nodes.push_back(node);
-    _nodes.back()->_parent = this;
+    _nodes.back()->_parent = _self;
   }
 
   //----------------------------------------------------------------------------
   nodes_t::iterator HyperEdge::removeNode(const nodes_t::iterator& node)
   {
-    (*node)->_parent = 0;
+    (*node)->_parent.reset();
     return _nodes.erase(node);
+  }
+
+  //----------------------------------------------------------------------------
+  void HyperEdge::removeNode(const NodePtr& node)
+  {
+    _nodes.remove(node);
   }
 
   //----------------------------------------------------------------------------
   void HyperEdge::resetNodeParents()
   {
-    for(auto it = _nodes.begin(); it != _nodes.end(); ++it)
-      (*it)->_parent = this;
+    for(auto& node: _nodes)
+      node->_parent = _self;
   }
 
   //----------------------------------------------------------------------------
@@ -330,6 +316,26 @@ namespace LinkDescription
   void HyperEdge::removeRoutingInformation()
   {
     _fork.reset();
+  }
+
+  //----------------------------------------------------------------------------
+  HyperEdge::HyperEdge():
+    _parent(0),
+    _revision( 0 )
+  {
+
+  }
+
+  //----------------------------------------------------------------------------
+  HyperEdge::HyperEdge( const nodes_t& nodes,
+                        const PropertyMap& props ):
+    PropertyElement( props ),
+    _parent(0),
+    _nodes( nodes ),
+    _revision( 0 ),
+    _fork( 0 )
+  {
+
   }
 
 } // namespace LinkDescription

@@ -350,7 +350,7 @@ namespace LinksRouting
         {
           client_info.setScrollPos( msg.getValue<QPoint>("pos") );
           client_info.update(_window_monitor.getWindows());
-          return _cond_data_ready->wakeAll();;
+          return _cond_data_ready->wakeAll();
         }
       }
 
@@ -665,7 +665,7 @@ namespace LinksRouting
       )
         ++color_id;
     }
-    auto hedge = std::make_shared<LinkDescription::HyperEdge>();
+    auto hedge = LinkDescription::HyperEdge::make_shared();
     hedge->set("link-id", id_str);
     hedge->addNode( client_info.parseRegions(msg) );
     client_info.update(_window_monitor.getWindows());
@@ -1043,7 +1043,7 @@ namespace LinksRouting
       else
         continue;
 
-      auto new_hedge = std::make_shared<LinkDescription::HyperEdge>();
+      auto new_hedge = LinkDescription::HyperEdge::make_shared();
       new_hedge->set("client_wid", WIdtoStr(client_wid));
       new_hedge->set("no-parent-route", true);
       new_hedge->set("covered", true);
@@ -1120,22 +1120,17 @@ namespace LinksRouting
   {
     QMutexLocker lock_links(_mutex_slot_links);
 
-    bool changed = false;
-    for(auto& popup: _subscribe_popups->_data->popups)
+    bool changed = foreachPopup([&]( SlotType::TextPopup::Popup& popup,
+                                     QWsSocket& socket,
+                                     ClientInfo& client_info ) -> bool
     {
-      if(    !popup.client_socket
-          || !popup.hover_region.visible
+      if(    !popup.hover_region.visible
           || !popup.hover_region.contains(x, y) )
-        continue;
+        return false;
 
       popup.hover_region.visible = false;
-      changed = true;
 
-      QWsSocket* client_socket = static_cast<QWsSocket*>(popup.client_socket);
-      ClientInfos::iterator client = _clients.find(client_socket);
-      assert(client != _clients.end());
-
-      QSize preview_size = client->second->preview_size;
+      QSize preview_size = client_info.preview_size;
       float scale = (preview_size.height()
                     / pow(2.0f, static_cast<float>(popup.hover_region.zoom))
                     )
@@ -1143,10 +1138,10 @@ namespace LinksRouting
       float dy = y - popup.hover_region.region.pos.y,
             scroll_y = scale * dy + popup.hover_region.src_region.pos.y;
 
-      for( auto part_src = client->second->tile_map->partitions_src.begin(),
-                part_dst = client->second->tile_map->partitions_dest.begin();
-                part_src != client->second->tile_map->partitions_src.end()
-             && part_dst != client->second->tile_map->partitions_dest.end();
+      for( auto part_src = client_info.tile_map->partitions_src.begin(),
+                part_dst = client_info.tile_map->partitions_dest.begin();
+                part_src != client_info.tile_map->partitions_src.end()
+             && part_dst != client_info.tile_map->partitions_dest.end();
               ++part_src,
               ++part_dst )
       {
@@ -1157,35 +1152,34 @@ namespace LinksRouting
         }
       }
 
-      client_socket->write(QString(
+      socket.write(QString(
       "{"
         "\"task\": \"SET\","
         "\"id\": \"scroll-y\","
         "\"val\": " + QString("%1").arg(scroll_y - 35) +
       "}"));
-      client->second->activateWindow();
-    }
+      client_info.activateWindow();
+      return true;
+    });
 
-    for(auto& preview: _slot_xray->_data->popups)
+    changed |= foreachPreview([&]( SlotType::XRayPopup::HoverRect& preview,
+                                   QWsSocket& socket,
+                                   ClientInfo& client_info ) -> bool
     {
       float2 offset = preview.node->getParent()->get<float2>("screen-offset");
       if( !preview.region.contains(float2(x, y) - offset) )
-        continue;
-
-      changed = true;
-
-      QWsSocket* client_socket = static_cast<QWsSocket*>(preview.client_socket);
-      ClientInfos::iterator client = _clients.find(client_socket);
-      assert(client != _clients.end());
+        return false;
 
       preview.node->set("hover", false);
-      client->second->activateWindow();
+      client_info.activateWindow();
 
       if( !preview.node->get<bool>("outside") )
+      {
         // We need to scroll only for regions outside the viewport
-        continue;
+        return true;
+      }
 
-      QRect client_region = client->second->getViewportAbs();
+      QRect client_region = client_info.getViewportAbs();
 
       const bool scroll_center = true;
       int scroll_y = y;
@@ -1205,15 +1199,17 @@ namespace LinksRouting
           scroll_y -= 35;
       }
 
-      scroll_y -= client->second->scroll_region.top();
+      scroll_y -= client_info.scroll_region.top();
 
-      client_socket->write(QString(
+      socket.write(QString(
         "{"
           "\"task\": \"SET\","
           "\"id\": \"scroll-y\","
           "\"val\": " + QString("%1").arg(scroll_y) +
         "}"));
-    }
+
+      return true;
+    });
 
     if( changed )
       _cond_data_ready->wakeAll();
@@ -1224,13 +1220,11 @@ namespace LinksRouting
   {
     QMutexLocker lock_links(_mutex_slot_links);
 
-    bool changed = false;
     bool popup_visible = false;
-    for(auto& popup: _subscribe_popups->_data->popups)
+    bool changed = foreachPopup([&]( SlotType::TextPopup::Popup& popup,
+                                     QWsSocket& socket,
+                                     ClientInfo& client_info ) -> bool
     {
-      if( !popup.client_socket )
-        continue;
-
       if(    !popup_visible // Only one popup/preview at the same time
           && (  popup.region.contains(x, y)
              || (  popup.hover_region.visible
@@ -1240,61 +1234,50 @@ namespace LinksRouting
       {
         popup_visible = true;
         if( popup.hover_region.visible )
-          continue;
+          return false;
 
         popup.hover_region.visible = true;
-
-        QWsSocket* client_socket = static_cast<QWsSocket*>(popup.client_socket);
-        ClientInfos::iterator client = _clients.find(client_socket);
-
-        if( client == _clients.end() )
-        {
-          LOG_WARN("Popup without valid client_socket");
-          popup.client_socket = 0;
-          continue;
-        }
-
-        _interaction_handler.updateRegion(*client, popup);
+        _interaction_handler.updateRegion(&socket, popup);
+        return true;
       }
-      else if( !popup.hover_region.visible )
-      {
-        continue;
-      }
-      else
+      else if( popup.hover_region.visible )
       {
         popup.hover_region.visible = false;
-        changed = true;
+        return true;
       }
-    }
 
-    for(auto& preview: _slot_xray->_data->popups)
+      return false;
+    });
+
+    changed |= foreachPreview([&]( SlotType::XRayPopup::HoverRect& preview,
+                                   QWsSocket& socket,
+                                   ClientInfo& client_info ) -> bool
     {
+      auto const& p = preview.node->getParent();
       bool hover = preview.node->get<bool>("hover");
-      float2 offset = preview.node->getParent()->get<float2>("screen-offset");
 
       if(   !popup_visible // Only one popup/preview at the same time
-          && preview.region.contains(float2(x, y) - offset) )
+          && preview.region.contains( float2(x, y)
+                                    - p->get<float2>("screen-offset")) )
       {
         if( hover )
-          continue;
+          return false;
         hover = true;
         _interaction_handler.updateRegion(preview);
       }
       else if( hover )
-      {
         hover = false;
-      }
       else
-        continue;
+        return false;
 
       //std::cout << "hidden = " << !hover << std::endl;
 
-      changed |= preview.node->set("hover", hover);
+      return preview.node->set("hover", hover);
 #if 0
       changed |= preview.node->getParent()->getParent()->set("hidden", !hover);
       changed |= preview.node->getParent()->getParent()->set("hover", hover);
 #endif
-    }
+    });
 
     if( changed )
       _cond_data_ready->wakeAll();
@@ -1308,15 +1291,14 @@ namespace LinksRouting
     float preview_aspect = _preview_width
                          / static_cast<float>(_preview_height);
 
-    for(auto& popup: _subscribe_popups->_data->popups)
+    if( foreachPopup([&]( SlotType::TextPopup::Popup& popup,
+                      QWsSocket& socket,
+                      ClientInfo& client_info ) -> bool
     {
       if( !popup.hover_region.visible )
-        continue;
+        return false;
 
-      QWsSocket* client_socket = static_cast<QWsSocket*>(popup.client_socket);
-      ClientInfos::iterator client = _clients.find(client_socket);
-      assert(client != _clients.end());
-
+      bool changed = false;
       const float2& scroll_size = popup.hover_region.scroll_region.size;
       float step_y = scroll_size.y
                    / pow(2.0f, static_cast<float>(popup.hover_region.zoom))
@@ -1326,14 +1308,14 @@ namespace LinksRouting
       {
         popup.hover_region.src_region.pos.y -=
           delta / fabs(static_cast<float>(delta)) * 20 * step_y;
-        _interaction_handler.updateRegion(*client, popup);
+        changed |= _interaction_handler.updateRegion(&socket, popup);
       }
       else if( mod & SlotType::MouseEvent::ControlModifier )
       {
         float step_x = step_y * preview_aspect;
         popup.hover_region.src_region.pos.x -=
           delta / fabs(static_cast<float>(delta)) * 20 * step_x;
-        _interaction_handler.updateRegion(*client, popup);
+        changed |= _interaction_handler.updateRegion(&socket, popup);
       }
       else
       {
@@ -1349,14 +1331,17 @@ namespace LinksRouting
                  mouse_pos = scale * d + popup.hover_region.src_region.pos;
           _interaction_handler.updateRegion
           (
-            *client,
+            &socket,
             popup,
             mouse_pos,
             d / popup.hover_region.region.size
           );
         }
       }
-    }
+
+      return changed;
+    }) )
+      _cond_data_ready->wakeAll();
   }
 
   //----------------------------------------------------------------------------
@@ -1367,14 +1352,12 @@ namespace LinksRouting
     float preview_aspect = _preview_width
                          / static_cast<float>(_preview_height);
 
-    for(auto& popup: _subscribe_popups->_data->popups)
+    if( foreachPopup([&]( SlotType::TextPopup::Popup& popup,
+                          QWsSocket& socket,
+                          ClientInfo& client_info ) -> bool
     {
       if( !popup.hover_region.visible )
-        continue;
-
-      QWsSocket* client_socket = static_cast<QWsSocket*>(popup.client_socket);
-      ClientInfos::iterator client = _clients.find(client_socket);
-      assert(client != _clients.end());
+        return false;
 
       const float2& scroll_size = popup.hover_region.scroll_region.size;
       float step_y = scroll_size.y
@@ -1385,8 +1368,98 @@ namespace LinksRouting
       float step_x = step_y * preview_aspect;
       popup.hover_region.src_region.pos.x -= delta.x * step_x;
 
-      _interaction_handler.updateRegion(*client, popup);
+      return _interaction_handler.updateRegion(&socket, popup);
+    }) )
+      _cond_data_ready->wakeAll();
+  }
+
+  //----------------------------------------------------------------------------
+  bool IPCServer::foreachPopup(const IPCServer::popup_callback_t& cb)
+  {
+    bool changed = false;
+    for( auto popup = _subscribe_popups->_data->popups.begin();
+              popup != _subscribe_popups->_data->popups.end(); )
+    {
+      if( !popup->client_socket )
+      {
+        ++popup;
+        continue;
+      }
+
+      QWsSocket* client_socket = static_cast<QWsSocket*>(popup->client_socket);
+      ClientInfos::iterator client = _clients.find(client_socket);
+
+      if( client == _clients.end() )
+      {
+        LOG_WARN("Popup without valid client_socket");
+        popup->client_socket = 0;
+        // deleting would result in invalid iterators inside ClientInfo, so
+        // just let it be and wait for the according ClientInfo to remove it.
+        //popup = _subscribe_popups->_data->popups.erase(popup);
+        ++popup;
+        changed = true;
+        continue;
+      }
+
+      changed |= cb(*popup, *client_socket, *client->second);
+      ++popup;
     }
+
+    return changed;
+  }
+
+
+  //----------------------------------------------------------------------------
+  bool IPCServer::foreachPreview(const IPCServer::preview_callback_t& cb)
+  {
+    bool changed = false;
+    for( auto preview = _slot_xray->_data->popups.begin();
+              preview != _slot_xray->_data->popups.end(); )
+    {
+      if( !preview->client_socket )
+      {
+        ++preview;
+        continue;
+      }
+
+      auto const& p = preview->node->getParent();
+      if( !p )
+      {
+        LOG_WARN("xray preview: parent lost");
+
+        // Hide preview if parent has somehow been lost
+        changed |= preview->node->set("hover", false);
+
+        // deleting would result in invalid iterators inside ClientInfo, so
+        // just let it be and wait for the according ClientInfo to remove it.
+        //preview = _slot_xray->_data->popups.erase(preview);
+        ++preview;
+        continue;
+      }
+
+      QWsSocket* client_socket = static_cast<QWsSocket*>(preview->client_socket);
+      ClientInfos::iterator client = _clients.find(client_socket);
+
+      if( client == _clients.end() )
+      {
+        LOG_WARN("Preview without valid client_socket");
+        preview->client_socket = 0;
+
+        // Hide preview if socket has somehow been lost
+        changed |= preview->node->set("hover", false);
+
+        // deleting would result in invalid iterators inside ClientInfo, so
+        // just let it be and wait for the according ClientInfo to remove it.
+        //preview = _slot_xray->_data->popups.erase(preview);
+        ++preview;
+        continue;
+      }
+
+      changed |= cb(*preview, *client_socket, *client->second);
+      ++preview;
+    }
+
+    return changed;
   }
 
   //----------------------------------------------------------------------------
@@ -1416,8 +1489,8 @@ namespace LinksRouting
   }
 
   //----------------------------------------------------------------------------
-  void IPCServer::InteractionHandler::updateRegion(
-    const ClientInfos::value_type& client_info,
+  bool IPCServer::InteractionHandler::updateRegion(
+    QWsSocket* socket,
     SlotType::TextPopup::Popup& popup,
     float2 center,
     float2 rel_pos )
@@ -1475,11 +1548,7 @@ namespace LinksRouting
 //    if( old_pos == src.pos )
 //      return;
 
-    if( !updateTileMap( tile_map,
-                        client_info.first,
-                        src,
-                        popup.hover_region.zoom ) )
-      _server->_cond_data_ready->wakeAll();
+    return !updateTileMap(tile_map, socket, src, popup.hover_region.zoom);
   }
 
   //----------------------------------------------------------------------------

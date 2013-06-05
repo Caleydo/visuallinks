@@ -394,6 +394,8 @@ namespace LinksRouting
   //----------------------------------------------------------------------------
   void CPURouting::route(LinkDescription::HyperEdge* hedge)
   {
+    bool no_route = hedge->get<bool>("no-route");
+
     typedef LinkDescription::HyperEdgeDescriptionSegment segment_t;
     auto fork =
       std::make_shared<LinkDescription::HyperEdgeDescriptionForkation>();
@@ -408,7 +410,8 @@ namespace LinksRouting
     // add regions
     for( auto& node: hedge->getNodes() )
     {
-      if( node->get<bool>("hidden") )
+      if(    node->get<bool>("hidden")
+          || (no_route && !node->get<bool>("always-route")) )
         continue;
 
       // add children (hyperedges)
@@ -428,6 +431,7 @@ namespace LinksRouting
       if( !node->get<std::string>("outside-scroll").empty() )
         outside_nodes.push_back(node);
 
+#if 0
       if( node->get<bool>("outside") )
       {
         Rect cover_reg = node->get<Rect>("covered-region") - offset;
@@ -441,7 +445,7 @@ namespace LinksRouting
         segment.set("widen-end", false);
 #endif
       }
-
+#endif
       regions.push_back(node->getLinkPoints());
       nodes.push_back(node);
     }
@@ -607,7 +611,7 @@ namespace LinksRouting
           for(size_t j = 1; j < trail.size() - 1; ++j)
           {
             float2& force = forces[j - 1];
-            force = 1.5 * (trail[j + 1] + trail[j - 1] - 2 * trail[j]);
+            force = 2 * (trail[j + 1] + trail[j - 1] - 2 * trail[j]);
             int min_offset = std::min(4, (static_cast<int>(segments.size()) - 1) / 2),
                 max_offset = std::min(4, static_cast<int>(segments.size()) - 1 - min_offset);
             for(int offset = -min_offset; offset <= max_offset; ++offset)
@@ -634,7 +638,9 @@ namespace LinksRouting
 
               float2 dir = other_trail[j] - trail[j];
               float dist = dir.length();
-              force += .5 * std::min(400 / (dist * dist), 2.f) * dir;
+              float f = dist < 200 ? std::min(800 / (dist * dist), 1.f)
+                                   : 0;
+              force += f * dir;
             }
           }
         }
@@ -702,14 +708,15 @@ namespace LinksRouting
       // Connect to visible links
       if( link_covered )
       {
+        segment_t segment;
+#if 0
         auto& node = nodes[ group.second.at(0) ];
         Rect covering_reg = node->get<Rect>("covering-region") - offset;
         auto icon = getVisibleIntersect(fork->position, center, covering_reg);
-
-        segment_t segment;
         segment.nodes.push_back(icon);
+#endif
         segment.trail.push_back(center);
-#if 1
+#if 0
         segment.trail.push_back( icon->getLinkPointsChildren().front() );
         segment.set("covered", true);
         segment.set("widen-end", false);
