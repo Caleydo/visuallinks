@@ -86,7 +86,7 @@ namespace LinksRouting
                            WId* wid ) const
   {
     for(auto it = first_above; it != _windows.end(); ++it)
-      if( it->region.contains(point) )
+      if( !it->minimized && it->region.contains(point) )
       {
         if( reg )
           *reg = it->region;

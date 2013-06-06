@@ -466,7 +466,7 @@ function onScrollImpl()
     'pos': [-content.scrollX, -content.scrollY]
   });
 }
-var onScroll = throttle(onScrollImpl, 200);
+var onScroll = throttle(onScrollImpl, 100);
 
 //------------------------------------------------------------------------------
 function reroute()

@@ -247,6 +247,8 @@ namespace LinksRouting
   //----------------------------------------------------------------------------
   void IPCServer::removeCoveredPreview(const XRayIterator& preview)
   {
+    if( preview->node )
+      preview->node->set("hover", false);
     _slot_xray->_data->popups.erase(preview);
   }
 
@@ -255,7 +257,11 @@ namespace LinksRouting
   {
     auto& popups = _slot_xray->_data->popups;
     for(auto const& it: previews)
+    {
+      if( it->node )
+        it->node->set("hover", false);
       popups.erase(it);
+    }
   }
 
   //----------------------------------------------------------------------------
@@ -1269,8 +1275,6 @@ namespace LinksRouting
         hover = false;
       else
         return false;
-
-      //std::cout << "hidden = " << !hover << std::endl;
 
       return preview.node->set("hover", hover);
 #if 0
