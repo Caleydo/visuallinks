@@ -132,6 +132,12 @@ namespace LinksRouting
       float2 offset_out = normal / normal.dot(prev_normal / (w_out)),
              offset_in = normal / normal.dot(prev_normal / (w_in));
 
+      if( offset_out.length() > 2 * w_out )
+        offset_out *= 2 * w_out / offset_out.length();
+
+      if( offset_in.length() > 2 * w_in )
+        offset_in *= 2 * w_in / offset_in.length();
+
       ret.first.push_back(  *p0 + offset_out );
       ret.second.push_back( *p0 - offset_in );
 
@@ -576,12 +582,16 @@ namespace LinksRouting
                   && segment.nodes.back()->getChildren().empty()
                   && segment.get<bool>("widen-end", true) )
               {
-                if( !segment.nodes.back()->get<std::string>("virtual-outside").empty() )
+                if( !segment.nodes.back()
+                            ->get<std::string>("virtual-outside").empty() )
                   widen_size = 13;
                 else
                   widen_size = 55;
               }
-              line_borders_t region = calcLineBorders(segment.trail, 3, false, widen_size);
+              line_borders_t region = calcLineBorders( segment.trail,
+                                                       3,
+                                                       false,
+                                                       widen_size );
 
               glColor4fv(   segment.get<bool>("covered")
                           ? _color_covered_cur
