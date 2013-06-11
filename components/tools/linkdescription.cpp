@@ -6,6 +6,7 @@
  */
 
 #include <linkdescription.h>
+#include <limits>
 
 namespace LinksRouting
 {
@@ -100,6 +101,25 @@ namespace LinkDescription
   const points_t& Node::getLinkPoints() const
   {
     return const_cast<Node*>(this)->getLinkPoints();
+  }
+
+  //----------------------------------------------------------------------------
+  float2 Node::getBestLinkPoint(const float2& from_pos) const
+  {
+    float2 min_vert;
+    float min_dist = std::numeric_limits<float>::max();
+
+    for(auto const& p: getLinkPoints())
+    {
+      float dist = (p - from_pos).length();
+      if( dist < min_dist )
+      {
+        min_vert = p;
+        min_dist = dist;
+      }
+    }
+
+    return min_vert;
   }
 
   //----------------------------------------------------------------------------

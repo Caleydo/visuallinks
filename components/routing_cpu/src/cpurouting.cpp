@@ -2,13 +2,6 @@
 #include "log.hpp"
 
 #include <limits>
-#include <set>
-
-#ifdef _WIN32
-typedef HWND WId;
-#else
-typedef unsigned long WId;
-#endif
 
 template<typename T>
 void clamp(T& val, T min, T max)
@@ -233,6 +226,40 @@ namespace LinksRouting
     return buildIcon(min_pos, min_norm, triangle);
   }
 
+  /**
+   * Compare hedge segments by angle
+   */
+  struct CPURouting::cmp_by_angle
+  {
+    bool operator()( CPURouting::segment_iterator const& lhs,
+                     CPURouting::segment_iterator const& rhs ) const
+    {
+      return getAngle(lhs) < getAngle(rhs);
+    }
+
+    static float getAngle( CPURouting::segment_iterator const& s)
+    {
+      if( s->trail.size() < 2 )
+        return 0;
+      const float2 dir = s->trail.at(1) - s->trail.at(0);
+      return std::atan2(dir.y, dir.x);
+    }
+  };
+
+  /**
+   * Normalize angle to [-pi, pi]
+   */
+  float normalizePi(float rad)
+  {
+    while(rad < -M_PI)
+      rad += 2 * M_PI;
+    while(rad > M_PI)
+      rad -= 2 * M_PI;
+    return rad;
+  };
+
+  typedef LinkDescription::HyperEdgeDescriptionSegment segment_t;
+
   //----------------------------------------------------------------------------
   CPURouting::CPURouting() :
     Configurable("CPURouting")
@@ -271,6 +298,7 @@ namespace LinksRouting
 
   }
 
+#define GLOBAL_ROUTING
   //----------------------------------------------------------------------------
   void CPURouting::process(unsigned int type)
   {
@@ -284,7 +312,46 @@ namespace LinksRouting
     for( auto it = links.begin(); it != links.end(); ++it )
     {
       updateCenter(it->_link.get());
+
+#ifndef GLOBAL_ROUTING
       route(it->_link.get());
+#else
+      _global_route_nodes.clear();
+      _global_center = float2();
+      _global_num_nodes = 0;
+
+      routeGlobal(it->_link.get());
+
+      if( _global_num_nodes )
+      _global_center /= _global_num_nodes;
+
+      OrderedSegments segments;
+      for(const auto& group: _global_route_nodes)
+        for(const auto& node: group.second)
+        {
+          auto const& p = node->getParent();
+          if( !p )
+            continue;
+
+          auto const& fork = p->getHyperEdgeDescription();
+          if( !fork )
+            continue;
+
+          float2 offset = p->get<float2>("screen-offset");
+
+          segment_t segment;
+          segment.set("covered", node->get<bool>("covered"));
+          segment.nodes.push_back(node);
+          segment.trail.push_back(_global_center);
+          segment.trail.push_back(offset + node->getBestLinkPoint(_global_center - offset) );
+
+          segments.insert(
+            fork->outgoing.insert(fork->outgoing.end(), segment)
+          );
+        }
+
+      routeForceBundling(segments);
+#endif
 
 //      auto info = _link_infos.find(it->_id);
 //
@@ -298,6 +365,11 @@ namespace LinksRouting
     }
   }
 
+  WId getCoveringWId(const LinkDescription::Node& node)
+  {
+    return node.get<bool>("covered") ? node.get<WId>("covering-wid") : 0;
+  }
+
   typedef std::map<WId, std::vector<size_t>> RegionGroups;
   RegionGroups regionGroupsByCoverWindow(
     const LinkDescription::node_vec_t& nodes
@@ -306,14 +378,7 @@ namespace LinksRouting
     // Map window id to the regions they cover
     RegionGroups region_covers;
     for(size_t i = 0; i < nodes.size(); ++i )
-    {
-      WId covering_wid = nodes[i]->get<bool>("covered")
-                       ? nodes[i]->get<WId>("covering-wid")
-                       : 0;
-
-      region_covers[ covering_wid ].push_back(i);
-    }
-
+      region_covers[ getCoveringWId(*nodes[i]) ].push_back(i);
     return region_covers;
   }
 
@@ -396,7 +461,6 @@ namespace LinksRouting
   {
     bool no_route = hedge->get<bool>("no-route");
 
-    typedef LinkDescription::HyperEdgeDescriptionSegment segment_t;
     auto fork =
       std::make_shared<LinkDescription::HyperEdgeDescriptionForkation>();
     hedge->setHyperEdgeDescription(fork);
@@ -451,7 +515,7 @@ namespace LinksRouting
     }
 
     // Create route for each group of regions covered by the same window
-    RegionGroups region_groups = regionGroupsByCoverWindow(nodes);
+    auto region_groups = regionGroupsByCoverWindow(nodes);
 
     if( hedge->getParent() )
     {
@@ -478,23 +542,6 @@ namespace LinksRouting
       assert( !group.second.empty() );
       float2 center;
 
-      typedef decltype(fork->outgoing.begin()) segment_iterator;
-      struct cmp_by_angle
-      {
-        bool operator()( segment_iterator const& lhs,
-                         segment_iterator const& rhs ) const
-        {
-          return getAngle(lhs) < getAngle(rhs);
-        }
-
-        static float getAngle( segment_iterator const& s)
-        {
-          if( s->trail.size() < 2 )
-            return 0;
-          const float2 dir = s->trail.at(1) - s->trail.at(0);
-          return std::atan2(dir.y, dir.x);
-        }
-      };
       std::set<segment_iterator, cmp_by_angle> group_segments;
 
       if( link_covered )
@@ -555,7 +602,7 @@ namespace LinksRouting
             }
           }
 
-          segment.trail.push_back(min_pos);
+          segment.trail.push_back(offset + min_pos);
 //          segment.trail.push_back(min_vert);
           segment.set("covered", true);
 
@@ -563,99 +610,18 @@ namespace LinksRouting
         }
         else
         {
-          segment.trail.push_back(center);
+          segment.trail.push_back(offset + center);
           segment.set("covered", link_covered);
         }
 
-        float2 dir = min_vert - segment.trail.front();
-        size_t num_segments = /*outside ? 1 :*/ dir.length() / 9 + 0.5;
-        float2 sub_dir = dir / num_segments;
-        for(size_t i = 0; i < num_segments; ++i)
-          segment.trail.push_back(segment.trail.back() + sub_dir);
-
+        segment.trail.push_back(offset + min_vert);
         group_segments.insert(
           fork->outgoing.insert(fork->outgoing.end(), segment)
         );
       }
 
-      auto normalizePi = [](float rad)
-      {
-        while(rad < M_PI)
-          rad += 2 * M_PI;
-        while(rad > M_PI)
-          rad -= 2 * M_PI;
-        return rad;
-      };
-
 #if 1
-      // Force-Directed Edge Bundling
-      // Danny Holten and Jarke J. van Wijk
-
-      std::vector<segment_iterator> segments( group_segments.begin(),
-                                              group_segments.end() );
-      std::vector<std::vector<float2>> segment_forces(segments.size());
-
-      for(size_t iter = 0; iter < 50; ++iter)
-      {
-        // Calculate forces
-        for(int i = 0; i < static_cast<int>(segments.size()); ++i)
-        {
-          auto& trail = segments[i]->trail;
-          if( trail.size() < 3 )
-            continue;
-
-          auto& forces = segment_forces[i];
-          if( iter == 0 )
-            forces.resize(trail.size() - 2);
-
-          for(size_t j = 1; j < trail.size() - 1; ++j)
-          {
-            float2& force = forces[j - 1];
-            force = 2 * (trail[j + 1] + trail[j - 1] - 2 * trail[j]);
-            int min_offset = std::min(4, (static_cast<int>(segments.size()) - 1) / 2),
-                max_offset = std::min(4, static_cast<int>(segments.size()) - 1 - min_offset);
-            for(int offset = -min_offset; offset <= max_offset; ++offset)
-            {
-              if( !offset )
-                continue;
-
-              int other_i = (i + offset) % segments.size();
-              float delta_angle =
-                normalizePi( cmp_by_angle::getAngle(segments[i])
-                           - cmp_by_angle::getAngle(segments[other_i]) );
-
-              if( std::abs(delta_angle) > 0.7 * M_PI )
-                continue;
-
-              if(    segments[i]->get<bool>("covered")
-                  != segments[other_i]->get<bool>("covered") )
-                continue;
-
-              auto const& other_trail = segments[(i + offset) % segments.size()]
-                                                ->trail;
-              if( j >= other_trail.size() )
-                continue;
-
-              float2 dir = other_trail[j] - trail[j];
-              float dist = dir.length();
-              float f = dist < 200 ? std::min(800 / (dist * dist), 1.f)
-                                   : 0;
-              force += f * dir;
-            }
-          }
-        }
-
-        // Apply forces
-        for(int i = 0; i < static_cast<int>(segments.size()); ++i)
-        {
-          auto& trail = segments[i]->trail;
-          auto const& forces = segment_forces[i];
-
-          for(size_t j = 1; j < trail.size() - 1; ++j)
-            trail[j] += 0.1 * forces[j - 1];
-        }
-      }
-
+      routeForceBundling(group_segments);
 #else
       auto getLength = []( float2 const& center,
                            float2 const& bundle_point,
@@ -715,7 +681,7 @@ namespace LinksRouting
         auto icon = getVisibleIntersect(fork->position, center, covering_reg);
         segment.nodes.push_back(icon);
 #endif
-        segment.trail.push_back(center);
+        segment.trail.push_back(offset + center);
 #if 0
         segment.trail.push_back( icon->getLinkPointsChildren().front() );
         segment.set("covered", true);
@@ -728,10 +694,187 @@ namespace LinksRouting
 
         segment.trail.push_back(icon->getLinkPoints().front());
 #endif
-        segment.trail.push_back(fork->position);
+        segment.trail.push_back(offset + fork->position);
         segment.set("covered", false);
 
         fork->outgoing.push_back(segment);
+      }
+    }
+  }
+
+  //----------------------------------------------------------------------------
+  void CPURouting::routeGlobal(LinkDescription::HyperEdge* hedge)
+  {
+    bool no_route = hedge->get<bool>("no-route");
+
+    auto fork =
+      std::make_shared<LinkDescription::HyperEdgeDescriptionForkation>();
+    hedge->setHyperEdgeDescription(fork);
+    fork->position = hedge->getCenter();
+
+    LinkDescription::node_vec_t nodes,
+                                outside_nodes;
+    float2 offset = hedge->get<float2>("screen-offset");
+
+    // add regions
+    for( auto& node: hedge->getNodes() )
+    {
+      if(    node->get<bool>("hidden")
+          || (no_route && !node->get<bool>("always-route")) )
+        continue;
+
+      // add children (hyperedges)
+      for( auto& child: node->getChildren() )
+        routeGlobal(child.get());
+
+      nodes.push_back(node);
+
+      if( !node->get<std::string>("outside-scroll").empty() )
+        outside_nodes.push_back(node);
+    }
+
+    // Create route for each group of regions outside into the same direction
+    // Store all other nodes for later global routing
+
+    std::map<size_t, OrderedSegments> outside_groups;
+    for(size_t i = 0; i < nodes.size(); ++i)
+    {
+      auto const& node = nodes[i];
+
+      if( node->getVertices().empty() )
+      {
+        segment_t segment;
+        segment.nodes.push_back(node);
+
+        fork->outgoing.push_back(segment);
+        continue;
+      }
+
+      if( !node->get<bool>("outside") )
+      {
+        _global_route_nodes[ getCoveringWId(*node) ].push_back(node);
+        _global_center += node->getCenter() + offset;
+        _global_num_nodes += 1;
+        continue;
+      }
+
+      // get next outside node
+      float2 node_center = node->getCenter();
+      float min_dist = std::numeric_limits<float>::max();
+      size_t min_index = -1;
+
+      for(size_t j = 0; j < outside_nodes.size(); ++j)
+      {
+        const float2 pos = outside_nodes[j]->getLinkPointsChildren().front();
+        float dist = (pos - node_center).length();
+        if( dist < min_dist )
+        {
+          min_dist = dist;
+          min_index = j;
+        }
+      }
+      float2 min_pos =
+        outside_nodes[min_index]->getLinkPointsChildren().front();
+
+      segment_t segment;
+      segment.set("covered", true);
+      segment.nodes.push_back(node);
+      segment.trail.push_back(offset + min_pos);
+      segment.trail.push_back(offset + node->getBestLinkPoint(min_pos));
+
+      outside_groups[ min_index ].insert(
+        fork->outgoing.insert(fork->outgoing.end(), segment)
+      );
+    }
+
+    for(auto const& group: outside_groups)
+      routeForceBundling(group.second);
+  }
+
+  //----------------------------------------------------------------------------
+  void CPURouting::routeForceBundling(const OrderedSegments& sorted_segments)
+  {
+    SegmentIterators segments(sorted_segments.begin(), sorted_segments.end());
+
+    // First subdivide all segments to get smooth routes
+    for(auto& segment: segments)
+    {
+      assert( segment->trail.size() == 2 );
+
+      float2 dir = segment->trail.back() - segment->trail.front();
+      segment->trail.pop_back();
+      size_t num_segments = /*outside ? 1 :*/ dir.length() / 9 + 0.5;
+      float2 sub_dir = dir / num_segments;
+      for(size_t i = 0; i < num_segments; ++i)
+        segment->trail.push_back(segment->trail.back() + sub_dir);
+    }
+
+    // Force-Directed Edge Bundling
+    // Danny Holten and Jarke J. van Wijk
+
+    std::vector<std::vector<float2>> segment_forces(segments.size());
+
+    for(size_t iter = 0; iter < 50; ++iter)
+    {
+      // Calculate forces
+      for(int i = 0; i < static_cast<int>(segments.size()); ++i)
+      {
+        auto& trail = segments[i]->trail;
+        if( trail.size() < 3 )
+          continue;
+
+        auto& forces = segment_forces[i];
+        if( iter == 0 )
+          forces.resize(trail.size() - 2);
+
+        for(size_t j = 1; j < trail.size() - 1; ++j)
+        {
+          float2& force = forces[j - 1];
+          force = 2 * (trail[j + 1] + trail[j - 1] - 2 * trail[j]);
+          int min_offset = std::min(4, (static_cast<int>(segments.size()) - 1) / 2),
+              max_offset = std::min(4, static_cast<int>(segments.size()) - 1 - min_offset);
+          for(int offset = -min_offset; offset <= max_offset; ++offset)
+          {
+            if( !offset )
+              continue;
+
+            int other_i = (i + offset) % segments.size();
+            float delta_angle =
+              normalizePi( cmp_by_angle::getAngle(segments[i])
+                         - cmp_by_angle::getAngle(segments[other_i]) );
+
+            if( std::fabs(delta_angle) > (std::abs(offset) < 2 ? 0.7 : 0.35) * M_PI )
+              continue;
+//            float dist_scale = float(j) / trail.size();
+//            if( std::fabs(delta_angle) * dist_scale * dist_scale > 0.1 * M_PI )
+//              continue;
+
+//            if(    segments[i]->get<bool>("covered")
+//                != segments[other_i]->get<bool>("covered") )
+//              continue;
+
+            auto const& other_trail = segments[(i + offset) % segments.size()]
+                                              ->trail;
+            if( j >= other_trail.size() )
+              continue;
+
+            float2 dir = other_trail[j] - trail[j];
+            float dist = dir.length();
+            float f = dist < 200 ? std::min(800 / (dist * dist), 1.f)
+                                 : 0;
+            force += f * dir;
+          }
+        }
+      }
+
+      // Apply forces
+      for(int i = 0; i < static_cast<int>(segments.size()); ++i)
+      {
+        auto& trail = segments[i]->trail;
+        auto const& forces = segment_forces[i];
+
+        for(size_t j = 1; j < trail.size() - 1; ++j)
+          trail[j] += 0.1 * forces[j - 1];
       }
     }
   }

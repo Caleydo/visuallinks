@@ -143,6 +143,7 @@ namespace LinkDescription
       void setLinkPoints(const points_t& points);
       points_t& getLinkPoints();
       const points_t& getLinkPoints() const;
+      float2 getBestLinkPoint(const float2& from_pos) const;
 
       points_t& getLinkPointsChildren();
       const points_t& getLinkPointsChildren() const;
@@ -236,6 +237,7 @@ namespace LinkDescription
       nodes_t nodes;
       points_t trail;
   };
+  typedef std::list<HyperEdgeDescriptionSegment> HedgeSegmentList;
 
   struct HyperEdgeDescriptionForkation
   {
@@ -246,7 +248,7 @@ namespace LinkDescription
     float2 position;
 
     HyperEdgeDescriptionSegment incoming;
-    std::list<HyperEdgeDescriptionSegment> outgoing;
+    HedgeSegmentList outgoing;
   };
 
   struct LinkDescription

@@ -8,11 +8,30 @@
 #include "slotdata/image.hpp"
 #include "slotdata/polygon.hpp"
 
+#include <set>
+
+#ifdef _WIN32
+typedef HWND WId;
+#else
+typedef unsigned long WId;
+#endif
+
 namespace LinksRouting
 {
   class CPURouting: public Routing, public ComponentArguments
   {
     public:
+
+      /**
+       * Compare hedge segments by angle
+       */
+      struct cmp_by_angle;
+
+      typedef LinkDescription::HedgeSegmentList::iterator segment_iterator;
+      typedef std::vector<segment_iterator> SegmentIterators;
+      typedef std::set<segment_iterator, cmp_by_angle> OrderedSegments;
+
+      typedef std::map<WId, std::vector<LinkDescription::NodePtr>> RegionGroups;
 
       CPURouting();
 
@@ -32,10 +51,16 @@ namespace LinksRouting
     private:
 
       slot_t<LinkDescription::LinkList>::type _subscribe_links;
+      RegionGroups _global_route_nodes;
+      float2 _global_center;
+      size_t _global_num_nodes;
 
       bool updateCenter( LinkDescription::HyperEdge* hedge,
                          float2* center = nullptr );
       void route(LinkDescription::HyperEdge* hedge);
+      void routeGlobal(LinkDescription::HyperEdge* hedge);
+
+      void routeForceBundling(const OrderedSegments& segments);
 
   };
 }

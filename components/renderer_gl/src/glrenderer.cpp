@@ -545,15 +545,6 @@ namespace LinksRouting
         else
           glColor4fv(_color_cur);
 
-        if( pass > 0 )
-        {
-          // First pass is used by xray previews which are given in absolute
-          // coordinates.
-          float2 offset = hedge->get<float2>("screen-offset");
-          glPushMatrix();
-          glTranslatef(offset.x, offset.y, 0);
-        }
-
         auto fork = hedge->getHyperEdgeDescription();
         if( !fork )
         {
@@ -609,7 +600,7 @@ namespace LinksRouting
               glEnd();
             }
 
-            // Collect nodes for drawing the after the links to prevent links
+            // Collect nodes for drawing them after the links to prevent links
             // crossing regions.
             nodes.insert( nodes.end(),
                           segment.nodes.begin(),
@@ -618,11 +609,6 @@ namespace LinksRouting
 
           rendered_anything |=
             renderNodes(nodes, 3.f, &hedges_open, &hedges_done, false, pass);
-        }
-
-        if( pass > 0 )
-        {
-          glPopMatrix();
         }
 
         hedges_done.insert(hedge);
@@ -641,6 +627,18 @@ namespace LinksRouting
                                 int pass )
   {
     bool rendered_anything = false;
+
+    if( pass > 0 )
+    {
+      // First pass is used by xray previews which are given in absolute
+      // coordinates.
+      float2 offset = float2();
+      if( !nodes.empty() && nodes.front()->getParent() )
+        offset = nodes.front()->getParent()->get<float2>("screen-offset");
+
+      glPushMatrix();
+      glTranslatef(offset.x, offset.y, 0);
+    }
 
     for( auto node = nodes.begin(); node != nodes.end(); ++node )
     {
@@ -709,6 +707,11 @@ namespace LinksRouting
       }
       glEnd();
       rendered_anything = true;
+    }
+
+    if( pass > 0 )
+    {
+      glPopMatrix();
     }
 
     return rendered_anything;
