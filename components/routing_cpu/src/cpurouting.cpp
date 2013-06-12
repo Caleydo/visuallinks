@@ -262,9 +262,15 @@ namespace LinksRouting
 
   //----------------------------------------------------------------------------
   CPURouting::CPURouting() :
-    Configurable("CPURouting")
+    Configurable("CPURouting"),
+    _global_num_nodes(0)
   {
-
+    registerArg("SegmentLength", _initial_segment_length = 30);
+    registerArg("NumIterations", _initial_iterations = 32);
+    registerArg("NumSteps", _num_steps = 5);
+    registerArg("StepSize", _initial_step_size = 0.1);
+    registerArg("SpringConstant", _spring_constant = 20);
+    registerArg("AngleCompatWeight", _angle_comp_weight = 0.3);
   }
 
   //------------------------------------------------------------------------------
@@ -796,85 +802,155 @@ namespace LinksRouting
   {
     SegmentIterators segments(sorted_segments.begin(), sorted_segments.end());
 
-    // First subdivide all segments to get smooth routes
-    for(auto& segment: segments)
-    {
-      assert( segment->trail.size() == 2 );
-
-      float2 dir = segment->trail.back() - segment->trail.front();
-      segment->trail.pop_back();
-      size_t num_segments = /*outside ? 1 :*/ dir.length() / 9 + 0.5;
-      float2 sub_dir = dir / num_segments;
-      for(size_t i = 0; i < num_segments; ++i)
-        segment->trail.push_back(segment->trail.back() + sub_dir);
-    }
-
     // Force-Directed Edge Bundling
     // Danny Holten and Jarke J. van Wijk
 
     std::vector<std::vector<float2>> segment_forces(segments.size());
 
-    for(size_t iter = 0; iter < 50; ++iter)
+    int num_iterations = _initial_iterations;
+    float step_size = _initial_step_size;
+
+    for(int step = 0; step < _num_steps; ++step)
     {
-      // Calculate forces
-      for(int i = 0; i < static_cast<int>(segments.size()); ++i)
-      {
-        auto& trail = segments[i]->trail;
-        if( trail.size() < 3 )
-          continue;
+      // Subdivide all segments to get smooth routes.
 
-        auto& forces = segment_forces[i];
-        if( iter == 0 )
-          forces.resize(trail.size() - 2);
-
-        for(size_t j = 1; j < trail.size() - 1; ++j)
+      if( step == 0 )
+        // In the first step create subdivided segments approximately the given
+        // size.
+        for(auto& segment: segments)
         {
-          float2& force = forces[j - 1];
-          force = 2 * (trail[j + 1] + trail[j - 1] - 2 * trail[j]);
-          int min_offset = std::min(4, (static_cast<int>(segments.size()) - 1) / 2),
-              max_offset = std::min(4, static_cast<int>(segments.size()) - 1 - min_offset);
-          for(int offset = -min_offset; offset <= max_offset; ++offset)
+          assert( segment->trail.size() == 2 );
+
+          float2 dir = segment->trail.back() - segment->trail.front();
+          segment->trail.pop_back();
+          size_t num_segments = dir.length() / _initial_segment_length + 0.5;
+          float2 sub_dir = dir / num_segments;
+          for(size_t i = 0; i < num_segments; ++i)
+            segment->trail.push_back(segment->trail.back() + sub_dir);
+        }
+      else
+        // For all consecutive rounds double the number of segments
+        for(auto& segment: segments)
+        {
+          auto& trail = segment->trail;
+          size_t old_size = trail.size();
+          trail.resize(old_size * 2 - 1);
+
+          for(size_t i = old_size - 1; i > 0; --i)
           {
-            if( !offset )
-              continue;
-
-            int other_i = (i + offset) % segments.size();
-            float delta_angle =
-              normalizePi( cmp_by_angle::getAngle(segments[i])
-                         - cmp_by_angle::getAngle(segments[other_i]) );
-
-            if( std::fabs(delta_angle) > (std::abs(offset) < 2 ? 0.7 : 0.35) * M_PI )
-              continue;
-//            float dist_scale = float(j) / trail.size();
-//            if( std::fabs(delta_angle) * dist_scale * dist_scale > 0.1 * M_PI )
-//              continue;
-
-//            if(    segments[i]->get<bool>("covered")
-//                != segments[other_i]->get<bool>("covered") )
-//              continue;
-
-            auto const& other_trail = segments[(i + offset) % segments.size()]
-                                              ->trail;
-            if( j >= other_trail.size() )
-              continue;
-
-            float2 dir = other_trail[j] - trail[j];
-            float dist = dir.length();
-            float f = dist < 200 ? std::min(800 / (dist * dist), 1.f)
-                                 : 0;
-            force += f * dir;
+            trail[i * 2    ] = trail[i];
+            trail[i * 2 - 1] = 0.5 * (trail[i] + trail[i - 1]);
           }
+        }
+
+      for(int iter = 0; iter < num_iterations; ++iter)
+      {
+        // Calculate forces
+        for(int i = 0; i < static_cast<int>(segments.size()); ++i)
+        {
+          auto& trail = segments[i]->trail;
+          if( trail.size() < 3 )
+            continue;
+
+          auto& forces = segment_forces[i];
+          if( iter == 0 )
+            forces.resize(trail.size() - 2);
+
+          float len = (trail.back() - trail.front()).length();
+          double spring_constant = _spring_constant / (len * trail.size());
+
+          for(size_t j = 1; j < trail.size() - 1; ++j)
+          {
+            float2& force = forces[j - 1];
+            force = spring_constant * (trail[j + 1] + trail[j - 1] - 2 * trail[j]);
+            int min_offset = std::min(4, (static_cast<int>(segments.size()) - 1) / 2),
+                max_offset = std::min(4, static_cast<int>(segments.size()) - 1 - min_offset);
+            for(int offset = -min_offset; offset <= max_offset; ++offset)
+            {
+              if( !offset )
+                continue;
+
+              int other_i = (i + offset) % segments.size();
+              float delta_angle =
+                normalizePi( cmp_by_angle::getAngle(segments[i])
+                           - cmp_by_angle::getAngle(segments[other_i]) );
+
+              if( std::fabs(delta_angle) > 0.7 * M_PI )
+                continue;
+
+//              if( std::fabs(delta_angle) > (std::abs(offset) < 2 ? 0.7 : 0.35) * M_PI )
+//                continue;
+//              float dist_scale = float(j) / trail.size();
+//              if( std::fabs(delta_angle) * dist_scale * dist_scale > 0.1 * M_PI )
+//                continue;
+//
+//              if(    segments[i]->get<bool>("covered")
+//                  != segments[other_i]->get<bool>("covered") )
+//                continue;
+
+              auto const& other_trail = segments[other_i]->trail;
+              if( j >= other_trail.size() )
+                continue;
+
+              float trail_comp =
+                  (1 - _angle_comp_weight)
+                + _angle_comp_weight * std::max(0., cos(delta_angle));
+
+              float2 dir = other_trail[j] - trail[j];
+              float dist = dir.length();
+              float f = dist < 200 ? std::min(800 / (dist * dist), 1.f)
+                                   : 0;
+              force += trail_comp * f * dir;
+            }
+          }
+        }
+
+        // Apply forces
+        for(int i = 0; i < static_cast<int>(segments.size()); ++i)
+        {
+          auto& trail = segments[i]->trail;
+          auto const& forces = segment_forces[i];
+
+          for(size_t j = 1; j < trail.size() - 1; ++j)
+            trail[j] += step_size * forces[j - 1];
         }
       }
 
-      // Apply forces
-      for(int i = 0; i < static_cast<int>(segments.size()); ++i)
-      {
-        auto& trail = segments[i]->trail;
-        auto const& forces = segment_forces[i];
+      num_iterations = std::max<int>(num_iterations * 0.66, 5);
+      step_size *= 0.5;
+    }
 
-        for(size_t j = 1; j < trail.size() - 1; ++j)
-          trail[j] += 0.1 * forces[j - 1];
+    // -----------------------
+    // Finally clean up routes
+
+    for(int i = 0; i < static_cast<int>(segments.size()); ++i)
+    {
+      auto& trail = segments[i]->trail;
+      if( trail.size() < 3 )
+        continue;
+
+      for(size_t j = trail.size() - 1; j > 0; --j)
+      {
+        int min_offset = std::min(4, (static_cast<int>(segments.size()) - 1) / 2),
+            max_offset = std::min(4, static_cast<int>(segments.size()) - 1 - min_offset);
+        for(int offset = 1; offset <= max_offset; ++offset)
+        {
+          size_t other_i = i + offset;
+          if( other_i >= segments.size() )
+            continue;
+
+          auto const& other_trail = segments[other_i]->trail;
+          if( j >= other_trail.size() )
+            continue;
+
+          if( (other_trail[j] - trail[j]).length() < 2 )
+          {
+            for(size_t k = 0; k < j; ++k)
+              trail[k] = other_trail[j];
+            offset = max_offset + 1;
+            break;
+          }
+        }
       }
     }
   }

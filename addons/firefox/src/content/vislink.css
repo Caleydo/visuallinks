@@ -22,3 +22,8 @@
 {
   list-style-image: url("chrome://mypl/content/search-prev-16.png");
 }
+
+#vislink textbox
+{
+  list-style-image: none;
+}

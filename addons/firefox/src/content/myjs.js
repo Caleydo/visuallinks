@@ -261,8 +261,13 @@ function smoothScrollTo(y_target)
 
 
 //------------------------------------------------------------------------------
-function onVisLinkButton()
+function onVisLinkButton(ev)
 {
+  if( ev.target.id != 'vislink' )
+    // Do not use event if not button itself but an entry from the menu has
+    // been activated.
+    return;
+
   menu = document.getElementById("vislink_menu");
   items_routing = document.getElementById("routing-selector");
 

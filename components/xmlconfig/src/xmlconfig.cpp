@@ -107,7 +107,7 @@ namespace LinksRouting
     std::string valname;
     TiXmlNode* container = parseIdentifier(key, valname, true);
 
-    if( valname.length() + 1 > key.length() )
+    if( key.length() > valname.length() + 1 )
     {
       std::string component_name =
         key.substr(0, key.length() - valname.length() - 1);
@@ -248,7 +248,7 @@ namespace LinksRouting
     else if(typestr->compare(type) != 0)
     {
       std::cout << "LinksSystem XmlConfig Warning: types do not match for \"" << identifier << "\":" << std::endl;
-      std::cout << "  " << typestr << " != " << type << std::endl;
+      std::cout << "  " << *typestr << " != " << type << std::endl;
       return 0;
     }
     return 2;

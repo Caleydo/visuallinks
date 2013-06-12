@@ -50,6 +50,13 @@ namespace LinksRouting
 
     private:
 
+      int       _initial_segment_length,
+                _initial_iterations,
+                _num_steps;
+      double    _initial_step_size,
+                _spring_constant,
+                _angle_comp_weight;
+
       slot_t<LinkDescription::LinkList>::type _subscribe_links;
       RegionGroups _global_route_nodes;
       float2 _global_center;

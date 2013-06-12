@@ -13,7 +13,7 @@
 	             id="vislink"
 	             label="vislink"
 	             tooltiptext="VisLink"
-	             oncommand="onVisLinkButton()"
+	             oncommand="onVisLinkButton(event)"
 	             class="toolbarbutton-1 chromeclass-toolbar-additional vislink">
     <menupopup id="vislink_menu">
       <div id="routing-selector" orient="vertical">

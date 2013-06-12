@@ -36,11 +36,82 @@
             </menulist>
           </row>
 
+          <row>
+            <label value="Initial segment length" control="segment-length"/>
+            <textbox id="segment-length"
+                     type="number"
+                     value="30"
+                     min="10"
+                     max="300"
+                     increment="5"
+                     size="3" maxlength="3"
+                     onchange="onChangeSetting('CPURouting:SegmentLength', this, 'Integer');" />
+          </row>
+          <row>
+            <label value="Initial #iterations" control="num-iterations"/>
+            <textbox id="num-iterations"
+                     type="number"
+                     value="30"
+                     min="1"
+                     max="300"
+                     increment="5"
+                     size="3" maxlength="3"
+                     onchange="onChangeSetting('CPURouting:NumIterations', this, 'Integer');" />
+          </row>
+          <row>
+            <label value="#Steps" control="num-steps"/>
+            <textbox id="num-steps"
+                     type="number"
+                     value="3"
+                     min="1"
+                     max="12"
+                     increment="1"
+                     size="2" maxlength="2"
+                     onchange="onChangeSetting('CPURouting:NumSteps', this, 'Integer');" />
+          </row>
+          <row>
+            <label value="Initial step size" control="step-size"/>
+            <textbox id="step-size"
+                     type="number"
+                     value="30"
+                     min="0.1"
+                     max="2"
+                     increment="0.1"
+                     decimalplaces="2"
+                     size="3" maxlength="3"
+                     onchange="onChangeSetting('CPURouting:StepSize', this, 'Float');" />
+          </row>
+          <row>
+            <label value="K (spring constant)" control="spring-constant"/>
+            <textbox id="spring-constant"
+                     type="number"
+                     value="20"
+                     min="0"
+                     max="500"
+                     increment="10"
+                     decimalplaces="0"
+                     size="4" maxlength="4"
+                     onchange="onChangeSetting('CPURouting:SpringConstant', this, 'Float');" />
+          </row>
+          <row>
+            <label value="Angle compatibility weight" control="angle-comp-weight"/>
+            <textbox id="angle-comp-weight"
+                     type="number"
+                     value="0.5"
+                     min="0"
+                     max="1"
+                     increment="0.05"
+                     decimalplaces="2"
+                     size="4" maxlength="4"
+                     onchange="onChangeSetting('CPURouting:AngleCompatWeight', this, 'Float');" />
+          </row>
+
 				</rows>
 			</grid>
       
     </groupbox>
   </prefpane>
   
+  <script type="application/x-javascript" src="chrome://mypl/content/throttle.js" />
   <script type="application/x-javascript" src="chrome://mypl/content/preferences.js" />
 </prefwindow>

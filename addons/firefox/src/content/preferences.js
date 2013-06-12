@@ -1,3 +1,19 @@
+function changeSetting(key, val, type)
+{
+  var val = val instanceof XULElement ? val.value : val;
+
+  send({
+    'task': 'SET',
+    'id': '/config',
+    'var': key,
+    'val': val,
+    'type': type
+  });
+}
+var onChangeSetting = debounce(changeSetting, 400);
+
+// =============================================================================
+
 var p_status = document.getElementById("connection-status");
 var box_settings = document.getElementById("server-settings-box");
 var send = window.opener.send;
