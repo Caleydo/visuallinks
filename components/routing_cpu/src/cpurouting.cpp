@@ -269,6 +269,7 @@ namespace LinksRouting
     registerArg("NumIterations", _initial_iterations = 32);
     registerArg("NumSteps", _num_steps = 5);
     registerArg("NumSimplify", _num_simplify = std::numeric_limits<int>::max());
+    registerArg("NumLinear", _num_linear = 1);
     registerArg("StepSize", _initial_step_size = 0.1);
     registerArg("SpringConstant", _spring_constant = 20);
     registerArg("AngleCompatWeight", _angle_comp_weight = 0.3);
@@ -801,6 +802,9 @@ namespace LinksRouting
   //----------------------------------------------------------------------------
   void CPURouting::routeForceBundling(const OrderedSegments& sorted_segments)
   {
+    if( sorted_segments.empty() )
+      return;
+
     SegmentIterators segments(sorted_segments.begin(), sorted_segments.end());
 
     // Force-Directed Edge Bundling
@@ -900,8 +904,12 @@ namespace LinksRouting
 
               float2 dir = other_trail[j] - trail[j];
               float dist = dir.length();
-              float f = dist < 200 ? std::min(800 / (dist * dist), 1.f)
-                                   : 0;
+              float f = 0;
+              if( step < _num_linear )
+                f = std::min(1./dist, 1.);
+              else
+                f = dist < 200 ? std::min(800 / (dist * dist), 1.f)
+                               : 0;
               force += trail_comp * f * dir;
             }
           }
@@ -925,45 +933,59 @@ namespace LinksRouting
     // -----------------------
     // Finally clean up routes
 
-    // Whether a segment is needed by another segment to connect to the center
-    // and therefore is not allowed to be shortened.
-    std::vector<bool> fixed(segments.size());
+    size_t num_skip = 0;
+    for(bool check = true; check;)
+    {
+      float2 ref_pos;
+      for(size_t i = 0; i < segments.size(); ++i)
+      {
+        auto& trail = segments[i]->trail;
+        if( num_skip >= trail.size() )
+        {
+          check = false;
+          break;
+        }
 
+        if( i == 0 )
+          ref_pos = segments[0]->trail[num_skip];
+        else if( (trail[num_skip] - ref_pos).length() > 5 )
+        {
+          check = false;
+          break;
+        }
+      }
+
+      if( check )
+        ++num_skip;
+    }
+
+    if( num_skip )
+      num_skip -= 1;
+
+    for(size_t i = 0; i < segments.size(); ++i)
+    {
+      auto& trail = segments[i]->trail;
+      trail.erase(trail.begin(), trail.begin() + num_skip);
+    }
+#if 1
     int max_clean = std::min<int>(_num_simplify, segments.size());
     for(int i = 0; i < max_clean; ++i)
     {
-      if( fixed[i] )
-        continue;
-
       auto& trail = segments[i]->trail;
-      if( trail.size() < 3 )
-        continue;
-
-      for(size_t j = trail.size() - 1; j > 0; --j)
+      for(int other_i = i + 1; other_i < max_clean; ++other_i)
       {
-        for(int offset = 1; offset <= max_offset; ++offset)
-        {
-          size_t other_i = i + offset;
-          if( other_i >= segments.size() )
-            continue;
-
-          auto const& other_trail = segments[other_i]->trail;
-          if( j >= other_trail.size() )
-            continue;
-
-          if( (other_trail[j] - trail[j]).length() < 2 )
+        auto& other_trail = segments[other_i]->trail;
+        size_t max_trail = std::min(trail.size(), other_trail.size() - 1);
+        for(size_t j = max_trail; j --> 1; --j)
+          if( (other_trail[j] - trail[j]).length() < 5 )
           {
             for(size_t k = 0; k < j; ++k)
-              trail[k] = other_trail[j];
-            fixed[other_i] = true;
-            offset = max_offset + 1;
+              other_trail[k] = trail[j];
             break;
           }
-        }
       }
     }
-
-//    for(size_t i = 0; i < segments.size(); ++i)
+#endif
 //    {
 //      auto& trail = segments[i]->trail;
 //      if( trail.size() < 3 )

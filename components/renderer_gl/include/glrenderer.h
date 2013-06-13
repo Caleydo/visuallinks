@@ -81,7 +81,8 @@ namespace LinksRouting
                         HyperEdgeQueue* hedges_open = NULL,
                         HyperEdgeSet* hedges_done = NULL,
                         bool render_all = false,
-                        int pass = 0 );
+                        int pass = 0,
+                        bool do_transform = true );
       bool renderRect( const Rect& rect,
                        size_t margin = 2,
                        GLuint tex = 0,

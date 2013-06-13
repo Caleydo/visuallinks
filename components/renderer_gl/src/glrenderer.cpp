@@ -402,7 +402,7 @@ namespace LinksRouting
           glVertex2f(vp_pos.x, vp_pos.y + vp_dim.y);
         glEnd();
 
-        renderNodes(popup.nodes, 3.f / scale, 0, 0, true, 1);
+        renderNodes(popup.nodes, 3.f / scale, 0, 0, true, 1, false);
 
         glPopMatrix();
         glMatrixMode(GL_PROJECTION);
@@ -623,12 +623,13 @@ namespace LinksRouting
                                 float line_width,
                                 HyperEdgeQueue* hedges_open,
                                 HyperEdgeSet* hedges_done,
-                                bool render_all,
-                                int pass )
+                                const bool render_all,
+                                const int pass,
+                                const bool do_transform )
   {
     bool rendered_anything = false;
 
-    if( pass > 0 )
+    if( pass > 0 && do_transform )
     {
       // First pass is used by xray previews which are given in absolute
       // coordinates.
@@ -709,7 +710,7 @@ namespace LinksRouting
       rendered_anything = true;
     }
 
-    if( pass > 0 )
+    if( pass > 0 && do_transform )
     {
       glPopMatrix();
     }
