@@ -69,7 +69,8 @@ namespace LinksRouting
       void route(LinkDescription::HyperEdge* hedge);
       void routeGlobal(LinkDescription::HyperEdge* hedge);
 
-      void routeForceBundling(const OrderedSegments& segments);
+      void routeForceBundling( const OrderedSegments& segments,
+                               bool trim_root = true );
 
   };
 }

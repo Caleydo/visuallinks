@@ -796,11 +796,12 @@ namespace LinksRouting
     }
 
     for(auto const& group: outside_groups)
-      routeForceBundling(group.second);
+      routeForceBundling(group.second, false);
   }
 
   //----------------------------------------------------------------------------
-  void CPURouting::routeForceBundling(const OrderedSegments& sorted_segments)
+  void CPURouting::routeForceBundling( const OrderedSegments& sorted_segments,
+                                       bool trim_root )
   {
     if( sorted_segments.empty() )
       return;
@@ -933,40 +934,45 @@ namespace LinksRouting
     // -----------------------
     // Finally clean up routes
 
-    size_t num_skip = 0;
-    for(bool check = true; check;)
+    if( trim_root )
     {
-      float2 ref_pos;
-      for(size_t i = 0; i < segments.size(); ++i)
+      size_t num_skip = 0;
+      for(bool check = true; check;)
       {
-        auto& trail = segments[i]->trail;
-        if( num_skip >= trail.size() )
+        float2 ref_pos;
+        for(size_t i = 0; i < segments.size(); ++i)
         {
-          check = false;
-          break;
+          auto& trail = segments[i]->trail;
+          if( num_skip >= trail.size() )
+          {
+            check = false;
+            break;
+          }
+
+          if( i == 0 )
+            ref_pos = segments[0]->trail[num_skip];
+          else if( (trail[num_skip] - ref_pos).length() > 5 )
+          {
+            check = false;
+            break;
+          }
         }
 
-        if( i == 0 )
-          ref_pos = segments[0]->trail[num_skip];
-        else if( (trail[num_skip] - ref_pos).length() > 5 )
-        {
-          check = false;
-          break;
-        }
+        if( check )
+          ++num_skip;
       }
 
-      if( check )
-        ++num_skip;
+      if( num_skip )
+        num_skip -= 1;
+
+      if( num_skip )
+        for(size_t i = 0; i < segments.size(); ++i)
+        {
+          auto& trail = segments[i]->trail;
+          trail.erase(trail.begin(), trail.begin() + num_skip);
+        }
     }
 
-    if( num_skip )
-      num_skip -= 1;
-
-    for(size_t i = 0; i < segments.size(); ++i)
-    {
-      auto& trail = segments[i]->trail;
-      trail.erase(trail.begin(), trail.begin() + num_skip);
-    }
 #if 1
     int max_clean = std::min<int>(_num_simplify, segments.size());
     for(int i = 0; i < max_clean; ++i)
