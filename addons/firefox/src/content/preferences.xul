@@ -70,6 +70,17 @@
                      onchange="onChangeSetting('CPURouting:NumSteps', this, 'Integer');" />
           </row>
           <row>
+            <label value="#Steps" control="num-simplify"/>
+            <textbox id="num-simplify"
+                     type="number"
+                     value="10"
+                     min="0"
+                     max="32767"
+                     increment="1"
+                     size="5" maxlength="5"
+                     onchange="onChangeSetting('CPURouting:NumSimplify', this, 'Integer');" />
+          </row>
+          <row>
             <label value="Initial step size" control="step-size"/>
             <textbox id="step-size"
                      type="number"

@@ -268,6 +268,7 @@ namespace LinksRouting
     registerArg("SegmentLength", _initial_segment_length = 30);
     registerArg("NumIterations", _initial_iterations = 32);
     registerArg("NumSteps", _num_steps = 5);
+    registerArg("NumSimplify", _num_simplify = std::numeric_limits<int>::max());
     registerArg("StepSize", _initial_step_size = 0.1);
     registerArg("SpringConstant", _spring_constant = 20);
     registerArg("AngleCompatWeight", _angle_comp_weight = 0.3);
@@ -810,6 +811,9 @@ namespace LinksRouting
     int num_iterations = _initial_iterations;
     float step_size = _initial_step_size;
 
+    int min_offset = std::min(4, (static_cast<int>(segments.size()) - 1) / 2),
+        max_offset = std::min(4, static_cast<int>(segments.size()) - 1 - min_offset);
+
     for(int step = 0; step < _num_steps; ++step)
     {
       // Subdivide all segments to get smooth routes.
@@ -863,8 +867,6 @@ namespace LinksRouting
           {
             float2& force = forces[j - 1];
             force = spring_constant * (trail[j + 1] + trail[j - 1] - 2 * trail[j]);
-            int min_offset = std::min(4, (static_cast<int>(segments.size()) - 1) / 2),
-                max_offset = std::min(4, static_cast<int>(segments.size()) - 1 - min_offset);
             for(int offset = -min_offset; offset <= max_offset; ++offset)
             {
               if( !offset )
@@ -923,16 +925,22 @@ namespace LinksRouting
     // -----------------------
     // Finally clean up routes
 
-    for(int i = 0; i < static_cast<int>(segments.size()); ++i)
+    // Whether a segment is needed by another segment to connect to the center
+    // and therefore is not allowed to be shortened.
+    std::vector<bool> fixed(segments.size());
+
+    int max_clean = std::min<int>(_num_simplify, segments.size());
+    for(int i = 0; i < max_clean; ++i)
     {
+      if( fixed[i] )
+        continue;
+
       auto& trail = segments[i]->trail;
       if( trail.size() < 3 )
         continue;
 
       for(size_t j = trail.size() - 1; j > 0; --j)
       {
-        int min_offset = std::min(4, (static_cast<int>(segments.size()) - 1) / 2),
-            max_offset = std::min(4, static_cast<int>(segments.size()) - 1 - min_offset);
         for(int offset = 1; offset <= max_offset; ++offset)
         {
           size_t other_i = i + offset;
@@ -947,12 +955,37 @@ namespace LinksRouting
           {
             for(size_t k = 0; k < j; ++k)
               trail[k] = other_trail[j];
+            fixed[other_i] = true;
             offset = max_offset + 1;
             break;
           }
         }
       }
     }
+
+//    for(size_t i = 0; i < segments.size(); ++i)
+//    {
+//      auto& trail = segments[i]->trail;
+//      if( trail.size() < 3 )
+//        continue;
+//
+//      for(int offset = -min_offset; offset <= max_offset; ++offset)
+//      {
+//        if( !offset )
+//          continue;
+//        int other_i = (i + offset) % segments.size();
+//        auto& other_trail = segments[other_i]->trail;
+//
+//        size_t max_trail = std::min(trail.size(), other_trail.size() - 1);
+//        for(size_t j = max_trail; j --> 1;)
+//        {
+//          if( trail[j] == trail[j - 1] || other_trail[j] == other_trail[j - 1] )
+//            break;
+//          if( (other_trail[j] - trail[j]).length() < 10 )
+//            other_trail[j] = trail[j];
+//        }
+//      }
+//    }
   }
 
 } // namespace LinksRouting

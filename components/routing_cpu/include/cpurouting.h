@@ -52,7 +52,8 @@ namespace LinksRouting
 
       int       _initial_segment_length,
                 _initial_iterations,
-                _num_steps;
+                _num_steps,
+                _num_simplify;
       double    _initial_step_size,
                 _spring_constant,
                 _angle_comp_weight;
