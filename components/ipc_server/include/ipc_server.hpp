@@ -29,14 +29,11 @@
 #include "datatypes.h"
 #include <stdint.h>
 
-#include <chrono>
-
 class QMutex;
 class JSONParser;
 
 namespace LinksRouting
 {
-  typedef std::chrono::high_resolution_clock clock;
   class ClientInfo;
 
   class IPCServer:

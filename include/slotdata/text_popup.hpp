@@ -8,6 +8,7 @@
 #ifndef TEXT_POPUP_HPP_
 #define TEXT_POPUP_HPP_
 
+#include "../clock.hxx"
 #include "../float2.hpp"
 #include "../linkdescription.h"
 #include "../HierarchicTileMap.hpp"
@@ -29,6 +30,7 @@ namespace SlotType
       Rect region, src_region, scroll_region;
       float border;
       bool visible;
+      clock::time_point hide_time;
       float2 offset, dim;
       int zoom;
       HierarchicTileMapWeakPtr tile_map;

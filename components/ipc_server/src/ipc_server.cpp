@@ -161,6 +161,23 @@ namespace LinksRouting
         );
       _debug_full_preview_path.clear();
     }
+
+    bool changed = foreachPopup([&]( SlotType::TextPopup::Popup& popup,
+                                     QWsSocket& socket,
+                                     ClientInfo& client_info ) -> bool
+    {
+      if(    popup.hover_region.visible
+          && popup.hover_region.hide_time <= clock::now() )
+      {
+        popup.hover_region.visible = false;
+        return true;
+      }
+
+      return false;
+    });
+
+    if( changed )
+      _cond_data_ready->wakeAll();
   }
 
   //----------------------------------------------------------------------------
@@ -1227,6 +1244,7 @@ namespace LinksRouting
     QMutexLocker lock_links(_mutex_slot_links);
 
     bool popup_visible = false;
+    SlotType::TextPopup::Popup* hide_popup = nullptr;
     bool changed = foreachPopup([&]( SlotType::TextPopup::Popup& popup,
                                      QWsSocket& socket,
                                      ClientInfo& client_info ) -> bool
@@ -1238,7 +1256,11 @@ namespace LinksRouting
                 )
              ) )
       {
+        if( hide_popup )
+          hide_popup->hover_region.visible = false;
+
         popup_visible = true;
+        popup.hover_region.hide_time = clock::time_point::max();
         if( popup.hover_region.visible )
           return false;
 
@@ -1248,8 +1270,17 @@ namespace LinksRouting
       }
       else if( popup.hover_region.visible )
       {
-        popup.hover_region.visible = false;
-        return true;
+        std::chrono::milliseconds timeout(400);
+        if( popup.hover_region.hide_time - timeout > clock::now() )
+          popup.hover_region.hide_time = clock::now() + timeout;
+        else if( popup_visible )
+          popup.hover_region.visible = false;
+        else
+          // timeout already started, so store to be abled hiding if other
+          // popup is shown before hiding this one.
+          hide_popup = &popup;
+
+        //return true;
       }
 
       return false;
