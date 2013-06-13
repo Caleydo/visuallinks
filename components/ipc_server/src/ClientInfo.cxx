@@ -386,37 +386,6 @@ namespace LinksRouting
       LinkDescription::points_t& icon = _minimized_icon->getVertices();
       icon.clear();
 
-      LinkDescription::points_t& outline = _covered_outline->getVertices();
-      outline.clear();
-
-      if( _window_info.covered )
-      {
-        _outlines.push_back( _ipc_server->addOutline(*this) );
-        QPoint offset = _window_info.minimized
-            ? QPoint()
-            : getScrollRegionAbs().topLeft();
-
-        const Rect reg_title = _outlines.back()->region_title - offset;
-        outline.push_back(reg_title.topLeft());
-        outline.push_back(reg_title.topRight());
-        outline.push_back(reg_title.bottomRight());
-        outline.push_back(reg_title.bottomLeft());
-
-        for(auto& node: _nodes)
-          node->set("hidden", true);
-
-        if( !_nodes.empty() )
-          _outlines.back()->preview = _ipc_server->addCoveredPreview
-          (
-            _nodes.front()->getParent()->get<std::string>("link-id"),
-            *this,
-            _covered_outline,
-            tile_map_uncompressed,
-            getViewportAbs(),
-            getScrollRegionAbs()
-          );
-      }
-
       if( _window_info.minimized && !_window_info.title.contains("Airbus A300 - Wikipedia") )
       {
         const QRect& region_launcher = _window_info.region_launcher;
@@ -454,6 +423,7 @@ namespace LinksRouting
     if( first_above != windows.end() )
       first_above = first_above + 1;
 
+    size_t num_covered = 0;
     bool modified = false;
     QRect desktop = _ipc_server->desktopRect()
                                 .translated( -getScrollRegionAbs().topLeft() ),
@@ -538,6 +508,10 @@ namespace LinksRouting
                            true,
                            a300_client );
             }
+
+            if( (*region)->get<bool>("covered") )
+              num_covered += 1;
+
             if(    /*(*region)->get<bool>("hidden")
                 && */(*region)->get<bool>("outside") )
             {
@@ -636,6 +610,40 @@ namespace LinksRouting
       }
     }
 
+    LinkDescription::points_t& outline = _covered_outline->getVertices();
+    outline.clear();
+
+    if( (_window_info.covered || num_covered) && !_window_info.minimized )
+    {
+      _outlines.push_back( _ipc_server->addOutline(*this) );
+      QPoint offset = _window_info.minimized
+          ? QPoint()
+          : getScrollRegionAbs().topLeft();
+
+      const Rect reg_title = _outlines.back()->region_title - offset;
+      outline.push_back(reg_title.topLeft());
+      outline.push_back(reg_title.topRight());
+      outline.push_back(reg_title.bottomRight());
+      outline.push_back(reg_title.bottomLeft());
+
+//        for(auto& node: _nodes)
+//          node->set("hidden", true);
+
+      if( !_nodes.empty() )
+      {
+        _outlines.back()->preview = _ipc_server->addCoveredPreview
+        (
+          _nodes.front()->getParent()->get<std::string>("link-id"),
+          *this,
+          _covered_outline,
+          tile_map_uncompressed,
+          getViewportAbs(),
+          getScrollRegionAbs()
+        );
+        _outlines.back()->preview_valid = true;
+      }
+    }
+
     if( modified )
       _dirty |= VISIBLITY;
   }
@@ -671,7 +679,7 @@ namespace LinksRouting
     modified |= node.set("on-screen", onscreen);
     modified |= node.set("covered", covered);
     modified |= node.set("outside", outside);
-    modified |= node.set("hidden", hidden);
+    modified |= node.set("hidden", hidden || covered);
 
     if( covered )
     {

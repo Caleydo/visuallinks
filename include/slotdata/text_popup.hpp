@@ -98,6 +98,7 @@ namespace SlotType
       Rect          region_title,
                     region_outline;
       XRayPopup::Popups::iterator preview;
+      bool preview_valid;
     };
 
     typedef std::list<Outline> List;

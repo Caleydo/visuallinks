@@ -293,6 +293,7 @@ namespace LinksRouting
     outline.region_title.pos = winfo.region.topLeft();
     outline.region_title.size.x = outline.title.size() * 7;
     outline.region_title.size.y = 25;
+    outline.preview_valid = false;
 
     auto& outlines = _slot_outlines->_data->popups;
     return outlines.insert(outlines.end(), outline);
@@ -301,6 +302,8 @@ namespace LinksRouting
   //----------------------------------------------------------------------------
   void IPCServer::removeOutline(const OutlineIterator& outline)
   {
+    if( outline->preview_valid )
+      removeCoveredPreview(outline->preview);
     _slot_outlines->_data->popups.erase(outline);
   }
 
@@ -310,7 +313,8 @@ namespace LinksRouting
     auto& outlines = _slot_outlines->_data->popups;
     for(auto const& it: outlines_it)
     {
-      removeCoveredPreview(it->preview);
+      if( it->preview_valid )
+        removeCoveredPreview(it->preview);
       outlines.erase(it);
     }
   }
