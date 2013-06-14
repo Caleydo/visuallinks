@@ -643,7 +643,8 @@ namespace LinksRouting
 
     for( auto node = nodes.begin(); node != nodes.end(); ++node )
     {
-      if( (*node)->get<bool>("hidden") && !render_all )
+      if(   !(*node)->get<bool>("hover")
+          && (*node)->get<bool>("hidden") && !render_all )
         continue;
 
       if( hedges_open )

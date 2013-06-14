@@ -349,6 +349,7 @@ namespace LinksRouting
 
           segment_t segment;
           segment.set("covered", node->get<bool>("covered"));
+          segment.set("widen-end", node->get<bool>("widen-end", true));
           segment.nodes.push_back(node);
           segment.trail.push_back(_global_center);
           segment.trail.push_back(offset + node->getBestLinkPoint(_global_center - offset) );
@@ -727,8 +728,21 @@ namespace LinksRouting
     // add regions
     for( auto& node: hedge->getNodes() )
     {
-      if(    node->get<bool>("hidden")
-          || (no_route && !node->get<bool>("always-route")) )
+      std::cout << "check " << node.get() << " " << node->getCenter()
+                << " hover = " << node->get<bool>("hover")
+                << " on-screen = " << node->get<bool>("on-screen")
+                << " covered = " << node->get<bool>("covered")
+                << std::endl;
+
+      bool hover_preview = true //node->get<bool>("hover")
+                        && node->get<bool>("on-screen")
+                        && node->get<bool>("covered");
+
+      if( hover_preview )
+        std::cout << "hoverPreview " << node.get() << std::endl;
+
+      if(    (!hover_preview &&  node->get<bool>("hidden"))
+          || ( no_route      && !node->get<bool>("always-route")) )
         continue;
 
       // add children (hyperedges)

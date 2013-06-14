@@ -226,6 +226,20 @@ namespace LinkDescription
   }
 
   //----------------------------------------------------------------------------
+  std::string Node::getImpl(const std::string& key) const
+  {
+    props_t::const_iterator prop = _props.getMap().find(key);
+    if( prop != _props.getMap().end() )
+      return prop->second;
+
+    HyperEdgePtr p = _parent.lock();
+    if( p )
+      return p->get<std::string>(key);
+
+    return std::string();
+  }
+
+  //----------------------------------------------------------------------------
   nodes_t& HyperEdge::getNodes()
   {
     return _nodes;
@@ -356,6 +370,19 @@ namespace LinkDescription
     _fork( 0 )
   {
 
+  }
+
+  //----------------------------------------------------------------------------
+  std::string HyperEdge::getImpl(const std::string& key) const
+  {
+    props_t::const_iterator prop = _props.getMap().find(key);
+    if( prop != _props.getMap().end() )
+      return prop->second;
+
+    if( _parent )
+      return _parent->get<std::string>(key);
+
+    return std::string();
   }
 
 } // namespace LinkDescription

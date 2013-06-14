@@ -29,7 +29,7 @@ namespace LinksRouting
     _minimized_icon->set("filled", true);
     _minimized_icon->set("show-in-preview", false);
     _minimized_icon->set("always-route", true);
-    _covered_outline->set("covered", true);
+    _covered_outline->set("widen-end", false);
     _covered_outline->set("outline-only", true);
     _covered_outline->set("show-in-preview", false);
     _covered_outline->set("visible", false);

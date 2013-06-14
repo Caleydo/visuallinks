@@ -82,6 +82,11 @@ namespace LinkDescription
         return convertFromString(it->second, def_val);
       }
 
+      bool has(const std::string& key) const
+      {
+        return _props.find(key) != _props.end();
+      }
+
       props_t&       getMap()       { return _props; }
       props_t const& getMap() const { return _props; }
 
@@ -95,6 +100,8 @@ namespace LinkDescription
   {
     public:
 
+      virtual ~PropertyElement(){}
+
       template<typename T>
       bool set(const std::string& key, const T& val)
       {
@@ -104,7 +111,16 @@ namespace LinkDescription
       template<typename T>
       T get(const std::string& key, const T& def_val = T()) const
       {
-        return _props.get(key, def_val);
+        const std::string& val = getImpl(key);
+        if( val.empty() )
+          return def_val;
+
+        return convertFromString(val, def_val);
+      }
+
+      bool has(const std::string& key) const
+      {
+        return _props.has(key);
       }
 
       PropertyMap&       getProps()       { return _props; }
@@ -116,6 +132,11 @@ namespace LinkDescription
       PropertyElement( const PropertyMap& props = PropertyMap() ):
         _props( props )
       {}
+
+      virtual std::string getImpl(const std::string& key) const
+      {
+        return _props.get(key, std::string());
+      }
   };
 
   class Node:
@@ -168,6 +189,8 @@ namespace LinkDescription
       points_t _link_points_children;
       HyperEdgeWeakPtr _parent;
       hedges_t _children;
+
+      virtual std::string getImpl(const std::string& key) const override;
   };
 
   typedef std::shared_ptr<Node> NodePtr;
@@ -221,6 +244,8 @@ namespace LinkDescription
 
       HyperEdge(const HyperEdge&) /* = delete */;
       HyperEdge& operator=(const HyperEdge&) /* = delete */;
+
+      virtual std::string getImpl(const std::string& key) const override;
 
       HyperEdgeWeakPtr _self;
       Node* _parent;
