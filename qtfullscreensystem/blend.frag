@@ -21,7 +21,7 @@ void main()
 
   if( xray_color.a >= 0.001 )
   {
-    color = (1.0 - fac) * 0.95 * xray_color
+    color = (1.0 - fac) * xray_color
           + fac * link_color;
     color.a = max(color.a, link_color.a);
   }
