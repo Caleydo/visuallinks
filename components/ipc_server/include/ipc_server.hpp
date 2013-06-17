@@ -101,8 +101,6 @@ namespace LinksRouting
       void onPong(quint64 elapsedTime);
       void onClientDisconnection();
 
-      void onPinnedAppsChanged();
-
     protected:
 
       typedef std::map<QWsSocket*, std::unique_ptr<ClientInfo>> ClientInfos;

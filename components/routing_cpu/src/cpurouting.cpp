@@ -728,13 +728,13 @@ namespace LinksRouting
     // add regions
     for( auto& node: hedge->getNodes() )
     {
-      std::cout << "check " << node.get() << " " << node->getCenter()
-                << " hover = " << node->get<bool>("hover")
-                << " on-screen = " << node->get<bool>("on-screen")
-                << " covered = " << node->get<bool>("covered")
-                << std::endl;
+//      std::cout << "check " << node.get() << " " << node->getCenter()
+//                << " hover = " << node->get<bool>("hover")
+//                << " on-screen = " << node->get<bool>("on-screen")
+//                << " covered = " << node->get<bool>("covered")
+//                << std::endl;
 
-      bool hover_preview = true //node->get<bool>("hover")
+      bool hover_preview = node->get<bool>("hover")
                         && node->get<bool>("on-screen")
                         && node->get<bool>("covered");
 

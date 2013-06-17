@@ -229,7 +229,7 @@ namespace LinkDescription
   std::string Node::getImpl(const std::string& key) const
   {
     props_t::const_iterator prop = _props.getMap().find(key);
-    if( prop != _props.getMap().end() )
+    if( prop != _props.getMap().end() && !prop->second.empty() )
       return prop->second;
 
     HyperEdgePtr p = _parent.lock();
@@ -376,7 +376,7 @@ namespace LinkDescription
   std::string HyperEdge::getImpl(const std::string& key) const
   {
     props_t::const_iterator prop = _props.getMap().find(key);
-    if( prop != _props.getMap().end() )
+    if( prop != _props.getMap().end() && !prop->second.empty() )
       return prop->second;
 
     if( _parent )

@@ -239,7 +239,7 @@ namespace LinksRouting
 
     node->set("covered-region", to_string(viewport));
     node->set("covered-preview-region", to_string(preview_region));
-    node->set("hover", false);
+    node->setOrClear("hover", false);
 
     Rect bb;
     for( auto vert = node->getVertices().begin();
@@ -265,7 +265,7 @@ namespace LinksRouting
   void IPCServer::removeCoveredPreview(const XRayIterator& preview)
   {
     if( preview->node )
-      preview->node->set("hover", false);
+      preview->node->setOrClear("hover", false);
     _slot_xray->_data->popups.erase(preview);
   }
 
@@ -276,7 +276,7 @@ namespace LinksRouting
     for(auto const& it: previews)
     {
       if( it->node )
-        it->node->set("hover", false);
+        it->node->setOrClear("hover", false);
       popups.erase(it);
     }
   }
@@ -628,12 +628,6 @@ namespace LinksRouting
     socket->deleteLater();
 
     LOG_INFO("Client disconnected");
-  }
-
-  //----------------------------------------------------------------------------
-  void IPCServer::onPinnedAppsChanged()
-  {
-    std::cout << "Changed" << std::endl;
   }
 
   //----------------------------------------------------------------------------
@@ -1197,7 +1191,8 @@ namespace LinksRouting
       if( !preview.region.contains(float2(x, y) - offset) )
         return false;
 
-      preview.node->set("hover", false);
+      preview.node->getParent()->setOrClear("hover", false);
+      preview.node->setOrClear("hover", false);
       client_info.activateWindow();
 
       if( !preview.node->get<bool>("outside") )
@@ -1240,6 +1235,34 @@ namespace LinksRouting
 
     if( changed )
       _cond_data_ready->wakeAll();
+  }
+
+  void print( const LinkDescription::Node& node,
+              const std::string& key,
+              const std::string& indent = "" );
+
+  void print( const LinkDescription::HyperEdge& hedge,
+              const std::string& key,
+              const std::string& indent = "" )
+  {
+    std::cout << indent << "HyperEdge(" << &hedge << ") "
+              << key << " = '" << hedge.getProps().get<std::string>(key) << "'"
+              << std::endl;
+
+    for(auto const& c: hedge.getNodes())
+      print(*c, key, indent + " ");
+  }
+
+  void print( const LinkDescription::Node& node,
+              const std::string& key,
+              const std::string& indent )
+  {
+    std::cout << indent << "Node(" << &node << ") "
+              << key << " = '" << node.getProps().get<std::string>(key) << "'"
+              << std::endl;
+
+    for(auto const& c: node.getChildren())
+      print(*c, key, indent + " ");
   }
 
   //----------------------------------------------------------------------------
@@ -1290,6 +1313,7 @@ namespace LinksRouting
       return false;
     });
 
+    bool preview_visible = false;
     changed |= foreachPreview([&]( SlotType::XRayPopup::HoverRect& preview,
                                    QWsSocket& socket,
                                    ClientInfo& client_info ) -> bool
@@ -1301,20 +1325,23 @@ namespace LinksRouting
           && preview.region.contains( float2(x, y)
                                     - p->get<float2>("screen-offset")) )
       {
-        if( hover )
-          return false;
-        hover = true;
-        _interaction_handler.updateRegion(preview);
+        preview_visible = true;
+
+        if( !hover )
+        {
+          hover = true;
+          _interaction_handler.updateRegion(preview);
+        }
       }
       else if( hover )
         hover = false;
       else
         return false;
 
-      std::cout << "hover " << hover << " " << preview.node->getParent().get() << std::endl;
+      if( hover || !preview_visible )
+        changed |= preview.node->getParent()->setOrClear("hover", hover);
 
-      return preview.node->set("hover", hover)
-           | preview.node->getParent()->set("hover", hover);
+      return preview.node->setOrClear("hover", hover);
 #if 0
       changed |= preview.node->getParent()->getParent()->set("hidden", !hover);
       changed |= preview.node->getParent()->getParent()->set("hover", hover);
@@ -1322,7 +1349,13 @@ namespace LinksRouting
     });
 
     if( changed )
+    {
+      if( !_slot_links->_data->empty() )
+      {
+        print(*_slot_links->_data->front()._link, "hover");
+      }
       _cond_data_ready->wakeAll();
+    }
   }
 
   //----------------------------------------------------------------------------
@@ -1470,7 +1503,7 @@ namespace LinksRouting
         LOG_WARN("xray preview: parent lost");
 
         // Hide preview if parent has somehow been lost
-        changed |= preview->node->set("hover", false);
+        changed |= preview->node->setOrClear("hover", false);
 
         // deleting would result in invalid iterators inside ClientInfo, so
         // just let it be and wait for the according ClientInfo to remove it.
@@ -1488,7 +1521,7 @@ namespace LinksRouting
         preview->client_socket = 0;
 
         // Hide preview if socket has somehow been lost
-        changed |= preview->node->set("hover", false);
+        changed |= preview->node->setOrClear("hover", false);
 
         // deleting would result in invalid iterators inside ClientInfo, so
         // just let it be and wait for the according ClientInfo to remove it.

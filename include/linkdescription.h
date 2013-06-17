@@ -65,6 +65,25 @@ namespace LinkDescription
 //#endif
       }
 
+      bool setOrClear(const std::string& key, bool val)
+      {
+        if( val )
+        {
+          if( convertFromString<bool>(_props[key]) )
+            return false;
+          else
+            return set(key, val);
+        }
+
+        auto const& it = _props.find(key);
+        if( it == _props.end() )
+          return false;
+
+        _props.erase(it);
+
+        return true;
+      }
+
       /**
        * Get a property
        *
@@ -106,6 +125,11 @@ namespace LinkDescription
       bool set(const std::string& key, const T& val)
       {
         return _props.set(key, val);
+      }
+
+      bool setOrClear(const std::string& key, bool val)
+      {
+        return _props.setOrClear(key, val);
       }
 
       template<typename T>
