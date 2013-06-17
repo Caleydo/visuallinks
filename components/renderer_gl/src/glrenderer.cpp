@@ -673,7 +673,9 @@ namespace LinksRouting
         continue;
       }
 
-      Color color_cur = !render_all && ( (*node)->get<bool>("covered")
+      Color color_cur = !render_all && ( (   (*node)->get<bool>("covered")
+                                         && !(*node)->get<bool>("hover")
+                                         )
                                        || (*node)->get<bool>("outside")
                                        )
                       ? _color_covered_cur

@@ -348,7 +348,7 @@ namespace LinksRouting
           float2 offset = p->get<float2>("screen-offset");
 
           segment_t segment;
-          segment.set("covered", node->get<bool>("covered"));
+          segment.set("covered", node->get<bool>("covered") && !node->get<bool>("hover"));
           segment.set("widen-end", node->get<bool>("widen-end", true));
           segment.nodes.push_back(node);
           segment.trail.push_back(_global_center);
@@ -728,18 +728,9 @@ namespace LinksRouting
     // add regions
     for( auto& node: hedge->getNodes() )
     {
-//      std::cout << "check " << node.get() << " " << node->getCenter()
-//                << " hover = " << node->get<bool>("hover")
-//                << " on-screen = " << node->get<bool>("on-screen")
-//                << " covered = " << node->get<bool>("covered")
-//                << std::endl;
-
       bool hover_preview = node->get<bool>("hover")
                         && node->get<bool>("on-screen")
                         && node->get<bool>("covered");
-
-      if( hover_preview )
-        std::cout << "hoverPreview " << node.get() << std::endl;
 
       if(    (!hover_preview &&  node->get<bool>("hidden"))
           || ( no_route      && !node->get<bool>("always-route")) )
@@ -980,11 +971,18 @@ namespace LinksRouting
         num_skip -= 1;
 
       if( num_skip )
-        for(size_t i = 0; i < segments.size(); ++i)
+      {
+        float2 center;
+        for(auto& seg: segments)
         {
-          auto& trail = segments[i]->trail;
+          auto& trail = seg->trail;
           trail.erase(trail.begin(), trail.begin() + num_skip);
+          center += trail.front();
         }
+        center /= segments.size();
+        for(auto& seg: segments)
+          seg->trail.front() = center;
+      }
     }
 
 #if 1
