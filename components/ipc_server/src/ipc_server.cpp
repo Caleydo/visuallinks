@@ -162,18 +162,26 @@ namespace LinksRouting
       _debug_full_preview_path.clear();
     }
 
+    static clock::time_point last_time = clock::now();
+    clock::time_point now = clock::now();
+    auto dur_us = std::chrono::duration_cast<std::chrono::microseconds>
+    (
+      now - last_time
+    ).count();
+    double dt = dur_us / 1000000.;
+    last_time = now;
+
     bool changed = foreachPopup([&]( SlotType::TextPopup::Popup& popup,
                                      QWsSocket& socket,
                                      ClientInfo& client_info ) -> bool
     {
-      if(    popup.hover_region.visible
-          && popup.hover_region.hide_time <= clock::now() )
-      {
-        popup.hover_region.visible = false;
-        return true;
-      }
-
-      return false;
+//      if(    popup.hover_region.visible
+//          && popup.hover_region.hide_time <= clock::now() )
+//      {
+//        popup.hover_region.visible = false;
+//        return true;
+//      }
+      return popup.hover_region.update(dt);
     });
 
     if( changed )
@@ -1145,11 +1153,11 @@ namespace LinksRouting
                                      QWsSocket& socket,
                                      ClientInfo& client_info ) -> bool
     {
-      if(    !popup.hover_region.visible
+      if(    !popup.hover_region.isVisible()
           || !popup.hover_region.contains(x, y) )
         return false;
 
-      popup.hover_region.visible = false;
+      popup.hover_region.fadeOut();
 
       QSize preview_size = client_info.preview_size;
       float scale = (preview_size.height()
@@ -1278,32 +1286,33 @@ namespace LinksRouting
     {
       if(    !popup_visible // Only one popup/preview at the same time
           && (  popup.region.contains(x, y)
-             || (  popup.hover_region.visible
+             || (  popup.hover_region.isVisible()
                 && popup.hover_region.contains(x,y)
                 )
              ) )
       {
-        if( hide_popup )
-          hide_popup->hover_region.visible = false;
+//        if( hide_popup )
+//          hide_popup->hover_region.fadeOut();
 
         popup_visible = true;
-        popup.hover_region.hide_time = clock::time_point::max();
-        if( popup.hover_region.visible )
+        if( popup.hover_region.isVisible() && !popup.hover_region.isFadeOut() )
           return false;
 
-        popup.hover_region.visible = true;
+        popup.hover_region.fadeIn();
         _interaction_handler.updateRegion(&socket, popup);
         return true;
       }
-      else if( popup.hover_region.visible )
+      else if( popup.hover_region.isVisible() )
       {
-        std::chrono::milliseconds timeout(400);
-        if( popup.hover_region.hide_time - timeout > clock::now() )
-          popup.hover_region.hide_time = clock::now() + timeout;
-        else if( popup_visible )
-          popup.hover_region.visible = false;
+//        std::chrono::milliseconds timeout(400);
+//        if( popup.hover_region.hide_time - timeout > clock::now() )
+//          popup.hover_region.hide_time = clock::now() + timeout;
+//        else if( popup_visible )
+//          popup.hover_region.visible = false;
+        if( !popup.hover_region.isFadeOut() )
+          popup.hover_region.delayedFadeOut();
         else
-          // timeout already started, so store to be abled hiding if other
+          // timeout already started, so store to be able hiding if other
           // popup is shown before hiding this one.
           hide_popup = &popup;
 
@@ -1369,7 +1378,7 @@ namespace LinksRouting
                       QWsSocket& socket,
                       ClientInfo& client_info ) -> bool
     {
-      if( !popup.hover_region.visible )
+      if( !popup.hover_region.isVisible() )
         return false;
 
       bool changed = false;
@@ -1430,7 +1439,7 @@ namespace LinksRouting
                           QWsSocket& socket,
                           ClientInfo& client_info ) -> bool
     {
-      if( !popup.hover_region.visible )
+      if( !popup.hover_region.isVisible() )
         return false;
 
       const float2& scroll_size = popup.hover_region.scroll_region.size;

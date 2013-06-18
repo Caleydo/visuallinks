@@ -92,7 +92,8 @@ namespace LinksRouting
                           const Rect& src_region,
                           const Rect& target_region,
                           size_t zoom = -1,
-                          bool auto_center = false );
+                          bool auto_center = false,
+                          double alpha = 1. );
 
       float2 glVertex2f(float x, float y);
   };

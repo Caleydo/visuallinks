@@ -302,7 +302,7 @@ namespace LinksRouting
 
       for( auto const& popup: _subscribe_popups->_data->popups )
       {
-        if( !popup.region.visible )
+        if( !popup.region.isVisible() )
           continue;
 
         _partitions_src = 0;
@@ -311,13 +311,16 @@ namespace LinksRouting
         renderRect(popup.region.region, popup.region.border);
         rendered_anything = true;
 
-        if( !popup.hover_region.visible )
+        if( !popup.hover_region.isVisible() )
           continue;
+
+        double alpha = popup.hover_region.getAlpha();
 
         renderRect( popup.hover_region.region,
                     popup.hover_region.border,
                     0,
-                    Color(0.3,0.3,0.3) );
+                    Color(0.3,0.3,0.3, alpha),
+                    Color(0.3, 0.3, 0.3, 0.8 * alpha) );
 
 
         const Rect& hover = popup.hover_region.region,
@@ -329,7 +332,8 @@ namespace LinksRouting
                        src,
                        hover,
                        popup.hover_region.zoom,
-                       popup.auto_resize );
+                       popup.auto_resize,
+                       alpha );
 
         // ---------
         // Scrollbar
@@ -344,15 +348,13 @@ namespace LinksRouting
                             + float2( hover.size.x + 4,
                                       rel_pos_y * (hover.size.y - bar_height) );
 
-          glColor4f(1,0.5,0.25,1);
+          glColor4f(1,0.5,0.25,alpha);
           glLineWidth(4);
           glBegin(GL_LINE_STRIP);
             glVertex2f(scroll_pos.x, scroll_pos.y);
             glVertex2f(scroll_pos.x, scroll_pos.y + bar_height);
           glEnd();
         }
-
-        glColor3f(1, 0, 0);
 
         GLdouble proj[16];
         glGetDoublev(GL_PROJECTION_MATRIX, proj);
@@ -394,6 +396,10 @@ namespace LinksRouting
           _partitions_dest = &tile_map->partitions_dest;
         }
 
+        Color color_cur = _color_cur;
+        _color_cur = alpha * color_cur;
+        renderNodes(popup.nodes, 3.f / scale, 0, 0, true, 1, false);
+
         glLineWidth(w);
         glBegin(GL_LINE_LOOP);
           glVertex2f(vp_pos.x, vp_pos.y);
@@ -402,7 +408,7 @@ namespace LinksRouting
           glVertex2f(vp_pos.x, vp_pos.y + vp_dim.y);
         glEnd();
 
-        renderNodes(popup.nodes, 3.f / scale, 0, 0, true, 1, false);
+        _color_cur = color_cur;
 
         glPopMatrix();
         glMatrixMode(GL_PROJECTION);
@@ -445,7 +451,9 @@ namespace LinksRouting
 //      renderRect( preview.preview_region );
       renderTileMap( preview.tile_map.lock(),
                      preview.source_region,
-                     preview.preview_region );
+                     preview.preview_region,
+                     -1,
+                     false );
     }
 
     _xray_fbo.unbind();
@@ -468,7 +476,7 @@ namespace LinksRouting
                               color[1] / 256.f,
                               color[2] / 256.f,
                               0.7f ) );
-    std::cout << "GlRenderer: Added color (" << val << ")" << std::endl;
+    //std::cout << "GlRenderer: Added color (" << val << ")" << std::endl;
 
     return true;
   }
@@ -774,7 +782,8 @@ namespace LinksRouting
                                   const Rect& src_region,
                                   const Rect& target_region,
                                   size_t zoom,
-                                  bool auto_center )
+                                  bool auto_center,
+                                  double alpha )
   {
     if( !tile_map )
       return false;
@@ -821,6 +830,7 @@ namespace LinksRouting
 
       glEnable(GL_TEXTURE_2D);
       glBindTexture(GL_TEXTURE_2D, quad->first->id);
+      glTexEnvi(GL_TEXTURE_ENV, GL_TEXTURE_ENV_MODE, GL_MODULATE);
 
       float offset_x = 0;
       if( !auto_center && target_region.size.x > rect_size.x )
@@ -831,7 +841,7 @@ namespace LinksRouting
                     target_region.pos.y,
                     0 );
 
-      glColor4f(1,1,1,1);
+      glColor4f(alpha,alpha,alpha,alpha);
       glBegin(GL_QUADS);
       for(size_t i = 0; i < quad->second._coords.size(); ++i)
       {

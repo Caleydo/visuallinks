@@ -18,6 +18,7 @@ set(HEADER_FILES
 )
 
 set(SOURCE_FILES
+  AnimatedPopup.cxx
   fbo.cxx
   HierarchicTileMap.cxx
   linkdescription.cpp

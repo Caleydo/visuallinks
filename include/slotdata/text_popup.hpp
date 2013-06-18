@@ -22,15 +22,55 @@ namespace LinksRouting
 {
 namespace SlotType
 {
+  class AnimatedPopup
+  {
+    public:
+      static constexpr double DELAY = 0.5;
+      static constexpr double TIMEOUT = 0.6;
+
+      AnimatedPopup(bool visible = true);
+
+      /**
+       * @param dt  Time delta
+       * @return Whether further updates are needed
+       */
+      bool update(double dt);
+
+      void show();
+      void hide();
+      void fadeIn();
+      void fadeOut();
+      void delayedFadeIn();
+      void delayedFadeOut();
+
+      double getAlpha() const;
+      bool isVisible() const;
+      bool isTransient() const;
+      bool isFadeIn() const;
+      bool isFadeOut() const;
+
+    protected:
+      enum Flags
+      {
+        HIDDEN = 0,
+        VISIBLE = 1,
+        TRANSIENT = VISIBLE << 1,
+        DELAYED = TRANSIENT << 1
+      };
+
+      uint16_t  _state;
+      double    _time;
+
+      void setFlags(uint16_t flags);
+  };
 
   struct TextPopup
   {
-    struct HoverRect
+    struct HoverRect:
+      public AnimatedPopup
     {
       Rect region, src_region, scroll_region;
       float border;
-      bool visible;
-      clock::time_point hide_time;
       float2 offset, dim;
       int zoom;
       HierarchicTileMapWeakPtr tile_map;
@@ -40,9 +80,9 @@ namespace SlotType
                  float border,
                  bool visible,
                  int zoom = 0):
+        AnimatedPopup(visible),
         region(pos, size),
         border(border),
-        visible(visible),
         zoom(zoom)
       {}
 
@@ -107,6 +147,5 @@ namespace SlotType
 
 } // namespace SlotType
 } // namespace LinksRouting
-
 
 #endif /* TEXT_POPUP_HPP_ */
