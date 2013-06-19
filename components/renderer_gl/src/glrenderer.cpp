@@ -257,7 +257,7 @@ namespace LinksRouting
   }
 
   //----------------------------------------------------------------------------
-  void GlRenderer::process(unsigned int type)
+  uint32_t GlRenderer::process(unsigned int type)
   {
     assert( _blur_x_shader );
     assert( _blur_y_shader );
@@ -269,7 +269,10 @@ namespace LinksRouting
     glClear(GL_COLOR_BUFFER_BIT);
 
     if( _subscribe_links->_data->empty() )
-      return _links_fbo.unbind();
+    {
+      _links_fbo.unbind();
+      return 0;
+    }
 
     bool rendered_anything = false;
     if( !_subscribe_outlines->_data->popups.empty() )
@@ -421,7 +424,7 @@ namespace LinksRouting
     _links_fbo.unbind();
 
     if( !rendered_anything )
-      return;
+      return 0;
 
     glDisable(GL_BLEND);
     glColor4f(1,1,1,1);
@@ -458,6 +461,8 @@ namespace LinksRouting
 
     _xray_fbo.unbind();
     _slot_xray->setValid(true);
+
+    return 0;
   }
 
   //----------------------------------------------------------------------------

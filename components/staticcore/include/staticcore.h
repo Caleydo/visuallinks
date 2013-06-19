@@ -52,7 +52,7 @@ namespace LinksRouting
       virtual bool init();
       virtual bool initGL();
       virtual void shutdown();
-      virtual void process(unsigned int type = Component::Any);
+      virtual uint32_t process(unsigned int type = Component::Any) override;
 
       virtual Config* getConfig();
 

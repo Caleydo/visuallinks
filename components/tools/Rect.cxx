@@ -92,6 +92,18 @@ Rect Rect::operator-(const float2& offset) const
 }
 
 //------------------------------------------------------------------------------
+bool Rect::operator==(const Rect& rhs) const
+{
+  return pos == rhs.pos && size == rhs.size;
+}
+
+//------------------------------------------------------------------------------
+bool Rect::operator!=(const Rect& rhs) const
+{
+  return !(*this == rhs);
+}
+
+//------------------------------------------------------------------------------
 std::istream& operator>>(std::istream& strm, Rect& rect)
 {
   float l, r, t, b;

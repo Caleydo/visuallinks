@@ -60,7 +60,7 @@ namespace LinksRouting
         return (type & Component::DataServer);
       }
 
-      void process(unsigned int type);
+      uint32_t process(unsigned int type) override;
 
       int getPreviewWidth() const { return _preview_width; }
       int getPreviewHeight() const { return _preview_height; }
@@ -137,6 +137,9 @@ namespace LinksRouting
                                   ClientInfo& )> preview_callback_t;
       bool foreachPreview(const preview_callback_t& cb);
 
+      void dirtyLinks();
+      void dirtyRender();
+
     private:
 
       QWsServer          *_server;
@@ -145,6 +148,7 @@ namespace LinksRouting
 
       QMutex             *_mutex_slot_links;
       QWaitCondition     *_cond_data_ready;
+      uint32_t            _dirty_flags;
 
       /* List of all open searches */
       slot_t<LinkDescription::LinkList>::type _slot_links;

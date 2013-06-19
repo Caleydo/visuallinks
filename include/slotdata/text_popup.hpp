@@ -25,8 +25,11 @@ namespace SlotType
   class AnimatedPopup
   {
     public:
-      static constexpr double DELAY = 0.5;
-      static constexpr double TIMEOUT = 0.6;
+      static constexpr double SHOW_DELAY = 0.2;
+      static constexpr double HIDE_DELAY = 0.4;
+      static constexpr double TIMEOUT = 0.5;
+
+      static bool debug;
 
       AnimatedPopup(bool visible = true);
 

@@ -71,10 +71,10 @@ namespace LinksRouting
   }
 
   //----------------------------------------------------------------------------
-  void XmlConfig::process(unsigned int type)
+  uint32_t XmlConfig::process(unsigned int type)
   {
     if( !_config )
-      return;
+      return 0;
 
     if( _dirty_write )
     {
@@ -87,6 +87,8 @@ namespace LinksRouting
       loadFile();
       _dirty_read = false;
     }
+
+    return 0;
   }
 
   //----------------------------------------------------------------------------

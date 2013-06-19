@@ -102,6 +102,7 @@ ShaderPtr loadShader( QString vert, QString frag )
     Configurable("QGLWidget"),
     _cur_fbo(0),
     _do_drag(false),
+    _flags(0),
     _server(&_mutex_slot_links, &_cond_render, this)
   {
     QApplication::setOrganizationDomain("icg.tugraz.at");
@@ -340,9 +341,21 @@ ShaderPtr loadShader( QString vert, QString frag )
     glMatrixMode(GL_PROJECTION);
     glOrtho(x, x + w, y, y + h, -1.0, 1.0);
 
+    uint32_t old_flags = _flags;
     {
       QMutexLocker lock_links(&_mutex_slot_links);
-      _core.process(pass == 0 ? (Component::Renderer | 64) : Component::Any);
+      uint32_t types = pass == 0
+                     ? (Component::Renderer | 64)
+                     :   Component::Config
+                       | Component::DataServer
+                       | ((_flags & LINKS_DIRTY) ? Component::Routing : 0)
+                       | ((_flags & RENDER_DIRTY) ? Component::Renderer : 0);
+
+//      std::cout << "types: " << (types & Component::Routing ? "routing " : "")
+//                             << (types & Component::Renderer ? "render " : "")
+//                             << std::endl;
+
+      _flags = _core.process(types);
     }
 
     PROFILE_RESULT("  core")
@@ -437,30 +450,32 @@ ShaderPtr loadShader( QString vert, QString frag )
     //glPopAttrib();
 
     //links.save(QString("fbo%1.png").arg(counter));
-    if( _subscribe_links->isValid() )
+    if( old_flags & MASK_DIRTY )
     {
-      //writeTexture(_subscribe_links, QString("links%1.png").arg(counter));
-
-      QBitmap mask = QBitmap::fromImage( links.createMaskFromColor( qRgba(0,0,0, 0) ) );
-      setMask
-      (
-        /*_subscribe_xray->_data->img
-        ? QRegion(mask).unite(_subscribe_xray->_data->region.toQRect())
-        :*/ mask
-      );
-//      mask.save(QString("mask%1.png").arg(counter));
-    }
-    else
+      if( _subscribe_links->isValid() )
+      {
+        //writeTexture(_subscribe_links, QString("links%1.png").arg(counter));
+        QBitmap mask = QBitmap::fromImage( links.createMaskFromColor( qRgba(0,0,0, 0) ) );
+        setMask
+        (
+          /*_subscribe_xray->_data->img
+          ? QRegion(mask).unite(_subscribe_xray->_data->region.toQRect())
+          :*/ mask
+        );
+  //      mask.save(QString("mask%1.png").arg(counter));
+      }
+      else
 #if defined(WIN32) || defined(_WIN32)
       setMask(QRegion(size().width() - 2, size().height() - 2, 1, 1));
 #else
-      setMask(QRegion(-1, -1, 1, 1));
+        setMask(QRegion(-1, -1, 1, 1));
 #endif
+
+      PROFILE_RESULT("  updateMask")
+    }
 
     ++counter;
     _image = links;
-
-    PROFILE_RESULT("  updateMask")
 
     update();
 
@@ -482,7 +497,7 @@ ShaderPtr loadShader( QString vert, QString frag )
   void GLWidget::waitForData()
   {
     QMutexLocker lock(&_mutex_slot_links);
-    _cond_render.wait(&_mutex_slot_links, 200);
+    _cond_render.wait(&_mutex_slot_links, 30);
   }
 
   //----------------------------------------------------------------------------

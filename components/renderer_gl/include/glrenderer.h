@@ -36,7 +36,7 @@ namespace LinksRouting
         return (type & Component::Renderer);
       }
 
-      void process(unsigned int type);
+      uint32_t process(unsigned int type) override;
 
       virtual bool setString(const std::string& name, const std::string& val);
 

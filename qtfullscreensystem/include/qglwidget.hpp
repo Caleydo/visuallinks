@@ -98,6 +98,7 @@ namespace qtfullscreensystem
 
       bool _do_drag;
       float2 _last_mouse_pos;
+      uint32_t _flags;
 
       LinksRouting::slot_t<LinksRouting::SlotType::Image>::type _slot_desktop;
       LinksRouting::slot_t<QRect>::type _slot_desktop_rect;

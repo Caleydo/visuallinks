@@ -20,6 +20,8 @@ namespace qtfullscreensystem
                               int w,
                               int h ):
     _gl_widget( gl_widget ),
+    _w(0),
+    _h(0),
     _do_render( false ),
     _do_resize( false )
   {

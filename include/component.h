@@ -25,6 +25,13 @@ namespace LinksRouting
         Any = 63
       };
 
+      enum ProcessFlags
+      {
+        LINKS_DIRTY = 1,
+        RENDER_DIRTY = LINKS_DIRTY << 1,
+        MASK_DIRTY = RENDER_DIRTY << 1
+      };
+
       static std::string TypeToString(Type t)
       {
         switch( t )
@@ -69,16 +76,16 @@ namespace LinksRouting
       /**
        * Override to publish data to slots
        */
-      virtual void publishSlots(SlotCollector& slot_list) {};
-      virtual void subscribeSlots(SlotSubscriber& slot_subscriber) {};
+      virtual void publishSlots(SlotCollector& slot_list) {}
+      virtual void subscribeSlots(SlotSubscriber& slot_subscriber) {}
 
-      virtual bool startup(Core* core, unsigned int type) { return true; };
-      virtual void init() {};
-      virtual bool initGL() { return true; };
-      virtual void shutdown() {};
-      virtual bool supports(unsigned int type) const { return false; };
+      virtual bool startup(Core* core, unsigned int type) { return true; }
+      virtual void init() {}
+      virtual bool initGL() { return true; }
+      virtual void shutdown() {}
+      virtual bool supports(unsigned int type) const { return false; }
 
-      virtual void process(unsigned int type) {};
+      virtual uint32_t process(unsigned int type) { return 0; }
 
     protected:
 

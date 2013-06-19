@@ -131,7 +131,7 @@ namespace LinksRouting
     void shutdown();
     bool supports(unsigned int type) const;
 
-    void process(unsigned int type);
+    uint32_t process(unsigned int type) override;
 
     virtual bool setParameter( const std::string& key,
                                const std::string& val,

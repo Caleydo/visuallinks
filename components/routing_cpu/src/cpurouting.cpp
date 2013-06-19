@@ -308,12 +308,12 @@ namespace LinksRouting
 
 #define GLOBAL_ROUTING
   //----------------------------------------------------------------------------
-  void CPURouting::process(unsigned int type)
+  uint32_t CPURouting::process(unsigned int type)
   {
     if( !_subscribe_links->isValid() )
     {
       LOG_DEBUG("No valid routing data available.");
-      return;
+      return 0;
     }
 
     LinkDescription::LinkList& links = *_subscribe_links->_data;
@@ -372,6 +372,8 @@ namespace LinksRouting
 //      LOG_INFO("NEW DATA to route: " << it->_id << " using cpu routing");
       // TODO move looping and updating to common router component
     }
+
+    return RENDER_DIRTY | MASK_DIRTY;
   }
 
   WId getCoveringWId(const LinkDescription::Node& node)

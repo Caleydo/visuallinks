@@ -183,7 +183,7 @@ namespace LinksRouting
   }
 
   //----------------------------------------------------------------------------
-  void StaticCore::process(unsigned int type)
+  uint32_t StaticCore::process(unsigned int type)
   {
     // Check if we need to select a new routing algorithm
     std::string request = _slot_select_routing->_data->request,
@@ -216,18 +216,27 @@ namespace LinksRouting
       _slot_select_routing->_data->request.clear();
     }
 
+    uint32_t flags = 0;
     for( auto c = _components.begin(); c != _components.end(); ++c )
     {
       if( c->is && c->comp->supports(type) )
       {
 //        clock::time_point lap = clock::now();
 //        std::cout << "+->" << c->comp->name() << std::endl;
-        c->comp->process(type);
+        flags |= c->comp->process(type);
 //        std::cout << c->comp->name() << " -> " << (clock::now() - lap) << std::endl;
       }
 //      else
 //        std::cout << "!->" << c->comp->name() << std::endl;
     }
+
+//    std::cout << "staticcore: "
+//              << (flags & Component::LINKS_DIRTY ? "links " : "")
+//              << (flags & Component::RENDER_DIRTY ? "render " : "")
+//              << (flags & Component::MASK_DIRTY ? "mask " : "")
+//              << std::endl;
+
+    return flags;
   }
 
   //----------------------------------------------------------------------------

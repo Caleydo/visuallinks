@@ -53,6 +53,7 @@ namespace LinksRouting
     _window_monitor(widget, std::bind(&IPCServer::regionsChanged, this, _1)),
     _mutex_slot_links(mutex),
     _cond_data_ready(cond_data),
+    _dirty_flags(0),
     _interaction_handler(this)
   {
     assert(widget);
@@ -144,7 +145,7 @@ namespace LinksRouting
   }
 
   //----------------------------------------------------------------------------
-  void IPCServer::process(unsigned int type)
+  uint32_t IPCServer::process(unsigned int type)
   {
     if( !_debug_regions.empty() )
     {
@@ -171,9 +172,9 @@ namespace LinksRouting
     double dt = dur_us / 1000000.;
     last_time = now;
 
-    bool changed = foreachPopup([&]( SlotType::TextPopup::Popup& popup,
-                                     QWsSocket& socket,
-                                     ClientInfo& client_info ) -> bool
+    foreachPopup([&]( SlotType::TextPopup::Popup& popup,
+                      QWsSocket& socket,
+                      ClientInfo& client_info ) -> bool
     {
 //      if(    popup.hover_region.visible
 //          && popup.hover_region.hide_time <= clock::now() )
@@ -181,11 +182,22 @@ namespace LinksRouting
 //        popup.hover_region.visible = false;
 //        return true;
 //      }
-      return popup.hover_region.update(dt);
+      bool visible = popup.hover_region.isVisible();
+      if( popup.hover_region.update(dt) )
+        _dirty_flags |= RENDER_DIRTY;
+
+      double alpha = popup.hover_region.getAlpha();
+
+      if(    visible != popup.hover_region.isVisible()
+          || (alpha > 0 && alpha < 0.5) )
+        _dirty_flags |= MASK_DIRTY;
+
+      return true;
     });
 
-    if( changed )
-      _cond_data_ready->wakeAll();
+    uint32_t flags = _dirty_flags;
+    _dirty_flags = 0;
+    return flags;
   }
 
   //----------------------------------------------------------------------------
@@ -385,7 +397,7 @@ namespace LinksRouting
         {
           client_info.setScrollPos( msg.getValue<QPoint>("pos") );
           client_info.update(_window_monitor.getWindows());
-          return _cond_data_ready->wakeAll();
+          return dirtyLinks();
         }
       }
 
@@ -449,7 +461,7 @@ namespace LinksRouting
                    ++link )
             link->_stamp += 1;
           LOG_INFO("Trigger reroute -> routing algorithm changed");
-          _cond_data_ready->wakeAll();
+          return dirtyLinks();
         }
         else if( id == "/config" )
         {
@@ -558,7 +570,7 @@ namespace LinksRouting
       LOG_WARN("Failed to parse message: " << ex.what());
     }
 
-    _cond_data_ready->wakeAll();
+    dirtyLinks();
   }
 
   //----------------------------------------------------------------------------
@@ -616,7 +628,7 @@ namespace LinksRouting
                            data.constData() + 2,
                            data.size() - 2 );
 
-    _cond_data_ready->wakeAll();
+    dirtyRender();
   }
 
   //----------------------------------------------------------------------------
@@ -741,7 +753,7 @@ namespace LinksRouting
       return;
 
     LOG_INFO("Windows changed -> trigger reroute");
-    _cond_data_ready->wakeAll();
+    dirtyLinks();
   }
 
   //----------------------------------------------------------------------------
@@ -1284,25 +1296,28 @@ namespace LinksRouting
                                      QWsSocket& socket,
                                      ClientInfo& client_info ) -> bool
     {
+      auto& reg = popup.hover_region;
       if(    !popup_visible // Only one popup/preview at the same time
           && (  popup.region.contains(x, y)
-             || (  popup.hover_region.isVisible()
-                && popup.hover_region.contains(x,y)
-                )
+             || (reg.isVisible() && reg.contains(x,y))
              ) )
       {
 //        if( hide_popup )
 //          hide_popup->hover_region.fadeOut();
 
         popup_visible = true;
-        if( popup.hover_region.isVisible() && !popup.hover_region.isFadeOut() )
+        if( reg.isVisible() && !reg.isFadeOut() )
           return false;
 
-        popup.hover_region.fadeIn();
+        if( reg.isFadeOut() )
+          reg.fadeIn();
+        else
+          reg.delayedFadeIn();
+
         _interaction_handler.updateRegion(&socket, popup);
         return true;
       }
-      else if( popup.hover_region.isVisible() )
+      else if( reg.isVisible() )
       {
 //        std::chrono::milliseconds timeout(400);
 //        if( popup.hover_region.hide_time - timeout > clock::now() )
@@ -1317,6 +1332,10 @@ namespace LinksRouting
           hide_popup = &popup;
 
         //return true;
+      }
+      else if( reg.isFadeIn() )
+      {
+        reg.hide();
       }
 
       return false;
@@ -1362,7 +1381,7 @@ namespace LinksRouting
       for(auto& link: *_slot_links->_data)
         link._link->set("hide-covered-wid", preview_wid);
 
-      _cond_data_ready->wakeAll();
+      dirtyRender();
     }
   }
 
@@ -1409,6 +1428,7 @@ namespace LinksRouting
         {
           float scale = (scroll_size.y / pow(2.0f, static_cast<float>(old_zoom)))
                       / _preview_height;
+          Rect const old_region = popup.hover_region.region;
 
           float2 d = pos - popup.hover_region.region.pos,
                  mouse_pos = scale * d + popup.hover_region.src_region.pos;
@@ -1419,12 +1439,17 @@ namespace LinksRouting
             mouse_pos,
             d / popup.hover_region.region.size
           );
+
+          if( old_region != popup.hover_region.region )
+            _dirty_flags |= MASK_DIRTY;
+
+          changed = true;
         }
       }
 
       return changed;
     }) )
-      _cond_data_ready->wakeAll();
+      dirtyRender();
   }
 
   //----------------------------------------------------------------------------
@@ -1453,7 +1478,7 @@ namespace LinksRouting
 
       return _interaction_handler.updateRegion(&socket, popup);
     }) )
-      _cond_data_ready->wakeAll();
+      dirtyRender();
   }
 
   //----------------------------------------------------------------------------
@@ -1543,6 +1568,20 @@ namespace LinksRouting
     }
 
     return changed;
+  }
+
+  //----------------------------------------------------------------------------
+  void IPCServer::dirtyLinks()
+  {
+    _dirty_flags |= LINKS_DIRTY;
+    _cond_data_ready->wakeAll();
+  }
+
+  //----------------------------------------------------------------------------
+  void IPCServer::dirtyRender()
+  {
+    _dirty_flags |= RENDER_DIRTY;
+    _cond_data_ready->wakeAll();
   }
 
   //----------------------------------------------------------------------------

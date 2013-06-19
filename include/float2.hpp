@@ -273,6 +273,9 @@ struct Rect
   Rect operator+(const float2& offset) const;
   Rect operator-(const float2& offset) const;
 
+  bool operator==(const Rect& rhs) const;
+  bool operator!=(const Rect& rhs) const;
+
   friend std::istream& operator>>(std::istream& strm, Rect& rect);
   friend std::ostream& operator<<(std::ostream& strm, const Rect& r);
 };

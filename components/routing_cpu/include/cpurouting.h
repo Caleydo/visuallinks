@@ -46,7 +46,7 @@ namespace LinksRouting
         return (type & Component::Routing);
       }
 
-      void process(unsigned int type);
+      uint32_t process(unsigned int type) override;
 
     private:
 

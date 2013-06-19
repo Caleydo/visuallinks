@@ -40,7 +40,7 @@ namespace LinksRouting
         return (type & Component::Costanalysis);
       }
 
-      void process(unsigned int type);
+      uint32_t process(unsigned int type) override;
 
 //      bool setSceneInput(const Component::MapData& inputmap);
 //      bool setCostreductionInput(const Component::MapData& inputmap);
