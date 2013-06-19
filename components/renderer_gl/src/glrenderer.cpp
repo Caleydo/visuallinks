@@ -439,6 +439,7 @@ namespace LinksRouting
     glClearColor(0,0,0,0);
     glClear(GL_COLOR_BUFFER_BIT);
 
+    uint32_t flags = 0;
     for(auto const& preview: _subscribe_xray->_data->popups)
     {
       if( !preview.node->get<bool>("hover") )
@@ -451,6 +452,8 @@ namespace LinksRouting
         continue;
       }
 
+      flags |= MASK_DIRTY;
+
 //      renderRect( preview.preview_region );
       renderTileMap( preview.tile_map.lock(),
                      preview.source_region,
@@ -462,7 +465,7 @@ namespace LinksRouting
     _xray_fbo.unbind();
     _slot_xray->setValid(true);
 
-    return 0;
+    return flags;
   }
 
   //----------------------------------------------------------------------------

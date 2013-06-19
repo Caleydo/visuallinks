@@ -172,28 +172,36 @@ namespace LinksRouting
     double dt = dur_us / 1000000.;
     last_time = now;
 
-    foreachPopup([&]( SlotType::TextPopup::Popup& popup,
-                      QWsSocket& socket,
-                      ClientInfo& client_info ) -> bool
+    auto updatePopup = [&](SlotType::AnimatedPopup& popup)
     {
-//      if(    popup.hover_region.visible
-//          && popup.hover_region.hide_time <= clock::now() )
-//      {
-//        popup.hover_region.visible = false;
-//        return true;
-//      }
-      bool visible = popup.hover_region.isVisible();
-      if( popup.hover_region.update(dt) )
+      bool visible = popup.isVisible();
+      if( popup.update(dt) )
         _dirty_flags |= RENDER_DIRTY;
 
-      double alpha = popup.hover_region.getAlpha();
+      double alpha = popup.getAlpha();
 
-      if(    visible != popup.hover_region.isVisible()
+      if(    visible != popup.isVisible()
           || (alpha > 0 && alpha < 0.5) )
         _dirty_flags |= MASK_DIRTY;
+    };
 
-      return true;
-    });
+    foreachPopup
+    (
+      [&](SlotType::TextPopup::Popup& popup, QWsSocket&, ClientInfo&) -> bool
+      {
+        updatePopup(popup.hover_region);
+        return false;
+      }
+    );
+
+    foreachPreview
+    (
+      [&](SlotType::XRayPopup::HoverRect& preview, QWsSocket&, ClientInfo&)
+         -> bool
+      {
+        return false;
+      }
+    );
 
     uint32_t flags = _dirty_flags;
     _dirty_flags = 0;
@@ -267,15 +275,14 @@ namespace LinksRouting
             ++vert )
       bb.expand(*vert);
 
-    SlotType::XRayPopup::HoverRect xray = {
-      link_id,
-      bb,
-      preview_region,
-      source_region,
-      node,
-      tile_map,
-      getSocketByWId(client_info.getWindowInfo().id)
-    };
+    SlotType::XRayPopup::HoverRect xray;
+    xray.link_id = link_id;
+    xray.region = bb;
+    xray.preview_region = preview_region;
+    xray.source_region = source_region;
+    xray.node = node;
+    xray.tile_map = tile_map;
+    xray.client_socket = getSocketByWId(client_info.getWindowInfo().id);
 
     auto& previews = _slot_xray->_data->popups;
     return previews.insert(previews.end(), xray);

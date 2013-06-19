@@ -25,9 +25,9 @@ namespace SlotType
   class AnimatedPopup
   {
     public:
-      static constexpr double SHOW_DELAY = 0.2;
-      static constexpr double HIDE_DELAY = 0.4;
-      static constexpr double TIMEOUT = 0.5;
+      static const double SHOW_DELAY;
+      static const double HIDE_DELAY;
+      static const double TIMEOUT;
 
       static bool debug;
 
@@ -111,7 +111,8 @@ namespace SlotType
 
   struct XRayPopup
   {
-    struct HoverRect
+    struct HoverRect:
+      public AnimatedPopup
     {
       std::string link_id;
 
