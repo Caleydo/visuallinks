@@ -128,6 +128,11 @@ namespace SlotType
       LinkDescription::NodePtr node;
       HierarchicTileMapWeakPtr tile_map;
       void* client_socket;
+
+      HoverRect():
+        AnimatedPopup(false),
+        client_socket(0)
+      {}
     };
 
     typedef std::list<HoverRect> Popups;

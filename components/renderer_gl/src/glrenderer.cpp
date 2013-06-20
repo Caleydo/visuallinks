@@ -442,7 +442,7 @@ namespace LinksRouting
     uint32_t flags = 0;
     for(auto const& preview: _subscribe_xray->_data->popups)
     {
-      if( !preview.node->get<bool>("hover") )
+      if( !preview.isVisible() )
         continue;
 
       HierarchicTileMapPtr tile_map = preview.tile_map.lock();
@@ -459,7 +459,8 @@ namespace LinksRouting
                      preview.source_region,
                      preview.preview_region,
                      -1,
-                     false );
+                     false,
+                     preview.getAlpha() );
     }
 
     _xray_fbo.unbind();
@@ -677,13 +678,15 @@ namespace LinksRouting
 
       if( pass == 0 )
       {
+        float alpha = (*node)->get<float>("alpha");
         if(   !render_all
-            && (*node)->get<bool>("hover") )
+            && ((*node)->get<bool>("hover") || alpha > 0.01) )
         {
+          Color c = alpha * _color_cur;
           const Rect rp = (*node)->get<Rect>("covered-preview-region");
-          renderRect(rp, 2.f, 0, 0.05 * _color_cur, 2 * _color_cur);
+          renderRect(rp, 2.f, 0, 0.05 * c, 2 * c);
           const Rect r = (*node)->get<Rect>("covered-region");
-          renderRect(r, 3.f, 0, 0.15 * _color_cur, 2 * _color_cur);
+          renderRect(r, 3.f, 0, 0.15 * c, 2 * c);
           rendered_anything = true;
         }
         continue;

@@ -194,14 +194,30 @@ namespace LinksRouting
       }
     );
 
+    WId preview_wid = 0;
+    Rect preview_region;
     foreachPreview
     (
       [&](SlotType::XRayPopup::HoverRect& preview, QWsSocket&, ClientInfo&)
          -> bool
       {
+        updatePopup(preview);
+        if( preview.getAlpha() > (preview.isFadeIn() ? 0.9 : 0.3) )
+        {
+          preview_wid = preview.node->get<WId>("client_wid");
+          preview_region = preview.preview_region;
+        }
+        preview.node->set("alpha", preview.getAlpha());
         return false;
       }
     );
+
+    bool changed = false;
+    for(auto& cinfo: _clients)
+      changed |= cinfo.second->updateHoverCovered(preview_wid, preview_region);
+
+    if( changed )
+      _dirty_flags |= LINKS_DIRTY;
 
     uint32_t flags = _dirty_flags;
     _dirty_flags = 0;
@@ -1250,41 +1266,40 @@ namespace LinksRouting
       return false;
     });
 
-    WId preview_wid = 0;
-    Rect preview_region;
     changed |= foreachPreview([&]( SlotType::XRayPopup::HoverRect& preview,
                                    QWsSocket& socket,
                                    ClientInfo& client_info ) -> bool
     {
       auto const& p = preview.node->getParent();
-      bool hover = preview.node->get<bool>("hover");
 
       if(   !popup_visible // Only one popup/preview at the same time
           && preview.region.contains( float2(x, y)
                                     - p->get<float2>("screen-offset")) )
       {
-        preview_wid = preview.node->get<WId>("client_wid");
-        preview_region = preview.preview_region;
+        popup_visible = true;
+        if( preview.isVisible() && !preview.isFadeOut() )
+          return false;
 
-        if( !hover )
-        {
-          hover = true;
-          _interaction_handler.updateRegion(preview);
-        }
+        if( preview.isFadeOut() )
+          preview.fadeIn();
+        else
+          preview.delayedFadeIn();
+
+        _interaction_handler.updateRegion(preview);
+        return true;
       }
-      else if( hover )
-        hover = false;
-      else
-        return false;
+      else if( preview.isVisible() )
+      {
+        if( !preview.isFadeOut() )
+          preview.delayedFadeOut();
+      }
+      else if( preview.isFadeIn() )
+      {
+        preview.hide();
+      }
 
-      if( hover || !preview_wid )
-        _dirty_flags |= LINKS_DIRTY;
-
-      return preview.node->setOrClear("hover", hover);
+      return false;
     });
-
-    for(auto& cinfo: _clients)
-      changed |= cinfo.second->updateHoverCovered(preview_wid, preview_region);
 
     if( changed )
       dirtyRender();
