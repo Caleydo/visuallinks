@@ -995,34 +995,9 @@ namespace LinksRouting
     ;
 
     QRect region, scroll_region;
-//    WindowInfo::const_iterator first_above = regions.end();
     auto client_info = findClientInfo(client_wid);
     if( client_info != _clients.end() )
-    {
       modified |= client_info->second->update(regions);
-#if 0
-      region = client_info->second.viewport;
-      scroll_region = client_info->second.scroll_region;
-
-      if( client_wid )
-      {
-        auto window_info = std::find_if
-        (
-          regions.begin(),
-          regions.end(),
-          [&client_wid](const WindowInfo& winfo)
-          {
-            return winfo.id == client_wid;
-          }
-        );
-        region.translate( window_info->region.topLeft() );
-        scroll_region.translate( -2 * scroll_region.topLeft() );
-        scroll_region.translate(region.topLeft() );
-
-        first_above = window_info + 1;
-      }
-#endif
-    }
 
     const LinkDescription::nodes_t nodes = hedge->getNodes();
     for( auto node = hedge->getNodes().begin();
@@ -1032,75 +1007,9 @@ namespace LinksRouting
       for(auto child = (*node)->getChildren().begin();
                child != (*node)->getChildren().end();
              ++child )
-      {
-        if( updateHedge(regions, child->get()) )
-          modified = true;
-#if 0
-        float2 center = (*child)->getCenter();
-        if( center != float2(0,0) )
-        {
-          hedge_center += center;
-          num_visible += 1;
-        }
-#endif
-      }
-
-      if( !client_wid )
-        continue;
-#if 0
-      if( updateRegion(regions, node->get(), client_wid) )
-        modified = true;
-#endif
+        modified |= updateHedge(regions, child->get());
     }
-#if 0
-    for( auto node = hedge->getNodes().begin();
-              node != hedge->getNodes().end();
-            ++node )
-      if( (*node)->get<bool>("virtual-covered", false) )
-        node = hedge->getNodes().erase(node);
 
-    CoverWindows cover_windows(first_above, regions.end());
-    for( auto node = hedge->getNodes().begin();
-              node != hedge->getNodes().end();
-            ++node )
-      if(    !(*node)->get<bool>("hidden", false)
-          ||  (*node)->get<bool>("covered", false) )
-      {
-        float2 center = (*node)->getCenter();
-        if( center != float2(0,0) )
-        {
-          hedge_center += center;
-          num_visible += 1;
-        }
-      }
-
-    if( num_visible > 0 )
-      hedge_center /= num_visible;
-
-    hedge->setCenter(hedge_center);
-
-    for( auto node = covered_nodes.begin();
-              node != covered_nodes.end();
-            ++node )
-    {
-      LinkDescription::NodePtr new_node;
-      if( (*node)->get<bool>("outside") && (*node)->get<bool>("covered") )
-        new_node = cover_windows.getInsideIntersect(hedge_center, (*node)->getCenter(), region);
-      else if( cover_windows.valid() )
-        new_node = cover_windows.getVisibleIntersect(hedge_center, (*node)->getCenter());
-      else
-        continue;
-
-      auto new_hedge = LinkDescription::HyperEdge::make_shared();
-      new_hedge->set("client_wid", WIdtoStr(client_wid));
-      new_hedge->set("no-parent-route", true);
-      new_hedge->set("covered", true);
-      new_hedge->addNode(*node);
-      new_hedge->setCenter(new_node->getLinkPointsChildren().front());
-      new_node->getChildren().push_back(new_hedge);
-      hedge->addNode(new_node);
-    }
-#endif
     return modified;
   }
 
@@ -1326,19 +1235,12 @@ namespace LinksRouting
       }
       else if( reg.isVisible() )
       {
-//        std::chrono::milliseconds timeout(400);
-//        if( popup.hover_region.hide_time - timeout > clock::now() )
-//          popup.hover_region.hide_time = clock::now() + timeout;
-//        else if( popup_visible )
-//          popup.hover_region.visible = false;
         if( !popup.hover_region.isFadeOut() )
           popup.hover_region.delayedFadeOut();
         else
           // timeout already started, so store to be able hiding if other
           // popup is shown before hiding this one.
           hide_popup = &popup;
-
-        //return true;
       }
       else if( reg.isFadeIn() )
       {
@@ -1379,10 +1281,6 @@ namespace LinksRouting
         _dirty_flags |= LINKS_DIRTY;
 
       return preview.node->setOrClear("hover", hover);
-#if 0
-      changed |= preview.node->getParent()->getParent()->set("hidden", !hover);
-      changed |= preview.node->getParent()->getParent()->set("hover", hover);
-#endif
     });
 
     for(auto& cinfo: _clients)
