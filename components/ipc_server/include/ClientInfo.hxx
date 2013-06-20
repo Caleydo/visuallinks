@@ -68,6 +68,11 @@ namespace LinksRouting
     bool update(const WindowRegions& windows);
 
     /**
+     * Update regions while a hover preview is active
+     */
+    bool updateHoverCovered(WId hover_wid, const Rect& hover_region);
+
+    /**
      * Remove all information about given link
      */
     void removeLink(LinkDescription::HyperEdge* hedge);
@@ -162,6 +167,12 @@ namespace LinksRouting
                            const QRect& view,    ///<! viewport in local coords
                            const WindowRegions& windows,
                            const WindowInfos::const_iterator& first_above );
+      bool updateNode( LinkDescription::Node& node,
+                       WId hover_wid,
+                       const Rect& preview_region ); /// <! in absolute coords
+      bool updateChildren( LinkDescription::HyperEdge& hedge,
+                           WId hover_wid,
+                           const Rect& preview_region ); /// <! in absolute coords
       void updateHedges( LinkDescription::hedges_t& hedges,
                          bool first = true );
 

@@ -24,6 +24,12 @@ Rect::Rect(const float2& pos, const float2& size):
 }
 
 //------------------------------------------------------------------------------
+bool Rect::isValid() const
+{
+  return size.x >= 0 && size.y >= 0;
+}
+
+//------------------------------------------------------------------------------
 void Rect::expand(const float2& p)
 {
   if( size.x < 0 || size.y < 0 )

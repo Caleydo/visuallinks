@@ -726,19 +726,18 @@ namespace LinksRouting
     LinkDescription::node_vec_t nodes,
                                 outside_nodes;
     float2 offset = hedge->get<float2>("screen-offset");
-    WId hide_wid = hedge->get<WId>("hide-covered-wid");
-    bool hide_covered = hide_wid && hide_wid != hedge->get<WId>("client_wid");
 
     // add regions
     for( auto& node: hedge->getNodes() )
     {
-      bool covered = node->get<bool>("covered");
-      bool hover_preview = node->get<bool>("hover")
-                        && node->get<bool>("on-screen")
-                        && covered;
+      bool covered = node->get<bool>("covered")
+                  || node->get<bool>("preview-covered");
+      bool hover_preview = (node->get<bool>("hover") || node->get<bool>("preview"))
+                        && node->get<bool>("on-screen");
+                        //&& covered;
 
       if(    (!hover_preview &&  node->get<bool>("hidden"))
-          || ( covered       && hide_covered)
+          || ( covered )
           || ( no_route      && !node->get<bool>("always-route")) )
         continue;
 

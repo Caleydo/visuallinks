@@ -241,6 +241,22 @@ namespace LinksRouting
   }
 
   //----------------------------------------------------------------------------
+  bool ClientInfo::updateHoverCovered(WId hover_wid, const Rect& hover_region)
+  {
+    bool modified = false;
+    for(auto& node: _nodes)
+      for(auto& hedge: node->getChildren())
+      {
+        if( hedge->get<bool>("no-route") )
+          continue;
+
+        modified |= updateChildren(*hedge, hover_wid, hover_region);
+      }
+
+    return modified;
+  }
+
+  //----------------------------------------------------------------------------
   void ClientInfo::removeLink(LinkDescription::HyperEdge* hedge)
   {
     for( auto node = _nodes.begin(); node != _nodes.end(); )
@@ -681,11 +697,8 @@ namespace LinksRouting
     modified |= node.set("outside", outside);
     modified |= node.set("hidden", hidden || covered);
 
-    if( covered )
-    {
-      modified |= node.set("covering-region", covering_region);
-      modified |= node.set("covering-wid", covering_wid);
-    }
+    node.set("covering-region", covering_region);
+    node.set("covering-wid", covering_wid);
 
     return modified;
   }
@@ -700,12 +713,47 @@ namespace LinksRouting
   )
   {
     bool modified = false;
-    for(auto node: hedge.getNodes())
+    for(auto& node: hedge.getNodes())
       modified |= updateNode(*node, desktop, view, windows, first_above);
     return modified;
   }
 
-  //------------------------------------------------------------------------------
+  //----------------------------------------------------------------------------
+  bool ClientInfo::updateNode( LinkDescription::Node& node,
+                               WId hover_wid,
+                               const Rect& preview_region )
+  {
+    if( node.getVertices().empty() )
+      return false;
+
+    bool covered = false;
+    if( !hover_wid )
+    {
+      // Reset covered if stop hovering
+      covered = node.get<WId>("covering-wid") != 0;
+    }
+    else if( hover_wid != _window_info.id )
+    {
+      float2 center_abs = node.getCenter()
+                        + getScrollRegionAbs().topLeft();
+      covered = preview_region.contains(center_abs);
+    }
+
+    return node.set("covered", covered);
+  }
+
+  //----------------------------------------------------------------------------
+  bool ClientInfo::updateChildren( LinkDescription::HyperEdge& hedge,
+                                   WId hover_wid,
+                                   const Rect& preview_region )
+  {
+    bool modified = false;
+    for(auto& node: hedge.getNodes())
+      modified |= updateNode(*node, hover_wid, preview_region);
+    return modified;
+  }
+
+  //----------------------------------------------------------------------------
   void ClientInfo::updateHedges( LinkDescription::hedges_t& hedges,
                                  bool first )
   {

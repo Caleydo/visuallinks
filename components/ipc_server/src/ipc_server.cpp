@@ -1349,6 +1349,7 @@ namespace LinksRouting
     });
 
     WId preview_wid = 0;
+    Rect preview_region;
     changed |= foreachPreview([&]( SlotType::XRayPopup::HoverRect& preview,
                                    QWsSocket& socket,
                                    ClientInfo& client_info ) -> bool
@@ -1361,6 +1362,7 @@ namespace LinksRouting
                                     - p->get<float2>("screen-offset")) )
       {
         preview_wid = preview.node->get<WId>("client_wid");
+        preview_region = preview.preview_region;
 
         if( !hover )
         {
@@ -1374,7 +1376,7 @@ namespace LinksRouting
         return false;
 
       if( hover || !preview_wid )
-        changed |= preview.node->getParent()->setOrClear("hover", hover);
+        _dirty_flags |= LINKS_DIRTY;
 
       return preview.node->setOrClear("hover", hover);
 #if 0
@@ -1383,13 +1385,11 @@ namespace LinksRouting
 #endif
     });
 
-    if( changed )
-    {
-      for(auto& link: *_slot_links->_data)
-        link._link->set("hide-covered-wid", preview_wid);
+    for(auto& cinfo: _clients)
+      changed |= cinfo.second->updateHoverCovered(preview_wid, preview_region);
 
+    if( changed )
       dirtyRender();
-    }
   }
 
   //----------------------------------------------------------------------------

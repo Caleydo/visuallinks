@@ -252,6 +252,8 @@ struct Rect
   }
 #endif
 
+  bool isValid() const;
+
   float l() const { return pos.x; }
   float r() const { return pos.x + size.x; }
 
