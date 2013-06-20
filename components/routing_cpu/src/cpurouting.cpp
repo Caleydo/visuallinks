@@ -730,15 +730,8 @@ namespace LinksRouting
     // add regions
     for( auto& node: hedge->getNodes() )
     {
-      bool covered = node->get<bool>("covered")
-                  || node->get<bool>("preview-covered");
-      bool hover_preview = (node->get<bool>("hover") || node->get<bool>("preview"))
-                        && node->get<bool>("on-screen");
-                        //&& covered;
-
-      if(    (!hover_preview &&  node->get<bool>("hidden"))
-          || ( covered )
-          || ( no_route      && !node->get<bool>("always-route")) )
+      if(    node->get<bool>("hidden")
+          || (no_route && !node->get<bool>("always-route")) )
         continue;
 
       // add children (hyperedges)

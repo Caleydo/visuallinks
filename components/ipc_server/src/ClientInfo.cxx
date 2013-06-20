@@ -688,14 +688,12 @@ namespace LinksRouting
                                    center_abs,
                                    &covering_region,
                                    &covering_wid ),
-         outside    = !view.contains(center_rel),
-         hidden     =   !onscreen
-                    || (!_ipc_server->getOutsideSeeThrough() && outside);
+         outside    = !view.contains(center_rel);
 
     modified |= node.set("on-screen", onscreen);
     modified |= node.set("covered", covered);
     modified |= node.set("outside", outside);
-    modified |= node.set("hidden", hidden || covered);
+    modified |= updateNode(node);
 
     node.set("covering-region", covering_region);
     node.set("covering-wid", covering_wid);
@@ -723,7 +721,7 @@ namespace LinksRouting
                                WId hover_wid,
                                const Rect& preview_region )
   {
-    if( node.getVertices().empty() )
+    if( node.getVertices().empty() || !node.get<bool>("on-screen") )
       return false;
 
     bool covered = false;
@@ -739,7 +737,9 @@ namespace LinksRouting
       covered = preview_region.contains(center_abs);
     }
 
-    return node.set("covered", covered);
+    bool modified = node.set("covered", covered);
+    modified |= updateNode(node);
+    return modified;
   }
 
   //----------------------------------------------------------------------------
@@ -773,6 +773,16 @@ namespace LinksRouting
       for(auto& node: hedge->getNodes())
         updateHedges(node->getChildren(), false);
     }
+  }
+
+  //----------------------------------------------------------------------------
+  bool ClientInfo::updateNode(LinkDescription::Node& node)
+  {
+    bool hidden =  !node.get<bool>("on-screen")
+               || ( !_ipc_server->getOutsideSeeThrough()
+                 && node.get<bool>("outside") );
+
+    return node.set("hidden", hidden || node.get<bool>("covered"));
   }
 
   //----------------------------------------------------------------------------

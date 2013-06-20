@@ -175,6 +175,7 @@ namespace LinksRouting
                            const Rect& preview_region ); /// <! in absolute coords
       void updateHedges( LinkDescription::hedges_t& hedges,
                          bool first = true );
+      bool updateNode(LinkDescription::Node& node);
 
       /**
        * Update tile map (and recalculate partitions)
