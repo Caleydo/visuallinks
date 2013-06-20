@@ -1580,7 +1580,7 @@ namespace LinksRouting
   //----------------------------------------------------------------------------
   void IPCServer::dirtyLinks()
   {
-    _dirty_flags |= LINKS_DIRTY;
+    _dirty_flags |= LINKS_DIRTY | RENDER_DIRTY | MASK_DIRTY;
     _cond_data_ready->wakeAll();
   }
 

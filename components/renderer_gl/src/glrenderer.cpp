@@ -274,6 +274,9 @@ namespace LinksRouting
       return 0;
     }
 
+    _partitions_src = 0;
+    _partitions_dest = 0;
+
     bool rendered_anything = false;
     if( !_subscribe_outlines->_data->popups.empty() )
     {
@@ -292,9 +295,6 @@ namespace LinksRouting
                     0.6 * _colors.front() );
       }
     }
-
-    _partitions_src = 0;
-    _partitions_dest = 0;
 
     for(int pass = 0; pass <= 1; ++pass)
       rendered_anything |= renderLinks(*_subscribe_links->_data, pass);
