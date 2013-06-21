@@ -218,6 +218,7 @@ namespace LinkDescription
   };
 
   typedef std::shared_ptr<Node> NodePtr;
+  typedef std::weak_ptr<Node> NodeWeakPtr;
   typedef std::list<NodePtr> nodes_t;
   typedef std::vector<NodePtr> node_vec_t;
 

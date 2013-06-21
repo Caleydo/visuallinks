@@ -33,6 +33,7 @@ namespace LinksRouting
     _covered_outline->set("outline-only", true);
     _covered_outline->set("show-in-preview", false);
     _covered_outline->set("visible", false);
+    _covered_outline->set("outline-title", true);
   }
 
   //----------------------------------------------------------------------------

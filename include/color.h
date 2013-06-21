@@ -31,13 +31,18 @@ namespace LinksRouting
     {
       return &r;
     }
+    Color& operator*=(float rhs)
+    {
+      r *= rhs;
+      g *= rhs;
+      b *= rhs;
+      a *= rhs;
+      return *this;
+    }
     Color operator*(float rhs) const
     {
-      Color ret;
-      ret.r = rhs * r;
-      ret.g = rhs * g;
-      ret.b = rhs * b;
-      ret.a = rhs * a;
+      Color ret(*this);
+      ret *= rhs;
       return ret;
     }
 

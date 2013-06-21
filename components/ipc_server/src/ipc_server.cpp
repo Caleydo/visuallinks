@@ -1152,6 +1152,7 @@ namespace LinksRouting
 
       preview.node->getParent()->setOrClear("hover", false);
       preview.node->setOrClear("hover", false);
+      preview.fadeOut();
       client_info.activateWindow();
 
       if( !preview.node->get<bool>("outside") )
@@ -1193,7 +1194,7 @@ namespace LinksRouting
     });
 
     if( changed )
-      _cond_data_ready->wakeAll();
+      return dirtyRender();
   }
 
   void print( const LinkDescription::Node& node,

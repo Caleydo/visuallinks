@@ -292,7 +292,7 @@ namespace LinksRouting
         renderRect( outline.region_title,
                     0,
                     0,
-                    0.6 * _colors.front() );
+                    0.4 * _colors.front() );
       }
     }
 
@@ -701,6 +701,9 @@ namespace LinksRouting
                                        )
                       ? _color_covered_cur
                       : _color_cur;
+
+      if( (*node)->get<bool>("outline-title") )
+        color_cur *= 0.5;
 
       bool filled = (*node)->get<bool>("filled", false);
       if( !filled && !render_all && !(*node)->get<bool>("outline-only") )
