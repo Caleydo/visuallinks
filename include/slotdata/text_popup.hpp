@@ -99,6 +99,7 @@ namespace SlotType
       std::string text,
                   link_id;
       LinkDescription::nodes_t nodes;
+      LinkDescription::NodePtr node;
       void* client_socket;
       HoverRect region;
       HoverRect hover_region;

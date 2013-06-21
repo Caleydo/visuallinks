@@ -323,6 +323,7 @@ namespace LinksRouting
                                 const float2& normal,
                                 const std::string& text,
                                 const LinkDescription::nodes_t& nodes,
+                                const LinkDescription::NodePtr& node,
                                 const std::string& link_id,
                                 bool auto_resize,
                                 ClientInfo* client )
@@ -378,6 +379,7 @@ namespace LinksRouting
       text,
       link_id,
       nodes,
+      node,
       0,
       TextPopup::HoverRect(popup_pos, popup_size, border_text, !text.empty()),
       TextPopup::HoverRect(hover_pos, hover_size, border_preview, false),
@@ -430,6 +432,7 @@ namespace LinksRouting
                ? ""
                : _nodes.front()->get<std::string>("display-num"),
             _nodes.front()->getChildren().front()->getNodes(),
+            _minimized_icon,
             _nodes.front()->getParent()->get<std::string>("link-id")
           );
       }
@@ -450,6 +453,8 @@ namespace LinksRouting
 
     for(auto& node: _nodes)
     {
+      modified |= node->set("minimized", _window_info.minimized);// || _window_info.covered);
+
       for(auto& hedge: node->getChildren())
       {
         if( hedge->get<bool>("no-route") )
@@ -479,8 +484,6 @@ namespace LinksRouting
             ++region;
             continue;
           }
-
-          modified |= (*region)->set("hidden", _window_info.minimized);// || _window_info.covered);
 
           if( _window_info.minimized )// || _window_info.covered )
           {
@@ -520,6 +523,7 @@ namespace LinksRouting
                            float2(1,0),
                            std::to_string(static_cast<unsigned long long>(a300_nodes.size())),
                            a300_nodes,
+                           *region,
                            link_id,
                            true,
                            a300_client );
@@ -621,6 +625,7 @@ namespace LinksRouting
                        out.normal,
                        std::to_string(static_cast<unsigned long long>(out.num_outside)),
                        hedge->getNodes(),
+                       new_node,
                        link_id );
         }
       }
@@ -778,7 +783,8 @@ namespace LinksRouting
   //----------------------------------------------------------------------------
   bool ClientInfo::updateNode(LinkDescription::Node& node)
   {
-    bool hidden =  !node.get<bool>("on-screen")
+    bool hidden =  node.get<bool>("minimized")
+               || !node.get<bool>("on-screen")
                || ( !_ipc_server->getOutsideSeeThrough()
                  && node.get<bool>("outside") );
 

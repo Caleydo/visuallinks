@@ -510,7 +510,8 @@ ShaderPtr loadShader( QString vert, QString frag )
               popup != _slot_popups->_data->popups.end();
             ++popup )
     {
-      if( popup->region.isVisible() )
+      if(    popup->region.isVisible()
+          && (!popup->node || !popup->node->get<bool>("hidden")) )
         painter.drawText
         (
           popup->region.region.pos.x - _window_offset.x(),

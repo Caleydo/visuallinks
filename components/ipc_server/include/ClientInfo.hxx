@@ -152,6 +152,8 @@ namespace LinksRouting
                         const float2& normal,
                         const std::string& text,
                         const LinkDescription::nodes_t& nodes,
+                        const LinkDescription::NodePtr& node =
+                          LinkDescription::NodePtr(),
                         const std::string& link_id = "",
                         bool auto_resize = true,
                         ClientInfo* client = nullptr );

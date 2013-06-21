@@ -189,6 +189,13 @@ namespace LinksRouting
     (
       [&](SlotType::TextPopup::Popup& popup, QWsSocket&, ClientInfo&) -> bool
       {
+        if( popup.node )
+        {
+          if( popup.node->get<bool>("hidden") )
+            popup.region.hide();
+          else
+            popup.region.show();
+        }
         updatePopup(popup.hover_region);
         return false;
       }
