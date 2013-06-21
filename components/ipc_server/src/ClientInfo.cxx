@@ -813,7 +813,8 @@ namespace LinksRouting
         for(auto const& hedge: node->getChildren())
           for(auto const& region: hedge->getNodes())
           {
-            if( region->getVertices().empty() )
+            if(     region->getVertices().empty()
+                || !region->get<std::string>("outside-scroll").empty() )
               continue;
 
             const Rect& bb = region->getBoundingBox();
