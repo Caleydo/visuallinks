@@ -782,9 +782,7 @@ namespace LinksRouting
                || ( !_ipc_server->getOutsideSeeThrough()
                  && node.get<bool>("outside") );
 
-    bool modified = node.set("hidden", hidden || node.get<bool>("covered"));
-    modified |= node.set<float>("alpha", 0);
-    return modified;
+    return node.set("hidden", hidden || node.get<bool>("covered"));
   }
 
   //----------------------------------------------------------------------------

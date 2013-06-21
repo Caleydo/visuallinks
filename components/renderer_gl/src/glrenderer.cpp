@@ -660,8 +660,12 @@ namespace LinksRouting
 
     for( auto node = nodes.begin(); node != nodes.end(); ++node )
     {
-      if(   !(*node)->get<bool>("hover")
-          && (*node)->get<bool>("hidden") && !render_all )
+      bool hover = (*node)->get<bool>("hover");
+      float alpha = (*node)->get<float>("alpha", hover ? 1 : 0);
+      if( alpha > 0.01 )
+        hover = true;
+
+      if( !hover && (*node)->get<bool>("hidden") && !render_all )
         continue;
 
       if( hedges_open )
@@ -678,9 +682,7 @@ namespace LinksRouting
 
       if( pass == 0 )
       {
-        float alpha = (*node)->get<float>("alpha");
-        if(   !render_all
-            && ((*node)->get<bool>("hover") || alpha > 0.01) )
+        if( !render_all && hover )
         {
           Color c = alpha * _color_cur;
           const Rect rp = (*node)->get<Rect>("covered-preview-region");
