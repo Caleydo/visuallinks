@@ -769,6 +769,9 @@ namespace LinksRouting
         continue;
       }
 
+      if( outside_nodes.empty() )
+        continue;
+
       // get next outside node
       float2 node_center = node->getCenter();
       float min_dist = std::numeric_limits<float>::max();
