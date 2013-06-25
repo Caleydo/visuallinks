@@ -284,11 +284,11 @@ namespace LinksRouting
 
       for( auto const& outline: _subscribe_outlines->_data->popups )
       {
-        renderRect( outline.region_outline,
-                    2,
-                    0,
-                    Color(0,0,0,0),
-                    0.4 * _colors.front() );
+//        renderRect( outline.region_outline,
+//                    2,
+//                    0,
+//                    Color(0,0,0,0),
+//                    0.4 * _colors.front() );
         renderRect( outline.region_title,
                     0,
                     0,

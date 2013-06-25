@@ -222,8 +222,8 @@ namespace LinksRouting
       _window_info = *window_info;
       _dirty |= WINDOW;
 
-      if( _window_info.title.contains("Airbus A300 - Wikipedia") )
-        a300_client = this;
+//      if( _window_info.title.contains("Airbus A300 - Wikipedia") )
+//        a300_client = this;
     }
 
     updateRegions(windows);
@@ -399,13 +399,13 @@ namespace LinksRouting
   void ClientInfo::updateRegions(const WindowRegions& windows)
   {
     clear();
-
+std::cout << "updateRegions " << to_string(_window_info.title) << std::endl;
     if( true ) //_dirty & WINDOW )
     {
       LinkDescription::points_t& icon = _minimized_icon->getVertices();
       icon.clear();
 
-      if( _window_info.minimized && !_window_info.title.contains("Airbus A300 - Wikipedia") )
+      if( _window_info.minimized ) //&& !_window_info.title.contains("Airbus A300 - Wikipedia") )
       {
         const QRect& region_launcher = _window_info.region_launcher;
         QPoint pos
@@ -488,6 +488,7 @@ namespace LinksRouting
 
           if( _window_info.minimized )// || _window_info.covered )
           {
+            modified |= updateNode(**region);
             ++region;
             continue;
           }
@@ -621,6 +622,9 @@ namespace LinksRouting
 
           updateNode(*new_node, desktop, local_view, windows, first_above);
           hedge->addNode(new_node);
+
+          if( new_node->get<bool>("covered") )
+            num_covered += 1;
 
           createPopup( out.pos + getScrollRegionAbs().topLeft(),
                        out.normal,

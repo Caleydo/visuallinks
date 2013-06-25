@@ -188,10 +188,21 @@ namespace LinksRouting
 
     for(QString const& launcher: _launchers)
     {
+      QString name(launcher);
+      name.remove("localhost");
+
       for(WindowInfo& winfo: regions)
       {
         bool match = false;
-        if( winfo.title.contains("Google Maps") )
+        QString title = winfo.title;
+        title.remove(QRegExp("\\W")); // Title of Unity launchers has all non
+                                      // alphanumeric characters removed
+
+        if( title == name || title == name + "MozillaFirefox" )
+        {
+          match = true;
+        }
+        else if( winfo.title.contains("Google Maps") )
         {
           match = launcher == "Map";
         }
