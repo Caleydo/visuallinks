@@ -136,6 +136,14 @@ namespace LinksRouting
       typedef SlotType::CoveredOutline::List::iterator OutlineIterator;
       typedef std::list<OutlineIterator> Outlines;
 
+      enum class LabelAlign
+      {
+        NORMAL,
+        LEFT,
+        CENTER,
+        RIGHT
+      };
+
       uint32_t                      _dirty;
       IPCServer                    *_ipc_server;
       WindowInfo                    _window_info;
@@ -156,7 +164,8 @@ namespace LinksRouting
                           LinkDescription::NodePtr(),
                         const std::string& link_id = "",
                         bool auto_resize = true,
-                        ClientInfo* client = nullptr );
+                        ClientInfo* client = nullptr,
+                        LabelAlign align = LabelAlign::NORMAL );
 
       void updateRegions(const WindowRegions& windows);
       bool updateNode( LinkDescription::Node& hedge,

@@ -193,7 +193,7 @@ namespace LinksRouting
         {
           if( popup.node->get<bool>("hidden") )
             popup.region.hide();
-          else
+          else if( !popup.text.empty() )
             popup.region.show();
         }
         updatePopup(popup.hover_region);

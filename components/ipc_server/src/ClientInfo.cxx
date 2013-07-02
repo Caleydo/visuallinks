@@ -327,7 +327,8 @@ namespace LinksRouting
                                 const LinkDescription::NodePtr& node,
                                 const std::string& link_id,
                                 bool auto_resize,
-                                ClientInfo* client )
+                                ClientInfo* client,
+                                LabelAlign align )
   {
     const QRect& desktop_rect = _ipc_server->desktopRect();
 
@@ -344,20 +345,27 @@ namespace LinksRouting
 
       if( normal.y < 0 )
       {
-        popup_pos.y = pos.y - 13 - popup_size.y - border_text;
+        popup_pos.y = pos.y - popup_size.y - border_text;
         hover_pos.y = popup_pos.y - hover_size.y + border_text
                                                  - 2 * border_preview;
       }
       else
       {
-        popup_pos.y = pos.y + 13 + border_text;
+        popup_pos.y = pos.y + border_text;
         hover_pos.y = popup_pos.y + popup_size.y - border_text
                                                  + 2 * border_preview;
       }
     }
     else
     {
-      popup_pos.x = pos.x + normal.x * (13 + border_text);
+      switch( align )
+      {
+        case LabelAlign::RIGHT:
+          popup_pos.x = pos.x - popup_size.x - border_text;
+          break;
+        default:
+          popup_pos.x = pos.x + normal.x * border_text;
+      }
       hover_pos.x = popup_pos.x + normal.x * (border_preview + border_text);
       if( normal.x > 0 )
         hover_pos.x += popup_size.x;
@@ -399,7 +407,6 @@ namespace LinksRouting
   void ClientInfo::updateRegions(const WindowRegions& windows)
   {
     clear();
-std::cout << "updateRegions " << to_string(_window_info.title) << std::endl;
     if( true ) //_dirty & WINDOW )
     {
       LinkDescription::points_t& icon = _minimized_icon->getVertices();
@@ -421,15 +428,15 @@ std::cout << "updateRegions " << to_string(_window_info.title) << std::endl;
         icon.push_back( pos + QPoint(ICON_SIZE,-ICON_SIZE) );
 
         LinkDescription::points_t link_points(1);
-        link_points.push_back(pos + QPoint(ICON_SIZE, 0));
+        link_points.push_back(pos += QPoint(ICON_SIZE, 0));
         _minimized_icon->setLinkPoints(link_points);
 
         if( !_nodes.empty() )
           createPopup
           (
-            pos,
+            pos + QPoint(3, 0), // padding (also for border)
             float2(1,0),
-            _nodes.front()->getChildren().front()->get<bool>("no-route")
+            _nodes.front()->getChildren().front()->get<bool>("search-preview")
                ? ""
                : _nodes.front()->get<std::string>("display-num"),
             _nodes.front()->getChildren().front()->getNodes(),
@@ -521,14 +528,15 @@ std::cout << "updateRegions " << to_string(_window_info.title) << std::endl;
                                         ->getChildren().front()
                                         ->getNodes();
 
-              createPopup( getScrollRegionAbs().topLeft() + (*region)->getVertices().front(),
+              createPopup( getScrollRegionAbs().topLeft() + (*region)->getVertices().back(),
                            float2(1,0),
                            std::to_string(static_cast<unsigned long long>(a300_nodes.size())),
                            a300_nodes,
                            *region,
                            link_id,
                            true,
-                           a300_client );
+                           a300_client,
+                           LabelAlign::RIGHT );
             }
 
             if( (*region)->get<bool>("covered") )
@@ -626,7 +634,7 @@ std::cout << "updateRegions " << to_string(_window_info.title) << std::endl;
           if( new_node->get<bool>("covered") )
             num_covered += 1;
 
-          createPopup( out.pos + getScrollRegionAbs().topLeft(),
+          createPopup( out.pos + getScrollRegionAbs().topLeft() + 13 * out.normal,
                        out.normal,
                        std::to_string(static_cast<unsigned long long>(out.num_outside)),
                        hedge->getNodes(),
