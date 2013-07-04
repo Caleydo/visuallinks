@@ -40,6 +40,8 @@ namespace LinksRouting
       virtual bool getString(const std::string& name,
                              std::string& val) const = 0;
 
+      template<class T> bool get(const std::string& name, T& val) const;
+
       template<class T>
       inline
       bool set(const std::string& key, const std::string& val)
@@ -136,6 +138,34 @@ namespace LinksRouting
                                            const std::string& val )
   {
     return comp->setString(name, convertFromString<std::string>(val));
+  }
+
+  template<>
+  inline
+  bool Configurable::get<bool>(const std::string& name, bool& val) const
+  {
+    return getFlag(name, val);
+  }
+
+  template<>
+  inline
+  bool Configurable::get<int>(const std::string& name, int& val) const
+  {
+    return getInteger(name, val);
+  }
+
+  template<>
+  inline
+  bool Configurable::get<double>(const std::string& name, double& val) const
+  {
+    return getFloat(name, val);
+  }
+
+  template<>
+  inline
+  bool Configurable::get<std::string>(const std::string& name, std::string& val) const
+  {
+    return getString(name, val);
   }
 
 } // namespace LinksRouting

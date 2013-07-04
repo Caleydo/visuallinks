@@ -41,6 +41,17 @@ namespace LinksRouting
     template<class T>
     bool getParameter(const std::string& identifier, T& val) const
     {
+      size_t end = identifier.find_first_of(':');
+      const std::string& comp = identifier.substr(0, end);
+
+      for( CompInfoList::const_iterator it = compInfoList.begin();
+           it != compInfoList.end();
+           ++it )
+      {
+        if( it->comp->name() == comp )
+          return it->comp->get(identifier.substr(end), val);
+      }
+
       if( !_config )
         return false;
 

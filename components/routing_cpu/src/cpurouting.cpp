@@ -333,31 +333,47 @@ namespace LinksRouting
       if( _global_num_nodes )
       _global_center /= _global_num_nodes;
 
+      float2 center = _global_center;
+      float min_dist = std::numeric_limits<float>::max();
       OrderedSegments segments;
-      for(const auto& group: _global_route_nodes)
-        for(const auto& node: group.second)
-        {
-          auto const& p = node->getParent();
-          if( !p )
-            continue;
 
-          auto const& fork = p->getHyperEdgeDescription();
-          if( !fork )
-            continue;
+      for(int phase = 0; phase < 2; ++phase )
+        for(const auto& group: _global_route_nodes)
+          for(const auto& node: group.second)
+          {
+            auto const& p = node->getParent();
+            if( !p )
+              continue;
 
-          float2 offset = p->get<float2>("screen-offset");
+            auto const& fork = p->getHyperEdgeDescription();
+            if( !fork )
+              continue;
 
-          segment_t segment;
-          segment.set("covered", node->get<bool>("covered") && !node->get<bool>("hover"));
-          segment.set("widen-end", node->get<bool>("widen-end", true));
-          segment.nodes.push_back(node);
-          segment.trail.push_back(_global_center);
-          segment.trail.push_back(offset + node->getBestLinkPoint(_global_center - offset) );
+            float2 offset = p->get<float2>("screen-offset");
 
-          segments.insert(
-            fork->outgoing.insert(fork->outgoing.end(), segment)
-          );
-        }
+            if( phase == 0 )
+            {
+              float2 node_center = node->getCenter() + offset;
+              float dist = (node_center - _global_center).length();
+              if( dist < min_dist )
+              {
+                center = node_center;
+                min_dist = dist;
+              }
+              continue;
+            }
+
+            segment_t segment;
+            segment.set("covered", node->get<bool>("covered") && !node->get<bool>("hover"));
+            segment.set("widen-end", node->get<bool>("widen-end", true));
+            segment.nodes.push_back(node);
+            segment.trail.push_back(center);
+            segment.trail.push_back(offset + node->getBestLinkPoint(center - offset) );
+
+            segments.insert(
+              fork->outgoing.insert(fork->outgoing.end(), segment)
+            );
+          }
 
       routeForceBundling(segments);
 #endif

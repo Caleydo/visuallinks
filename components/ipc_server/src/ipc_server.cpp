@@ -501,6 +501,7 @@ namespace LinksRouting
             msg.getValue<std::string>("val"),
             msg.getValue<std::string>("type")
           );
+          return dirtyLinks();
         }
         else
           LOG_WARN("Request setting unknown value: " << id_str);
