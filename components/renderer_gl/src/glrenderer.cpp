@@ -708,7 +708,7 @@ namespace LinksRouting
       bool filled = (*node)->get<bool>("filled", false);
       if( !filled && !render_all && !(*node)->get<bool>("outline-only") )
       {
-        Color light = 0.5 * color_cur;
+        Color light(0,0,0,0);// = 0.5 * color_cur;
         light.a *= 0.6;
         glColor4fv(light);
         glBegin(GL_POLYGON);

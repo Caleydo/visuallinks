@@ -1,6 +1,8 @@
 #ifndef LR_COLOR_INCLUDED
 #define LR_COLOR_INCLUDED
 
+#include <cmath>
+
 namespace LinksRouting
 {
 //  class Color
@@ -12,7 +14,12 @@ namespace LinksRouting
   {
     float r, g, b, a;
 
-    Color(){};
+    Color():
+      r(0),
+      g(0),
+      b(0),
+      a(0)
+    {}
     Color(float r, float g, float b, float a = 1):
       r(r),
       g(g),
@@ -49,6 +56,14 @@ namespace LinksRouting
     friend inline const Color operator*(float lhs, const Color& rhs)
     {
       return rhs * lhs;
+    }
+
+    bool operator==(const Color& rhs) const
+    {
+      return std::fabs(r - rhs.r) < 0.01
+          && std::fabs(g - rhs.g) < 0.01
+          && std::fabs(b - rhs.b) < 0.01
+          && std::fabs(a - rhs.a) < 0.01;
     }
   };
 
