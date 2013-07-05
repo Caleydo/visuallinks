@@ -43,13 +43,18 @@ namespace LinksRouting
     {
       size_t end = identifier.find_first_of(':');
       const std::string& comp = identifier.substr(0, end);
+      const std::string& id = end != std::string::npos
+                            ? identifier.substr(end + 1)
+                            : "";
+      if( id.empty() )
+        return false;
 
       for( CompInfoList::const_iterator it = compInfoList.begin();
            it != compInfoList.end();
            ++it )
       {
         if( it->comp->name() == comp )
-          return it->comp->get(identifier.substr(end), val);
+          return it->comp->get(id, val);
       }
 
       if( !_config )

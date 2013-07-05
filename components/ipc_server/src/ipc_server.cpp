@@ -468,8 +468,22 @@ namespace LinksRouting
         }
         else
         {
-          LOG_WARN("Requesting unknown value: " << id_str);
-          return;
+          std::string val_std;
+          if( !(*_subscribe_user_config->_data)
+               ->getParameter
+                (
+                  id_str,
+                  val_std,
+                  msg.getValue<std::string>("type")
+                ) )
+          {
+            LOG_WARN("Requesting unknown value: " << id_str);
+            return;
+          }
+
+          val = "\""
+              + QString::fromStdString(val_std).replace('"', "\\\"")
+              + "\"";
         }
 
         client->first->write
@@ -491,21 +505,23 @@ namespace LinksRouting
                    ++link )
             link->_stamp += 1;
           LOG_INFO("Trigger reroute -> routing algorithm changed");
-          return dirtyLinks();
-        }
-        else if( id == "/config" )
-        {
-          (*_subscribe_user_config->_data)->setParameter
-          (
-            msg.getValue<std::string>("var"),
-            msg.getValue<std::string>("val"),
-            msg.getValue<std::string>("type")
-          );
-          return dirtyLinks();
+          dirtyLinks();
         }
         else
-          LOG_WARN("Request setting unknown value: " << id_str);
-
+        {
+          if( !(*_subscribe_user_config->_data)
+               ->setParameter
+                (
+                  id_str,
+                  msg.getValue<std::string>("val"),
+                  msg.getValue<std::string>("type")
+                ) )
+          {
+            LOG_WARN("Request setting unknown value: " << id_str);
+            return;
+          }
+          dirtyLinks();
+        }
         return;
       }
 

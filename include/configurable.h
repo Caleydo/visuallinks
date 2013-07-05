@@ -40,7 +40,20 @@ namespace LinksRouting
       virtual bool getString(const std::string& name,
                              std::string& val) const = 0;
 
-      template<class T> bool get(const std::string& name, T& val) const;
+      template<class T> bool get(const std::string& name, T& val) const
+      {
+        return getImpl<T>(this, name, val);
+      }
+
+      template<class T> bool getAsString( const std::string& name,
+                                          std::string& val ) const
+      {
+        T v;
+        if( !get<T>(name, v) )
+          return false;
+        val = convertToString(v);
+        return true;
+      }
 
       template<class T>
       inline
@@ -62,7 +75,25 @@ namespace LinksRouting
         else if( isDataType<std::string>(type) )
           return set<std::string>(key, val);
         else
-          LOG_WARN(name() << ": unknown data type: " << type);
+          LOG_WARN(name() << ": unknown data type (set): " << type);
+
+        return false;
+      }
+
+      virtual bool getParameter( const std::string& key,
+                                 std::string& val,
+                                 const std::string& type )
+      {
+        if( isDataType<bool>(type) )
+          return getAsString<bool>(key, val);
+        else if( isDataType<int>(type) )
+          return getAsString<int>(key, val);
+        else if( isDataType<double>(type) )
+          return getAsString<double>(key, val);
+        else if( isDataType<std::string>(type) )
+          return get<std::string>(key, val);
+        else
+          LOG_WARN(name() << ": unknown data type (get): " << type);
 
         return false;
       }
@@ -84,6 +115,12 @@ namespace LinksRouting
       bool setImpl( Configurable* comp,
                     const std::string& key,
                     const std::string& val );
+
+      template<class T>
+      static inline
+      bool getImpl( const Configurable* comp,
+                    const std::string& key,
+                    T& val );
   };
 
   template<>
@@ -142,30 +179,38 @@ namespace LinksRouting
 
   template<>
   inline
-  bool Configurable::get<bool>(const std::string& name, bool& val) const
+  bool Configurable::getImpl<bool>( const Configurable* comp,
+                                    const std::string& name,
+                                    bool& val )
   {
-    return getFlag(name, val);
+    return comp->getFlag(name, val);
   }
 
   template<>
   inline
-  bool Configurable::get<int>(const std::string& name, int& val) const
+  bool Configurable::getImpl<int>( const Configurable* comp,
+                                   const std::string& name,
+                                   int& val )
   {
-    return getInteger(name, val);
+    return comp->getInteger(name, val);
   }
 
   template<>
   inline
-  bool Configurable::get<double>(const std::string& name, double& val) const
+  bool Configurable::getImpl<double>( const Configurable* comp,
+                                      const std::string& name,
+                                      double& val )
   {
-    return getFloat(name, val);
+    return comp->getFloat(name, val);
   }
 
   template<>
   inline
-  bool Configurable::get<std::string>(const std::string& name, std::string& val) const
+  bool Configurable::getImpl<std::string>( const Configurable* comp,
+                                           const std::string& name,
+                                           std::string& val )
   {
-    return getString(name, val);
+    return comp->getString(name, val);
   }
 
 } // namespace LinksRouting

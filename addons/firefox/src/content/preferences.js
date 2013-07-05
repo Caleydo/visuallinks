@@ -1,11 +1,14 @@
-function changeSetting(key, val, type)
+function changeSetting(val, type)
 {
+  if( !(val instanceof XULElement) )
+    alert("Not supported! (changeSetting)");
+  var key = val instanceof XULElement ? val.id : 'unknown';
   var val = val instanceof XULElement ? val.value : val;
 
   send({
     'task': 'SET',
     'id': '/config',
-    'var': key,
+    'id': key,
     'val': val,
     'type': type
   });
@@ -66,4 +69,13 @@ else
     });
     routing.default = this.value;
   });
+
+  for(var id in window.opener.cfg)
+  {
+    var el = document.getElementById(id);
+    if( !el )
+      continue;
+
+    el.value = window.opener.cfg[id];
+  }
 }

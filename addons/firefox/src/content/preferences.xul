@@ -37,63 +37,63 @@
           </row>
 
           <row>
-            <label value="Initial segment length" control="segment-length"/>
-            <textbox id="segment-length"
+            <label value="Initial segment length" control="CPURouting:SegmentLength"/>
+            <textbox id="CPURouting:SegmentLength"
                      type="number"
                      value="30"
                      min="10"
                      max="300"
                      increment="5"
                      size="3" maxlength="3"
-                     onchange="onChangeSetting('CPURouting:SegmentLength', this, 'Integer');" />
+                     onchange="onChangeSetting(this, 'Integer');" />
           </row>
           <row>
-            <label value="Initial #iterations" control="num-iterations"/>
-            <textbox id="num-iterations"
+            <label value="Initial #iterations" control="CPURouting:NumIterations"/>
+            <textbox id="CPURouting:NumIterations"
                      type="number"
                      value="30"
                      min="1"
                      max="300"
                      increment="5"
                      size="3" maxlength="3"
-                     onchange="onChangeSetting('CPURouting:NumIterations', this, 'Integer');" />
+                     onchange="onChangeSetting(this, 'Integer');" />
           </row>
           <row>
-            <label value="#Steps" control="num-steps"/>
-            <textbox id="num-steps"
+            <label value="#Steps" control="CPURouting:NumSteps"/>
+            <textbox id="CPURouting:NumSteps"
                      type="number"
                      value="3"
                      min="1"
                      max="12"
                      increment="1"
                      size="2" maxlength="2"
-                     onchange="onChangeSetting('CPURouting:NumSteps', this, 'Integer');" />
+                     onchange="onChangeSetting(this, 'Integer');" />
           </row>
           <row>
-            <label value="#Simplify" control="num-simplify"/>
-            <textbox id="num-simplify"
+            <label value="#Simplify" control="CPURouting:NumSimplify"/>
+            <textbox id="CPURouting:NumSimplify"
                      type="number"
                      value="10"
                      min="0"
                      max="32767"
                      increment="1"
                      size="5" maxlength="5"
-                     onchange="onChangeSetting('CPURouting:NumSimplify', this, 'Integer');" />
+                     onchange="onChangeSetting(this, 'Integer');" />
           </row>
           <row>
-            <label value="#Linear" control="num-linear"/>
-            <textbox id="num-linear"
+            <label value="#Linear" control="CPURouting:NumLinear"/>
+            <textbox id="CPURouting:NumLinear"
                      type="number"
                      value="1"
                      min="0"
                      max="32767"
                      increment="1"
                      size="5" maxlength="5"
-                     onchange="onChangeSetting('CPURouting:NumLinear', this, 'Integer');" />
+                     onchange="onChangeSetting(this, 'Integer');" />
           </row>
           <row>
-            <label value="Initial step size" control="step-size"/>
-            <textbox id="step-size"
+            <label value="Initial step size" control="CPURouting:StepSize"/>
+            <textbox id="CPURouting:StepSize"
                      type="number"
                      value="30"
                      min="0.1"
@@ -101,11 +101,11 @@
                      increment="0.1"
                      decimalplaces="2"
                      size="3" maxlength="3"
-                     onchange="onChangeSetting('CPURouting:StepSize', this, 'Float');" />
+                     onchange="onChangeSetting(this, 'Float');" />
           </row>
           <row>
-            <label value="K (spring constant)" control="spring-constant"/>
-            <textbox id="spring-constant"
+            <label value="K (spring constant)" control="CPURouting:SpringConstant"/>
+            <textbox id="CPURouting:SpringConstant"
                      type="number"
                      value="20"
                      min="0"
@@ -113,11 +113,11 @@
                      increment="10"
                      decimalplaces="0"
                      size="4" maxlength="4"
-                     onchange="onChangeSetting('CPURouting:SpringConstant', this, 'Float');" />
+                     onchange="onChangeSetting(this, 'Float');" />
           </row>
           <row>
-            <label value="Angle compatibility weight" control="angle-comp-weight"/>
-            <textbox id="angle-comp-weight"
+            <label value="Angle compatibility weight" control="CPURouting:AngleCompatWeight"/>
+            <textbox id="CPURouting:AngleCompatWeight"
                      type="number"
                      value="0.5"
                      min="0"
@@ -125,7 +125,7 @@
                      increment="0.05"
                      decimalplaces="2"
                      size="4" maxlength="4"
-                     onchange="onChangeSetting('CPURouting:AngleCompatWeight', this, 'Float');" />
+                     onchange="onChangeSetting(this, 'Float');" />
           </row>
 
 				</rows>

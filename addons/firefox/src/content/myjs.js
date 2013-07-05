@@ -14,6 +14,7 @@ var items_routing = null;
 var active_routes = new Object();
 var timeout = null;
 var routing = null;
+var cfg = new Object();
 var tile_requests = null;
 var tile_timeout = false;
 
@@ -517,9 +518,22 @@ function register()
           pos: [box.screenX + box.width / 2, box.screenY + box.height / 2],
           viewport: getViewport()
         });
+      var props = {
+        'CPURouting:SegmentLength': 'Integer',
+        'CPURouting:NumIterations': 'Integer',
+        'CPURouting:NumSteps': 'Integer',
+        'CPURouting:NumSimplify': 'Integer',
+        'CPURouting:NumLinear': 'Integer',
+        'CPURouting:StepSize': 'Float',
+        'CPURouting:SpringConstant': 'Float',
+        'CPURouting:AngleCompatWeight': 'Float',
+        '/routing': 'String'
+      };
+      for(var name in props)
         send({
           task: 'GET',
-          id: '/routing'
+          id: name,
+          type: props[name]
         });
       };
       socket.onclose = function(event)
@@ -581,6 +595,8 @@ function register()
               items_routing.appendChild(item);
             }
           }
+          else
+            cfg[msg.id] = msg.val;
         }
         else if( msg.task == 'GET' )
         {

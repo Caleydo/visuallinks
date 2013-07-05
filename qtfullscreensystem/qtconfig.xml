@@ -17,11 +17,19 @@
   </QtWebsocketServer>
 
   <ComponentCostanalysis>
-	<DownsampleSaliency type="Integer" val="2" />
-	<DownsampleCost type="Integer" val="8" />
+    <DownsampleSaliency type="Integer" val="2" />
+    <DownsampleCost type="Integer" val="8" />
   </ComponentCostanalysis>
 
   <CPURouting>
+    <SegmentLength type="Integer" val="120" />
+    <StepSize type="Float" val="0.4" />
+    <SpringConstant type="Float" val="300" />
+    <NumIterations type="Integer" val="200" />
+    <NumSteps type="Integer" val="5" />
+    <AngleCompatWeight type="Float" val="0.95" />
+    <NumSimplify type="Integer" val="32767" />
+    <NumLinear type="Integer" val="0" />
   </CPURouting>
 
   <GPURouting>
