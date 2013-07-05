@@ -576,6 +576,9 @@ function register()
               var name = msg.val.available[router][0];
               var valid = msg.val.available[router][1];
 
+              if( typeof(name) == 'undefined' )
+                continue;
+
               var item = document.createElement("menuitem");
               item.setAttribute("label", name);
               item.setAttribute("type", "radio");

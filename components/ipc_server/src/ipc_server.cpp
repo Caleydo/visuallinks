@@ -431,7 +431,7 @@ namespace LinksRouting
         }
       }
 
-      QString id = msg.getValue<QString>("id").trimmed().toLower(),
+      QString id = msg.getValue<QString>("id").trimmed(),
               title = msg.getValue<QString>("title", "");
       const std::string& id_str = to_string(id);
 
