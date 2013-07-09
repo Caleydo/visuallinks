@@ -128,7 +128,7 @@ function onPageLoad(event)
   var doc = event.originalTarget;
   var loc = doc.defaultView ? doc.defaultView.location : null;
 
-  if( socket )
+  if( !stopped )
     setTimeout("resize();", 300);
   else
     checkAutoConnect();
@@ -171,7 +171,7 @@ function onTabChangeImpl()
 
   if( content.document.readyState != "complete" )
     return;
-  
+
   onPageLoad(tab_event);
 }
 
@@ -217,7 +217,7 @@ function onKeyUp(e)
     if( e.timeStamp - last_ctrl_down > 300 )
       return;
 
-    if( status == 'active')
+    if( status == 'active' )
       selectVisLink();
   }
 }
@@ -270,12 +270,11 @@ function smoothScrollTo(y_target)
 
 function start(match_title = false)
 {
-//alert("start");
   // start client
   stopped = false;
   if( register(match_title) )
   {
-    window.addEventListener('unload', stopVisLinks, false);
+//    window.addEventListener('unload', stopVisLinks, false);
     window.addEventListener('scroll', onScroll, false);
 //      window.addEventListener("DOMAttrModified", attrModified, false);
     window.addEventListener('resize', resize, false);
@@ -290,9 +289,6 @@ function onVisLinkButton(ev)
     // Do not use event if not button itself but an entry from the menu has
     // been activated.
     return;
-
-  menu = document.getElementById("vislink_menu");
-  items_routing = document.getElementById("routing-selector");
 
   if( status == 'active')
     selectVisLink();
@@ -494,11 +490,11 @@ function reroute()
 }
 
 //------------------------------------------------------------------------------
-function stopVisLinks()
+function stop()
 {
 	stopped = true;
-	setStatus('');
-	window.removeEventListener('unload', stopVisLinks, false);
+//	setStatus('');
+//	window.removeEventListener('unload', stopVisLinks, false);
 	window.removeEventListener('scroll', onScroll, false);
 	window.removeEventListener("DOMAttrModified", attrModified, false);
   window.removeEventListener('resize', resize, false);
@@ -507,8 +503,8 @@ function stopVisLinks()
 //------------------------------------------------------------------------------
 function register(match_title = false)
 {
-//	window.lastPointerID = null;
-//
+  menu = document.getElementById("vislink_menu");
+  items_routing = document.getElementById("routing-selector");
 
 	// Get the box object for the link button to get window handler from the
 	// window at the position of the box
@@ -529,7 +525,7 @@ function register(match_title = false)
           viewport: getViewport()
         };
         if( match_title )
-          msg.title = content.window.title;
+          msg.title = gBrowser.contentTitle;
         else
           msg.pos = [box.screenX + box.width / 2, box.screenY + box.height / 2];
         send(msg);
@@ -555,11 +551,13 @@ function register(match_title = false)
       {
         setStatus(event.wasClean ? '' : 'error');
         removeAllRouteData();
+        stop();
       };
       socket.onerror = function(event)
       {
         setStatus('error');
         removeAllRouteData();
+        stop();
       };
       socket.onmessage = function(event)
       {
@@ -642,7 +640,7 @@ function register(match_title = false)
 	catch (err)
 	{
 		alert("Could not establish connection to visdaemon. "+err);
-		stopped = true;
+    stop();
 		return false;
 	}
 	return true;

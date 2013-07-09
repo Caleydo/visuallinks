@@ -46,6 +46,29 @@ namespace LinksRouting
   }
 
   //----------------------------------------------------------------------------
+  WindowInfos::const_iterator WindowRegions::find(const QString& title) const
+  {
+    return std::find_if
+    (
+      _windows.begin(),
+      _windows.end(),
+      [&title](const WindowInfo& winfo)
+      {
+        return winfo.title.startsWith(title);
+      }
+    );
+  }
+
+  //----------------------------------------------------------------------------
+  WId WindowRegions::findId(const QString& title) const
+  {
+    auto win = find(title);
+    if( win != _windows.end() )
+      return win->id;
+    return 0;
+  }
+
+  //----------------------------------------------------------------------------
   WindowInfos::const_iterator WindowRegions::begin() const
   {
     return _windows.begin();

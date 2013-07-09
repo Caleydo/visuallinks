@@ -417,7 +417,9 @@ namespace LinksRouting
 
           if( task == "REGISTER" )
           {
-            const WId wid = windows.windowIdAt(msg.getValue<QPoint>("pos"));
+            const WId wid = msg.hasChild("pos")
+                          ? windows.windowIdAt(msg.getValue<QPoint>("pos"))
+                          : windows.findId(msg.getValue<QString>("title"));
             client_info.setWindowId(wid);
           }
           client_info.update(windows);

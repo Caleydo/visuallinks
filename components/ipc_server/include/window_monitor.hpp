@@ -68,6 +68,9 @@ namespace LinksRouting
       WindowRegions(const WindowInfos& windows);
 
       WindowInfos::const_iterator find(WId wid) const;
+      WindowInfos::const_iterator find(const QString& title) const;
+      WId findId(const QString& title) const;
+
       WindowInfos::const_iterator begin() const;
       WindowInfos::const_iterator end() const;
 
