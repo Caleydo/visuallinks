@@ -375,7 +375,7 @@ namespace LinksRouting
             );
           }
 
-      routeForceBundling(segments);
+      routeForceBundling(segments, false);
 #endif
 
 //      auto info = _link_infos.find(it->_id);
@@ -648,7 +648,7 @@ namespace LinksRouting
       }
 
 #if 1
-      routeForceBundling(group_segments);
+      routeForceBundling(group_segments, false);
 #else
       auto getLength = []( float2 const& center,
                            float2 const& bundle_point,
