@@ -58,8 +58,11 @@ function send(data)
   }
   catch(e)
   {
-    alert(e);
-    throw e;
+//    alert(e);
+    socket = 0;
+    stop();
+    checkAutoConnect();
+//    throw e;
   }
 }
 
@@ -114,9 +117,12 @@ function getScrollRegion()
   };
 }
 
-function checkAutoConnect()
+function checkAutoConnect(event)
 {
-  if( content.document.getElementById("vislink-autoconnect") )
+  var doc = event ? event.originalTarget : content.document;
+  var loc = doc.defaultView ? doc.defaultView.location : null;
+
+  if( loc && loc.host == "localhost" && loc.pathname.startsWith("/userstudy/") )
     start(true);
 }
 
@@ -125,33 +131,13 @@ function checkAutoConnect()
  */
 function onPageLoad(event)
 {
-  var doc = event.originalTarget;
-  var loc = doc.defaultView ? doc.defaultView.location : null;
-
   if( !stopped )
     setTimeout("resize();", 300);
   else
-    checkAutoConnect();
+    checkAutoConnect(event);
 
   content.addEventListener("keydown", onKeyDown, false);
   content.addEventListener("keyup", onKeyUp, false);
-
-  // Match google desktop search
-  if( !loc || loc.host != "127.0.0.1:30828" || loc.pathname != "/search" )
-    return;
-
-  alert("search...");
-
-  var results = doc.getElementsByClassName("searchresult");
-  for(var i = 0; i < results.length; i += 1)
-  {
-    var afterresult = results[i].getElementsByClassName("afterresult")[0];
-    var url = results[i].getElementsByClassName("url")[0];
-
-    afterresult.innerHTML = url.innerHTML;
-  };
-
-  var myDiv = doc.getElementById("myDiv");
 }
 
 var tab_changed = false;
