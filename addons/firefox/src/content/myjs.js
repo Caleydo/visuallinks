@@ -260,6 +260,20 @@ function smoothScrollTo(y_target)
   }
 }
 
+function start(match_title = false)
+{
+//alert("start");
+  // start client
+  stopped = false;
+  if( register(match_title) )
+  {
+    window.addEventListener('unload', stopVisLinks, false);
+    window.addEventListener('scroll', onScroll, false);
+//      window.addEventListener("DOMAttrModified", attrModified, false);
+    window.addEventListener('resize', resize, false);
+//      window.addEventListener("DOMContentLoaded", windowChanged, false);
+  }
+}
 
 //------------------------------------------------------------------------------
 function onVisLinkButton(ev)
@@ -275,18 +289,7 @@ function onVisLinkButton(ev)
   if( status == 'active')
     selectVisLink();
   else
-  {
-    // start client
-    stopped = false;
-    if( register() )
-    {
-      window.addEventListener('unload', stopVisLinks, false);
-      window.addEventListener('scroll', onScroll, false);
-//      window.addEventListener("DOMAttrModified", attrModified, false);
-      window.addEventListener('resize', resize, false);
-//      window.addEventListener("DOMContentLoaded", windowChanged, false);
-    }
-  }
+    start();
 }
 
 function getSelectionId()
