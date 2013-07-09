@@ -494,7 +494,7 @@ function stopVisLinks()
 }
 
 //------------------------------------------------------------------------------
-function register()
+function register(match_title = false)
 {
 //	window.lastPointerID = null;
 //
@@ -512,29 +512,33 @@ function register()
       socket.onopen = function(event)
       {
         setStatus('active');
-        send({
+        var msg = {
           task: 'REGISTER',
           name: "Firefox",
-          pos: [box.screenX + box.width / 2, box.screenY + box.height / 2],
           viewport: getViewport()
-        });
-      var props = {
-        'CPURouting:SegmentLength': 'Integer',
-        'CPURouting:NumIterations': 'Integer',
-        'CPURouting:NumSteps': 'Integer',
-        'CPURouting:NumSimplify': 'Integer',
-        'CPURouting:NumLinear': 'Integer',
-        'CPURouting:StepSize': 'Float',
-        'CPURouting:SpringConstant': 'Float',
-        'CPURouting:AngleCompatWeight': 'Float',
-        '/routing': 'String'
-      };
-      for(var name in props)
-        send({
-          task: 'GET',
-          id: name,
-          type: props[name]
-        });
+        };
+        if( match_title )
+          msg.title = content.window.title;
+        else
+          msg.pos = [box.screenX + box.width / 2, box.screenY + box.height / 2];
+        send(msg);
+        var props = {
+          'CPURouting:SegmentLength': 'Integer',
+          'CPURouting:NumIterations': 'Integer',
+          'CPURouting:NumSteps': 'Integer',
+          'CPURouting:NumSimplify': 'Integer',
+          'CPURouting:NumLinear': 'Integer',
+          'CPURouting:StepSize': 'Float',
+          'CPURouting:SpringConstant': 'Float',
+          'CPURouting:AngleCompatWeight': 'Float',
+          '/routing': 'String'
+        };
+        for(var name in props)
+          send({
+            task: 'GET',
+            id: name,
+            type: props[name]
+          });
       };
       socket.onclose = function(event)
       {

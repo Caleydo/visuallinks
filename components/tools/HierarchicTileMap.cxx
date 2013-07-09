@@ -64,6 +64,18 @@ HierarchicTileMap* Layer::getMap() const
 }
 
 //------------------------------------------------------------------------------
+size_t Layer::sizeX() const
+{
+  return _tiles.size();
+}
+
+//------------------------------------------------------------------------------
+size_t Layer::sizeY() const
+{
+  return _tiles.empty() ? 0 : _tiles.front().size();
+}
+
+//------------------------------------------------------------------------------
 MapRect::QuadList MapRect::getQuads() const
 {
   QuadList ret;
@@ -126,8 +138,11 @@ float2 MapRect::getSize() const
 //------------------------------------------------------------------------------
 void MapRect::foreachTile(const MapRect::tile_callback_t& func) const
 {
-  for(size_t x = min_tile[0]; x < max_tile[0]; ++x)
-    for(size_t y = min_tile[1]; y < max_tile[1]; ++y)
+  size_t max_x = std::min(layer.sizeX(), max_tile[0]),
+         max_y = std::min(layer.sizeY(), max_tile[1]);
+
+  for(size_t x = min_tile[0]; x < max_x; ++x)
+    for(size_t y = min_tile[1]; y < max_y; ++y)
       func(layer.getTile(x, y), x, y);
 }
 

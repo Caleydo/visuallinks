@@ -35,6 +35,9 @@ class Layer
 
     Tile& getTile(size_t x, size_t y);
     HierarchicTileMap* getMap() const;
+
+    size_t sizeX() const;
+    size_t sizeY() const;
   
   private:
     HierarchicTileMap* _map;
