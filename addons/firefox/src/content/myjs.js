@@ -114,6 +114,12 @@ function getScrollRegion()
   };
 }
 
+function checkAutoConnect()
+{
+  if( content.document.getElementById("vislink-autoconnect") )
+    start(true);
+}
+
 /**
  * Page/Tab load hook
  */
@@ -123,7 +129,9 @@ function onPageLoad(event)
   var loc = doc.defaultView ? doc.defaultView.location : null;
 
   if( socket )
-    setTimeout("resize();", 250);
+    setTimeout("resize();", 300);
+  else
+    checkAutoConnect();
 
   content.addEventListener("keydown", onKeyDown, false);
   content.addEventListener("keyup", onKeyUp, false);
