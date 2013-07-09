@@ -40,6 +40,8 @@ class QXT_GUI_EXPORT QxtWindowSystem
 {
 public:
 
+    static void init();
+
     static WindowList windows();
     static WId activeWindow();
     static int activeWindow(WId window);

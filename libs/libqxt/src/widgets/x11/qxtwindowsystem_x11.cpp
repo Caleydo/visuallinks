@@ -33,8 +33,11 @@
 #include <QX11Info>
 #include <X11/Xutil.h>
 
+#include <iostream>
+
 static WindowList qxt_getWindows(Atom prop)
 {
+  QxtWindowSystem::init();
     Display* display = QX11Info::display();
     Window window = QX11Info::appRootWindow();
 
@@ -54,6 +57,28 @@ static WindowList qxt_getWindows(Atom prop)
             XFree(data);
     }
     return res;
+}
+
+static int qxtX11ErrorHandler(Display* dpy, XErrorEvent* error)
+{
+  const size_t msg_size = 256;
+  char msg[msg_size];
+  if( !XGetErrorText(dpy, error->error_code, msg, msg_size) )
+    return 1;
+
+  msg[msg_size - 1] = 0;
+  std::cout << "XError: " << msg << std::endl;
+  return 0;
+}
+
+void QxtWindowSystem::init()
+{
+  static bool initDone = false;
+  if( !initDone )
+  {
+    XSetErrorHandler(&qxtX11ErrorHandler);
+    initDone = true;
+  }
 }
 
 WindowList QxtWindowSystem::windows()
@@ -80,6 +105,7 @@ WId QxtWindowSystem::activeWindow()
 
 int QxtWindowSystem::activeWindow(WId window)
 {
+    init();
     XEvent ev;
     memset(&ev, 0, sizeof(ev));
     ev.type = ClientMessage;
@@ -103,6 +129,7 @@ int QxtWindowSystem::activeWindow(WId window)
 
 bool QxtWindowSystem::isVisible(WId wid)
 {
+  init();
   Display* display = QX11Info::display();
   bool hidden = false;
 
@@ -172,6 +199,7 @@ WId QxtWindowSystem::windowAt(const QPoint& pos)
 
 QString QxtWindowSystem::windowTitle(WId window)
 {
+    init();
     XTextProperty prop;
     if( XGetWMName(QX11Info::display(), window, &prop) )
       return QString::fromLocal8Bit( reinterpret_cast<char*>(prop.value),
@@ -183,23 +211,35 @@ QString QxtWindowSystem::windowTitle(WId window)
         name = QString::fromLatin1(str);
     if (str)
         XFree(str);
+
     return name;
 }
 
 QRect QxtWindowSystem::windowGeometry(WId window)
 {
+    init();
     int x, y;
     uint width, height, border, depth;
     Window root, child;
     Display* display = QX11Info::display();
-    XGetGeometry(display, window, &root, &x, &y, &width, &height, &border, &depth);
-    XTranslateCoordinates(display, window, root, x, y, &x, &y, &child);
+    if( !XGetGeometry(display, window, &root, &x, &y, &width, &height, &border, &depth) )
+    {
+      std::cout << "fail 1" << std::endl;
+      return QRect();
+    }
+
+    QRect rect(x, y, width, height);
+    if( !XTranslateCoordinates(display, window, root, x, y, &x, &y, &child) )
+    {
+      std::cout << "fail 2" << std::endl;
+      return rect;
+    }
+    rect.moveTo(x, y);
 
     static Atom net_frame = 0;
     if (!net_frame)
         net_frame = XInternAtom(QX11Info::display(), "_NET_FRAME_EXTENTS", True);
 
-    QRect rect(x, y, width, height);
     Atom type = 0;
     int format = 0;
     uchar* data = 0;
