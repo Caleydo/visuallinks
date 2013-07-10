@@ -29,11 +29,13 @@ namespace LinksRouting
     _minimized_icon->set("filled", true);
     _minimized_icon->set("show-in-preview", false);
     _minimized_icon->set("always-route", true);
+    _minimized_icon->set("type", "minimized-icon");
     _covered_outline->set("widen-end", false);
     _covered_outline->set("outline-only", true);
     _covered_outline->set("show-in-preview", false);
     _covered_outline->set("visible", false);
     _covered_outline->set("outline-title", true);
+    _covered_outline->set("type", "covered-outline");
   }
 
   //----------------------------------------------------------------------------
@@ -428,7 +430,7 @@ namespace LinksRouting
         icon.push_back( pos + QPoint(ICON_SIZE,-ICON_SIZE) );
 
         LinkDescription::points_t link_points(1);
-        link_points.push_back(pos += QPoint(ICON_SIZE, 0));
+        link_points[0] = pos += QPoint(ICON_SIZE, 0);
         _minimized_icon->setLinkPoints(link_points);
 
         if( !_nodes.empty() )
@@ -627,6 +629,7 @@ namespace LinksRouting
           new_node->set("outside-scroll", "side[" + std::to_string(static_cast<unsigned long long>(i)) + "]");
           new_node->set("filled", true);
           new_node->set("show-in-preview", false);
+          new_node->set("type", "outside-scroll");
 
           updateNode(*new_node, desktop, local_view, windows, first_above);
           hedge->addNode(new_node);
