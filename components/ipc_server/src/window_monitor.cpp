@@ -183,12 +183,15 @@ namespace LinksRouting
         title
       ));
 
-      QRect visible_region = _desktop_rect.intersected(region);
-      if(    visible_region.left() <= 0.08 * _desktop_rect.width()
-          && visible_region.right() >= 0.94 * _desktop_rect.width()
-          && visible_region.top() <= 0.06 * _desktop_rect.height()
-          && visible_region.bottom() >= 0.96 * _desktop_rect.height() )
-        maximized_wid = id;
+      if( !regions.back().minimized )
+      {
+        QRect visible_region = _desktop_rect.intersected(region);
+        if(    visible_region.left() <= 0.08 * _desktop_rect.width()
+            && visible_region.right() >= 0.94 * _desktop_rect.width()
+            && visible_region.top() <= 0.06 * _desktop_rect.height()
+            && visible_region.bottom() >= 0.96 * _desktop_rect.height() )
+          maximized_wid = id;
+      }
     }
 
     if( maximized_wid )
