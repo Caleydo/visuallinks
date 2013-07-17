@@ -145,6 +145,7 @@ ShaderPtr loadShader( QString vert, QString frag )
                   | Qt::MSWindowsOwnDC
                   //| Qt::X11BypassWindowManagerHint
                   );
+    setAttribute(Qt::WA_ShowWithoutActivating);
 #ifdef USE_DESKTOP_BLEND
     setAttribute(Qt::WA_TranslucentBackground);
 #else

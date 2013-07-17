@@ -755,7 +755,8 @@ namespace LinksRouting
     {
       float2 center_abs = node.getCenter()
                         + getScrollRegionAbs().topLeft();
-      covered = preview_region.contains(center_abs);
+      covered = node.get<bool>("covered")
+             || preview_region.contains(center_abs);
     }
 
     bool modified = node.set("covered", covered);
