@@ -785,7 +785,8 @@ namespace LinksRouting
     _window_monitor.setDesktopRect( desktopRect() );
     _mutex_slot_links->lock();
 
-    bool need_update = false;
+    bool need_update = true; // TODO update checks to also detect eg. changes in
+                             //      outside icons.
     for( auto link = _slot_links->_data->begin();
          link != _slot_links->_data->end();
          ++link )
