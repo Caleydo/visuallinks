@@ -171,7 +171,8 @@ ShaderPtr loadShader( QString vert, QString frag )
 
     publishSlots(_core.getSlotCollector());
 
-    _config.initFrom(argv[1]);
+    if( !_config.initFrom(argv[1]) )
+      qFatal("Failed to read config");
     _user_config.initFrom( to_string(user_config) );
 
     _core.startup();
