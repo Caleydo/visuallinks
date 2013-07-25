@@ -243,7 +243,7 @@ function smoothScrollTo(y_target)
   var x_cur = content.scrollX;
   var y_cur = content.scrollY;
   var delta = y_target - y_cur;
-  var duration = Math.max(500, Math.min(Math.abs(delta), 3000));
+  var duration = Math.max(400, Math.min(Math.abs(delta), 2000));
   for( var t = 0; t <= duration; t += 100 )
   {
     if( t + 99 > duration )
