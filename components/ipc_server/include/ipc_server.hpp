@@ -200,15 +200,18 @@ namespace LinksRouting
 
         struct TileRequest
         {
+          QWsSocket* socket;
           HierarchicTileMapWeakPtr tile_map;
           int zoom;
           size_t x, y;
+          float2 tile_size;
           clock::time_point time_stamp;
         };
 
         typedef std::map<uint8_t, TileRequest> TileRequests;
         TileRequests  _tile_requests;
         uint8_t       _tile_request_id;
+        int           _new_request;
 
         InteractionHandler(IPCServer* server);
         bool updateRegion( QWsSocket* socket,

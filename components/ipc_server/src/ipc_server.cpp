@@ -163,6 +163,51 @@ namespace LinksRouting
       _debug_full_preview_path.clear();
     }
 
+    if( _interaction_handler._new_request > 0 )
+      --_interaction_handler._new_request;
+    else
+    {
+      int allowed_request = 4;
+      for(auto req =  _interaction_handler._tile_requests.rbegin();
+               req != _interaction_handler._tile_requests.rend();
+             ++req )
+      {
+        if( !req->second.socket )
+          continue;
+
+        HierarchicTileMapPtr tile_map = req->second.tile_map.lock();
+        if( !tile_map )
+        {
+          // TODO req = _interaction_handler._tile_requests.erase(req);
+          continue;
+        }
+
+        float scale = 1/tile_map->getLayerScale(req->second.zoom);
+        Rect src( float2( req->second.x * tile_map->getTileWidth(),
+                          req->second.y * tile_map->getTileHeight() ),
+                  req->second.tile_size );
+        src *= scale;
+
+        std::cout << "request tile " << src.toString(true) << std::endl;
+        req->second.socket->write(QString(
+        "{"
+          "\"task\": \"GET\","
+          "\"id\": \"preview-tile\","
+          "\"size\": [" + QString::number(req->second.tile_size.x)
+                  + "," + QString::number(req->second.tile_size.y)
+                  + "],"
+          "\"sections_src\":" + to_string(tile_map->partitions_src).c_str() + ","
+          "\"sections_dest\":" + to_string(tile_map->partitions_dest).c_str() + ","
+          "\"src\": " + src.toString(true).c_str() + ","
+          "\"req_id\": " + QString::number(req->first) +
+        "}"));
+
+        req->second.socket = 0;
+        if( --allowed_request <= 0 )
+          break;
+      }
+    }
+
     static clock::time_point last_time = clock::now();
     clock::time_point now = clock::now();
     auto dur_us = std::chrono::duration_cast<std::chrono::microseconds>
@@ -1369,8 +1414,10 @@ namespace LinksRouting
       }
       else
       {
+        //pow(2.0f, static_cast<float>(popup.hover_region.zoom)) = scroll_size.y / _preview_height;
+        int max_zoom = log2(scroll_size.y / _preview_height / 0.9) + 0.7;
         int old_zoom = popup.hover_region.zoom;
-        clampedStep(popup.hover_region.zoom, delta, 0, 3, 1);
+        clampedStep(popup.hover_region.zoom, delta, 0, max_zoom, 1);
 
         if( popup.hover_region.zoom != old_zoom )
         {
@@ -1553,7 +1600,8 @@ namespace LinksRouting
   //----------------------------------------------------------------------------
   IPCServer::InteractionHandler::InteractionHandler(IPCServer* server):
     _server(server),
-    _tile_request_id(0)
+    _tile_request_id(0),
+    _new_request(0)
   {
 
   }
@@ -1645,7 +1693,6 @@ namespace LinksRouting
     }
 
     bool sent = false;
-    float scale = 1/tile_map->getLayerScale(zoom);
     MapRect rect = tile_map->requestRect(src, zoom);
     rect.foreachTile([&](Tile& tile, size_t x, size_t y)
     {
@@ -1670,37 +1717,21 @@ namespace LinksRouting
           // already sent
           return;
 
-        Rect src( float2( x * tile_map->getTileWidth(),
-                          y * tile_map->getTileHeight() ),
-                  float2(tile.width, tile.height) );
-        src *= scale;
-
         TileRequest tile_req = {
+          socket,
           tile_map,
           zoom,
           x, y,
+          float2(tile.width, tile.height),
           clock::now()
         };
         uint8_t req_id = ++_tile_request_id;
         _tile_requests[req_id] = tile_req;
-
-        std::cout << "request tile " << src.toString(true) << std::endl;
-
-        socket->write(QString(
-        "{"
-          "\"task\": \"GET\","
-          "\"id\": \"preview-tile\","
-          "\"size\": [" + QString::number(tile.width)
-                  + "," + QString::number(tile.height)
-                  + "],"
-          "\"sections_src\":" + to_string(tile_map->partitions_src).c_str() + ","
-          "\"sections_dest\":" + to_string(tile_map->partitions_dest).c_str() + ","
-          "\"src\": " + src.toString(true).c_str() + ","
-          "\"req_id\": " + QString::number(req_id) +
-        "}"));
         sent = true;
       }
     });
+    if( sent )
+      _new_request = 2;
     return sent;
   }
 
