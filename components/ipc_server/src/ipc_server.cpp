@@ -1637,9 +1637,10 @@ namespace LinksRouting
 
       Rect& popup_region = popup.hover_region.region;
       const Rect& icon_region = popup.region.region;
+      float offset_l = popup_region.pos.x - icon_region.pos.x,
+            offset_r = icon_region.size.x - popup_region.size.x - offset_l;
 
-      if(    icon_region.pos.x >= popup_region.pos.x
-          && icon_region.pos.x <= popup_region.pos.x + popup_region.size.x )
+      if( std::signbit(offset_l) == std::signbit(offset_r) )
       {
         int center_x = popup_region.pos.x + 0.5 * popup_region.size.x;
         popup_region.size.x = popup_width;
