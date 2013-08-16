@@ -42,11 +42,14 @@ with a single line containing the full path to <repo>/addons/firefox/src
 Alternatively just install <repo>/addons/firefox/src/src.xpi as addon. With this
 method the addon will not be automatically updated.
 
-After installing the icon you will probably need to add the icon to the toolbar.
-Clicking on the icon connects to the server and pressing [CTRL] or the button
-(after connecting) initates a new link.
+After installing the add-on you will need to add the icon that hooks firefox up to the visual links application to the toolbar.
+
 
 Run '''qtfullscreensystem''':
 
   $ cd bin/qtfullscreensystem
   $ ./qtfullscreensystem qtconfig.xml
+  
+Then connect your browser by clicking the visual links icon. 
+
+To trigger a visual link select a word and click the icon again.
