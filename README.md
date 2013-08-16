@@ -4,6 +4,11 @@ visuallinks
 Context Preserving Visual Links and Hidden Content Visualization 
 
 
+Dependencies
+------------
+
+qt-sdk, openCL
+
 Building
 --------
 
@@ -13,10 +18,9 @@ Install dependencies:
 
 Checkout sources:
 
-  $ git clone <USER>@europa.icg.tugraz.at:/mount/data/public/projects/links
-  $ cd links
+  $ git clone https://github.com/Caleydo/visuallinks.git
 
-Get submodules (qtwebsocket):
+In the repository's folder get submodules (qtwebsocket):
 
   $ git submodule init
   $ git submodule update
