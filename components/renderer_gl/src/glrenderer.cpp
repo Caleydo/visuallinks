@@ -180,10 +180,12 @@ namespace LinksRouting
   //----------------------------------------------------------------------------
   GlRenderer::GlRenderer():
     Configurable("GLRenderer"),
-    _partitions_src(0),
-    _partitions_dest(0)
+    _partitions_src(nullptr),
+    _partitions_dest(nullptr),
+    _blur_x_shader(nullptr),
+    _blur_y_shader(nullptr)
   {
-
+    registerArg("NumBlur", _num_blur = 1);
   }
 
   //----------------------------------------------------------------------------
@@ -237,11 +239,21 @@ namespace LinksRouting
     GLint vp[4];
     glGetIntegerv(GL_VIEWPORT, vp);
 
-    _links_fbo.init(vp[2], vp[3], GL_RGBA8, 2, false, GL_NEAREST);
-    *_slot_links->_data = SlotType::Image(vp[2], vp[3], _links_fbo.colorBuffers.at(0));
+    int w = vp[2],
+        h = vp[3];
+    const int upscale = 2;
 
-    _xray_fbo.init(vp[2], vp[3], GL_RGBA8, 1, false, GL_NEAREST);
-    *_slot_xray->_data = SlotType::Image(vp[2], vp[3], _xray_fbo.colorBuffers.at(0));
+    _links_fbo.init( upscale * w,
+                     upscale * h,
+                     GL_RGBA8, 2, false,
+                     GL_LINEAR );
+    *_slot_links->_data =
+      SlotType::Image( _links_fbo.width,
+                       _links_fbo.height,
+                       _links_fbo.colorBuffers.at(0) );
+
+    _xray_fbo.init(w, h, GL_RGBA8, 1, false, GL_NEAREST);
+    *_slot_xray->_data = SlotType::Image(w, h, _xray_fbo.colorBuffers.at(0));
 
     _blur_x_shader = _shader_manager.loadfromFile(0, "blurX.glsl");
     _blur_y_shader = _shader_manager.loadfromFile(0, "blurY.glsl");
@@ -276,6 +288,9 @@ namespace LinksRouting
 
     _partitions_src = 0;
     _partitions_dest = 0;
+
+    glPushAttrib(GL_VIEWPORT_BIT);
+    glViewport(0, 0, _links_fbo.width, _links_fbo.height);
 
     bool rendered_anything = false;
     if( !_subscribe_outlines->_data->popups.empty() )
@@ -421,6 +436,8 @@ namespace LinksRouting
       }
     }
 
+    glPopAttrib();
+
     _links_fbo.unbind();
 
     if( !rendered_anything )
@@ -503,7 +520,7 @@ namespace LinksRouting
   {
     assert(fbo.colorBuffers.size() >= 2);
 
-    for( int i = 0; i < 1; ++i )
+    for( int i = 0; i < _num_blur; ++i )
     {
       fbo.swapColorAttachment(1);
       fbo.bind();

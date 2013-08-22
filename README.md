@@ -53,3 +53,21 @@ Run '''qtfullscreensystem''':
 Then connect your browser by clicking the visual links icon. 
 
 To trigger a visual link select a word and click the icon again.
+
+Troubleshooting
+---------------
+
+Maximum size of shared memory segment exceeded (indicated by the following error
+messages):
+
+  QNativeImage: Unable to attach to shared memory segment. 
+  QPainter::begin: Paint device returned engine == 0, type: 3
+  QPainter::setCompositionMode: Painter not active
+
+Increase maximum shared memory segment size:
+
+  $ # Immediate change:
+  $ echo "67108864" >/proc/sys/kernel/shmmax
+
+  $ # Permanent change:
+  $ echo "kernel.shmmax=67108864" >/etc/sysctl.d/90-shared-memory.conf

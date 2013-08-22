@@ -45,6 +45,7 @@ namespace LinksRouting
       std::vector<Color>    _colors;
       Color                 _color_cur,
                             _color_covered_cur;
+      int                   _num_blur;
 
       Partitions *_partitions_src,
                  *_partitions_dest;
