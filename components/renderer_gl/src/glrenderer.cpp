@@ -380,11 +380,13 @@ namespace LinksRouting
         float offset_x = (proj[12] + 1) / proj[0];
         float offset_y = (proj[13] + 1) / proj[5];
 
+        float upscale = _links_fbo.width / _xray_fbo.width;
+
         glPushAttrib(GL_VIEWPORT_BIT);
-        glViewport( hover.pos.x + offset_x,
-                    hover.pos.y + offset_y,
-                    hover.size.x,
-                    hover.size.y );
+        glViewport( upscale * (hover.pos.x + offset_x),
+                    upscale * (hover.pos.y + offset_y),
+                    upscale * hover.size.x,
+                    upscale * hover.size.y );
 
         glMatrixMode(GL_PROJECTION);
         glPushMatrix();
