@@ -13,6 +13,7 @@
 #include "ipc_server.hpp"
 #include "glcostanalysis.h"
 #include "cpurouting.h"
+#include "cpurouting-dijkstra.h"
 #if USE_GPU_ROUTING
 # include "gpurouting.h"
 #endif
@@ -120,6 +121,7 @@ namespace qtfullscreensystem
       LinksRouting::IPCServer       _server;
       LinksRouting::GlCostAnalysis  _cost_analysis;
       LinksRouting::CPURouting      _routing_cpu;
+      LinksRouting::Dijkstra::CPURouting _routing_cpu_dijkstra;
 #if USE_GPU_ROUTING
       LinksRouting::GPURouting      _routing_gpu;
 #endif
