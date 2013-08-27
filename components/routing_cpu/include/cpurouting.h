@@ -8,8 +8,6 @@
 #include "slotdata/image.hpp"
 #include "slotdata/polygon.hpp"
 
-#include <set>
-
 #ifdef _WIN32
 typedef HWND WId;
 #else
@@ -21,15 +19,6 @@ namespace LinksRouting
   class CPURouting: public Routing, public ComponentArguments
   {
     public:
-
-      /**
-       * Compare hedge segments by angle
-       */
-      struct cmp_by_angle;
-
-      typedef LinkDescription::HedgeSegmentList::iterator segment_iterator;
-      typedef std::vector<segment_iterator> SegmentIterators;
-      typedef std::set<segment_iterator, cmp_by_angle> OrderedSegments;
 
       typedef std::map<WId, std::vector<LinkDescription::NodePtr>> RegionGroups;
 

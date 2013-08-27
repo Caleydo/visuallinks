@@ -66,7 +66,7 @@ namespace LinksRouting
       int getPreviewHeight() const { return _preview_height; }
       bool getPreviewAutoWidth() const { return _preview_auto_width; }
       bool getOutsideSeeThrough() const { return _outside_see_through; }
-      QRect& desktopRect() const { return *_subscribe_desktop_rect->_data; }
+      Rect desktopRect() const { return *_subscribe_desktop_rect->_data; }
 
       typedef SlotType::TextPopup::Popups::iterator PopupIterator;
 
@@ -164,7 +164,7 @@ namespace LinksRouting
       slot_t<LinksRouting::Config*>::type _subscribe_user_config;
 
       /* Drawable desktop region */
-      slot_t<QRect>::type _subscribe_desktop_rect;
+      slot_t<Rect>::type _subscribe_desktop_rect;
 
       /* Slot for registering mouse callback */
       slot_t<SlotType::MouseEvent>::type _subscribe_mouse;

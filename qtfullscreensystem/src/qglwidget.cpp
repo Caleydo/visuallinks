@@ -237,7 +237,7 @@ ShaderPtr loadShader( QString vert, QString frag )
     _slot_desktop->_data->type = LinksRouting::SlotType::Image::OpenGLTexture;
 
     _slot_desktop_rect =
-      slot_collector.create<QRect>("/desktop/rect");
+      slot_collector.create<Rect>("/desktop/rect");
 
     _slot_mouse =
       slot_collector.create<LinksRouting::SlotType::MouseEvent>("/mouse");
@@ -571,9 +571,8 @@ ShaderPtr loadShader( QString vert, QString frag )
       _window_end = window_end;
 
       // Publish desktop region which contains only drawable areas
-      QRect& rect = *_slot_desktop_rect->_data;
-      rect.setTopLeft(window_offset);
-      rect.setBottomRight(window_end - window_offset - QPoint(1,1));
+      *_slot_desktop_rect->_data =
+        QRect(window_offset, window_end - window_offset - QPoint(1,1));
 
       _slot_desktop_rect->setValid(true);
 

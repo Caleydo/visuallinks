@@ -90,7 +90,7 @@ namespace LinksRouting
     assert(_subscribe_user_config->_data.get());
 
     _subscribe_desktop_rect =
-      slot_subscriber.getSlot<QRect>("/desktop/rect");
+      slot_subscriber.getSlot<Rect>("/desktop/rect");
 
     _subscribe_mouse =
       slot_subscriber.getSlot<LinksRouting::SlotType::MouseEvent>("/mouse");
@@ -326,7 +326,7 @@ namespace LinksRouting
                                 bool extend )
   {
     QRect preview_region =
-      scroll_region.intersect(extend ? desktopRect() : viewport);
+      scroll_region.intersect(extend ? desktopRect().toQRect() : viewport);
     QRect source_region
     (
       preview_region.topLeft() - scroll_region.topLeft(),
@@ -827,7 +827,7 @@ namespace LinksRouting
   //----------------------------------------------------------------------------
   void IPCServer::regionsChanged(const WindowRegions& regions)
   {
-    _window_monitor.setDesktopRect( desktopRect() );
+    _window_monitor.setDesktopRect( desktopRect().toQRect() );
     _mutex_slot_links->lock();
 
     bool need_update = true; // TODO update checks to also detect eg. changes in

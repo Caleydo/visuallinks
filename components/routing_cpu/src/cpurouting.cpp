@@ -227,26 +227,6 @@ namespace LinksRouting
   }
 
   /**
-   * Compare hedge segments by angle
-   */
-  struct CPURouting::cmp_by_angle
-  {
-    bool operator()( CPURouting::segment_iterator const& lhs,
-                     CPURouting::segment_iterator const& rhs ) const
-    {
-      return getAngle(lhs) < getAngle(rhs);
-    }
-
-    static float getAngle( CPURouting::segment_iterator const& s)
-    {
-      if( s->trail.size() < 2 )
-        return 0;
-      const float2 dir = s->trail.at(1) - s->trail.at(0);
-      return std::atan2(dir.y, dir.x);
-    }
-  };
-
-  /**
    * Normalize angle to [-pi, pi]
    */
   float normalizePi(float rad)
@@ -901,8 +881,8 @@ namespace LinksRouting
 
               int other_i = (i + offset) % segments.size();
               float delta_angle =
-                normalizePi( cmp_by_angle::getAngle(segments[i])
-                           - cmp_by_angle::getAngle(segments[other_i]) );
+                normalizePi( cmp_by_angle::getAngle(segments[i]->trail)
+                           - cmp_by_angle::getAngle(segments[other_i]->trail) );
 
               if( std::fabs(delta_angle) > 0.7 * M_PI )
                 continue;

@@ -332,7 +332,7 @@ namespace LinksRouting
                                 ClientInfo* client,
                                 LabelAlign align )
   {
-    const QRect& desktop_rect = _ipc_server->desktopRect();
+    const QRect desktop_rect = _ipc_server->desktopRect().toQRect();
 
     float2 popup_pos, popup_size(text.length() * 10 + 6, 16);
     float2 hover_pos, hover_size = getPreviewSize();
@@ -454,7 +454,7 @@ namespace LinksRouting
 
     size_t num_covered = 0;
     bool modified = false;
-    QRect desktop = _ipc_server->desktopRect()
+    QRect desktop = _ipc_server->desktopRect().toQRect()
                                 .translated( -getScrollRegionAbs().topLeft() ),
           local_view(-scroll_region.topLeft(), viewport.size());
 

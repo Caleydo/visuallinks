@@ -24,6 +24,7 @@ set(SOURCE_FILES
   linkdescription.cpp
   PartitionHelper.cxx
   Rect.cxx
+  routing.cxx
 )
 
 set(HEADER_FILES_QT

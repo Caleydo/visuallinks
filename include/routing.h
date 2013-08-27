@@ -3,6 +3,7 @@
 #include <component.h>
 #include <linkdescription.h>
 #include <map>
+#include <set>
 
 namespace LinksRouting
 {
@@ -11,8 +12,24 @@ namespace LinksRouting
   class Routing:
     public virtual Component
   {
-    protected:
+    public:
 
+      typedef LinkDescription::HedgeSegmentList::iterator segment_iterator;
+      typedef std::vector<segment_iterator> SegmentIterators;
+
+      /**
+       * Compare hedge segments by angle
+       */
+      struct cmp_by_angle
+      {
+        bool operator()( segment_iterator const& lhs,
+                         segment_iterator const& rhs ) const;
+        static float getAngle(LinkDescription::points_t const& trail);
+      };
+
+      typedef std::set<segment_iterator, cmp_by_angle> OrderedSegments;
+
+    protected:
       Routing():
         Configurable("Routing")
       {}
