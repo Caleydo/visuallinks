@@ -39,6 +39,7 @@
   
   <GLRenderer>
     <enabled type="Bool" val="true" />
+    <NumBlur type="Integer" val="1" />
     <link-color type="String" val="228 26 28" />
     <link-color type="String" val="55 126 184" />
     <link-color type="String" val="77 175 74" />
