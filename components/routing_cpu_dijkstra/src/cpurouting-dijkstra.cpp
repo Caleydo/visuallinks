@@ -1,7 +1,8 @@
 #include "cpurouting-dijkstra.h"
 #include "log.hpp"
-#include "dijkstra.h"
 
+#include <array>
+#include <cstring>
 #include <limits>
 
 // internal helper...
@@ -265,6 +266,65 @@ namespace Dijkstra
 
   }
 
+  //----------------------------------------------------------------------------
+  float2 divdown(const float2& vec, size_t grid)
+  {
+    return float2( std::floor(vec.x / grid),
+                   std::floor(vec.y / grid) );
+  }
+
+  int indexFromOffset(int dx, int dy)
+  {
+    // 0 1 2
+    // 7   3
+    // 6 5 4
+
+    if( dy < 0 )
+      return dx + 1;
+    else if( dy > 0 )
+      return 5 - dx;
+    else if( dx != 0 )
+      return dx < 0 ? 7 : 3;
+
+    std::cerr << "invalid offset (" << dx << "|" << dy << ")" << std::endl;
+    return -1;
+  }
+
+  float2 offsetFromIndex(int index)
+  {
+    index = index % 8;
+    if( index < 3 )
+      return float2(index - 1, -1);
+    else if( index == 3 )
+      return float2(1, 0);
+    else if( index == 7 )
+      return float2(-1, 0);
+    else
+      return float2(5 - index, 1);
+  }
+
+  size_t getCostForDir(const float2& dir)
+  {
+    return (dir.x == 0 || dir.y == 0) ? 2 : 3;
+  }
+
+  size_t getCost( const std::vector<size_t>& indices,
+                  const float2& pos,
+                  const std::vector<dijkstra::Grid>& grids )
+  {
+    dijkstra::NodePos node{ static_cast<size_t>(pos.x),
+                            static_cast<size_t>(pos.y),
+                            0 };
+
+    size_t cur_cost = 0;
+    for(size_t i: indices)
+    {
+      node.grid = const_cast<dijkstra::Grid*>(&grids[i]);
+      cur_cost += node->getCost();
+    }
+    return cur_cost;
+  }
+
 #define GLOBAL_ROUTING
   //----------------------------------------------------------------------------
   uint32_t CPURouting::process(unsigned int type)
@@ -275,7 +335,7 @@ namespace Dijkstra
       return 0;
     }
 
-    const size_t GRID_SIZE = 32;
+    const size_t GRID_SIZE = 48;
     float2 grid_size
     (
       divup(_subscribe_desktop_rect->_data->size.x, GRID_SIZE),
@@ -292,91 +352,92 @@ namespace Dijkstra
 
     for(const auto& group: _global_route_nodes)
     {
-      std::vector<dijkstra::Grid> grids
+      _grids.clear();
+      _grids.resize
       (
         group.second.size(),
         dijkstra::Grid(grid_size.x, grid_size.y)
       );
 
-      dijkstra::NodePos min_node{0,0, &grids[0]};
+      float2 min_pos;
       size_t min_cost = dijkstra::Node::MAX_COST;
-      float2 center;
 
+      for(size_t i = 0; i < group.second.size(); ++i)
+      {
+        auto const& node = group.second[i];
+        auto const& p = node->getParent();
+        if( !p )
+          continue;
+
+        auto const& fork = p->getHyperEdgeDescription();
+        if( !fork )
+          continue;
+
+        float2 offset = p->get<float2>("screen-offset");
+
+        auto const link_point =
+          divdown(node->getLinkPoints().front() + offset, GRID_SIZE);
+        _grids[i].run( std::min<size_t>(link_point.x, grid_size.x - 1),
+                       std::min<size_t>(link_point.y, grid_size.y - 1) );
+      }
+
+      for(size_t x = 0; x < grid_size.x; ++x)
+        for(size_t y = 0; y < grid_size.y; ++y)
+        {
+          size_t cost = 0;
+          for(auto const& grid: _grids)
+          {
+            if( grid.hasRun() )
+              cost += grid(x, y).getCost();
+          }
+
+          if( cost < min_cost )
+          {
+            min_cost = cost;
+            min_pos = float2(x, y);
+          }
+        }
+
+      bundle(min_pos);
+
+      float2 center = float2(min_pos.x + .5f, min_pos.y + .5f) * GRID_SIZE;
       OrderedSegments segments;
 
-      for(int phase = 0; phase < 2; ++phase )
+      for(size_t i = 0; i < group.second.size(); ++i)
       {
-        for(size_t i = 0; i < group.second.size(); ++i)
+        if( !_grids[i].hasRun() )
+          continue;
+
+        auto const& node = group.second[i];
+        auto const& p = node->getParent();
+        auto const& fork = p->getHyperEdgeDescription();
+        float2 const& offset = p->get<float2>("screen-offset");
+
+        segment_t segment;
+        segment.set("covered", node->get<bool>("covered") && !node->get<bool>("hover"));
+        segment.set("widen-end", node->get<bool>("widen-end", true));
+        segment.nodes.push_back(node);
+
+        dijkstra::NodePos cur_node{ size_t(min_pos.x),
+                                    size_t(min_pos.y),
+                                    &_grids[i] };
+
+        do
         {
-          auto const& node = group.second[i];
-          auto const& p = node->getParent();
-          if( !p )
-            continue;
+          segment.trail.push_back({ (cur_node.x + .5f) * GRID_SIZE,
+                                    (cur_node.y + .5f) * GRID_SIZE });
+          cur_node = cur_node.getParent();
+        } while( cur_node->getCost() );
 
-          auto const& fork = p->getHyperEdgeDescription();
-          if( !fork )
-            continue;
-
-          float2 offset = p->get<float2>("screen-offset");
-
-          if( phase == 0 )
-          {
-            auto const link_point = node->getLinkPoints().front() + offset;
-            grids[i].run( std::min<size_t>(divdown(link_point.x, GRID_SIZE), grid_size.x - 1),
-                          std::min<size_t>(divdown(link_point.y, GRID_SIZE), grid_size.y - 1) );
-          }
-          else
-          {
-            segment_t segment;
-            segment.set("covered", node->get<bool>("covered") && !node->get<bool>("hover"));
-            segment.set("widen-end", node->get<bool>("widen-end", true));
-            segment.nodes.push_back(node);
-
-            dijkstra::NodePos cur_node = min_node;
-            cur_node.grid = &grids[i];
-
-            do
-            {
-              segment.trail.push_back({ (cur_node.x + 0.5) * GRID_SIZE,
-                                        (cur_node.y + 0.5) * GRID_SIZE });
-              cur_node = cur_node.getParent();
-            } while( cur_node->getCost() );
-
-            segment.trail.back() = offset + node->getBestLinkPoint(center - offset);
-            segment.trail = smooth(segment.trail, 0.4, 5);
+        segment.trail.back() = offset + node->getBestLinkPoint(center - offset);
+        segment.trail = smooth(segment.trail, 0.4, 2);
 
 //            segment.trail.push_back(center);
 //            segment.trail.push_back(offset + node->getBestLinkPoint(center - offset) );
 
-            segments.insert(
-              fork->outgoing.insert(fork->outgoing.end(), segment)
-            );
-          }
-        }
-
-        if( phase == 0 )
-        {
-          for(size_t x = 0; x < grid_size.x; ++x)
-            for(size_t y = 0; y < grid_size.y; ++y)
-            {
-              size_t cost = 0;
-              for(auto const& grid: grids)
-              {
-                if( grid.hasRun() )
-                  cost += grid(x, y).getCost();
-              }
-
-              if( cost < min_cost )
-              {
-                min_cost = cost;
-                min_node.x = x;
-                min_node.y = y;
-              }
-            }
-
-          center.x = (min_node.x + 0.5) * GRID_SIZE;
-          center.y = (min_node.y + 0.5) * GRID_SIZE;
-        }
+        segments.insert(
+          fork->outgoing.insert(fork->outgoing.end(), segment)
+        );
       }
 
       //routeForceBundling(segments);
@@ -503,6 +564,160 @@ namespace Dijkstra
 
 //    for(auto const& group: outside_groups)
 //      routeForceBundling(group.second, false);
+  }
+
+  //----------------------------------------------------------------------------
+  void CPURouting::bundle( const float2& pos,
+                           const Bundle& bundle )
+  {
+    typedef std::array<Bundle, 8> Outgoings;
+    Outgoings outgoings;
+
+    dijkstra::NodePos min_node{size_t(pos.x), size_t(pos.y), 0};
+
+    if( bundle.empty() )
+    {
+      for(size_t i = 0; i < _grids.size(); ++i)
+      {
+        if( !_grids[i].hasRun() )
+          continue;
+
+        min_node.grid = &_grids[i];
+        int index = indexFromOffset( min_node->getParentOffsetX(),
+                                     min_node->getParentOffsetY() );
+        if( index >= 0 )
+          outgoings[ index ].push_back(i);
+      }
+    }
+    else
+    {
+      for(auto const edge: bundle)
+      {
+        min_node.grid = &_grids[edge];
+        if( min_node->getCost() == 0  )
+          continue;
+
+        int index = indexFromOffset( min_node->getParentOffsetX(),
+                                     min_node->getParentOffsetY() );
+        if( index >= 0 )
+          outgoings[ index ].push_back( edge );
+      }
+    }
+
+    struct MiniumFinder
+    {
+      size_t costs[8][5] = {{0}},
+             num_bundles[8] = {0},
+             cur_cost = 0,
+             cur_pos[8] = {0},
+             min_cost = size_t(-1),
+             min_pos[8] = {0};
+
+      MiniumFinder( Outgoings const& outgoings,
+                    Grids const& grids,
+                    float2 const& pos )
+      {
+        // Precalculate costs for rotating the max 8 edge bundles by +-2
+        // fields
+        for(int i = 0; i < 8; ++i)
+        {
+          for(int offset = -2; offset <= 2; ++offset)
+          {
+            int other = (i + offset + 8) % 8;
+            costs[i][offset + 2] = getCost
+            (
+              outgoings[i],
+              pos + offsetFromIndex(other),
+              grids
+            );
+          }
+
+#if 0
+          std::cout << "costs[" << i << "] = {";
+          for(size_t j = 0; j < 5; ++j)
+            std::cout << (j ? "," : "") << costs[i][j];
+          std::cout << "}" << std::endl;
+#endif
+        }
+
+      }
+
+      void run(int bundle = 0)
+      {
+        for(size_t i = 0; i < 5; ++i)
+        {
+          size_t cost = costs[bundle][i];
+          size_t cur_i = (i + bundle + 8 - 2) % 8;
+          cur_pos[bundle] = cur_i;
+
+          if( cost )
+          {
+            cur_cost += cost;
+            num_bundles[cur_i] += 1;
+          }
+
+          if( bundle < 7 )
+            run(bundle + 1);
+          else
+          {
+            size_t bundle_costs = 0;
+            for(size_t i = 0; i < 8; ++i)
+              if( num_bundles[i] )
+                bundle_costs += getCostForDir(offsetFromIndex(i));
+
+            if( cur_cost + bundle_costs < min_cost )
+            {
+              min_cost = cur_cost + bundle_costs;
+              memcpy(min_pos, cur_pos, sizeof(min_pos));
+            }
+          }
+
+          if( cost )
+          {
+            cur_cost -= cost;
+            num_bundles[cur_i] -= 1;
+          }
+        }
+      }
+    };
+
+    MiniumFinder min_finder(outgoings, _grids, float2(min_node.x, min_node.y));
+    min_finder.run();
+
+//    std::cout << "min_cost = " << min_finder.min_cost
+//              << ", bundles: " << std::endl;
+
+    Outgoings new_bundles;
+    for(size_t i = 0; i < 8; ++i)
+    {
+      size_t const dest = min_finder.min_pos[i];
+      if( !min_finder.costs[i][0] )
+        continue;
+
+      new_bundles[dest].insert(
+        end(new_bundles[dest]),
+        begin(outgoings[i]),
+        end(outgoings[i])
+      );
+
+      if( dest == i )
+        continue;
+
+//      std::cout << i << " -> " << dest << std::endl;
+
+      float2 new_dir = offsetFromIndex(dest);
+      for(auto const link: outgoings[i])
+      {
+        min_node.grid = &_grids[ link ];
+        min_node->setParentOffset(new_dir.x, new_dir.y);
+      }
+    }
+
+    for(size_t i = 0; i < 8; ++i)
+    {
+      if( !new_bundles[i].empty() )
+        this->bundle(pos + offsetFromIndex(i), new_bundles[i]);
+    }
   }
 
 }

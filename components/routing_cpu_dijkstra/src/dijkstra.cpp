@@ -191,7 +191,9 @@ namespace dijkstra
   //----------------------------------------------------------------------------
   const Node& Grid::operator()(size_t x, size_t y) const
   {
-    assert( x < _width && y < _height );
+    x = std::min(x, _width - 1);
+    y = std::min(y, _height - 1);
+    //assert( x < _width && y < _height );
     return _nodes[y * _width + x];
   }
 

@@ -8,6 +8,8 @@
 #include "slotdata/image.hpp"
 #include "slotdata/polygon.hpp"
 
+#include "dijkstra.h"
+
 #include <set>
 
 #ifdef _WIN32
@@ -46,14 +48,20 @@ namespace Dijkstra
 
     private:
 
+      typedef std::vector<size_t> Bundle;
+      typedef std::vector<dijkstra::Grid> Grids;
+
       slot_t<LinkDescription::LinkList>::type _subscribe_links;
 
       /* Drawable desktop region */
       slot_t<Rect>::type _subscribe_desktop_rect;
 
       RegionGroups _global_route_nodes;
+      Grids        _grids;
 
       void collectNodes(LinkDescription::HyperEdge* hedge);
+      void bundle( const float2& pos,
+                   const Bundle& bundle = {} );
 
   };
 }
