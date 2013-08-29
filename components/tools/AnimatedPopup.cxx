@@ -45,7 +45,7 @@ namespace SlotType
 
     if( debug )
       std::cout << this
-                << " transient, dt = " << dt << ", "
+                << " transient, time = " << _time << ", dt = " << dt << ", "
                 << (_state & DELAYED ? "delayed " : "")
                 << (_state & VISIBLE ? "show" : "hide")
                 << ", alpha = " << getAlpha()

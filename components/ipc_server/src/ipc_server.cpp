@@ -1212,7 +1212,8 @@ namespace LinksRouting
                                    ClientInfo& client_info ) -> bool
     {
       float2 offset = preview.node->getParent()->get<float2>("screen-offset");
-      if( !preview.region.contains(float2(x, y) - offset) )
+      if(    !preview.region.contains(float2(x, y) - offset)
+          && !preview.preview_region.contains(x, y) )
         return false;
 
       preview.node->getParent()->setOrClear("hover", false);
@@ -1346,8 +1347,11 @@ namespace LinksRouting
       auto const& p = preview.node->getParent();
 
       if(   !popup_visible // Only one popup/preview at the same time
-          && preview.region.contains( float2(x, y)
-                                    - p->get<float2>("screen-offset")) )
+          && ( preview.region.contains( float2(x, y)
+                                      - p->get<float2>("screen-offset"))
+            || (preview.isVisible() && preview.preview_region.contains(x,y))
+             )
+        )
       {
         popup_visible = true;
         if( preview.isVisible() && !preview.isFadeOut() )
