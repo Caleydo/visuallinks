@@ -544,7 +544,6 @@ namespace LinksRouting
                 && segment.trail.front().y >= 24*/ )
             {
               // Draw path
-              //points = smooth(points, 0.4, 10);
               float widen_size = 0.f;
               if(   !segment.nodes.empty()
                   && segment.nodes.back()->getChildren().empty()

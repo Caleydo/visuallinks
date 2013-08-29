@@ -356,6 +356,9 @@ namespace LinksRouting
           }
 
       routeForceBundling(segments, false);
+
+      for(auto& segment: segments)
+        segment->trail = smooth(segment->trail, 0.4, 8);
 #endif
 
 //      auto info = _link_infos.find(it->_id);
@@ -842,17 +845,7 @@ namespace LinksRouting
       else
         // For all consecutive rounds double the number of segments
         for(auto& segment: segments)
-        {
-          auto& trail = segment->trail;
-          size_t old_size = trail.size();
-          trail.resize(old_size * 2 - 1);
-
-          for(size_t i = old_size - 1; i > 0; --i)
-          {
-            trail[i * 2    ] = trail[i];
-            trail[i * 2 - 1] = 0.5 * (trail[i] + trail[i - 1]);
-          }
-        }
+          subdivide(segment->trail);
 
       for(int iter = 0; iter < num_iterations; ++iter)
       {
