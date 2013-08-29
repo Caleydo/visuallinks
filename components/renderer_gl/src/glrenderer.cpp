@@ -187,7 +187,10 @@ namespace LinksRouting
     _links_fbo.init( upscale * w,
                      upscale * h,
                      GL_RGBA8, 2, false,
-                     GL_LINEAR );
+                     GL_LINEAR,
+                     GL_NEAREST,
+                     false,
+                     true ); // stencil
     *_slot_links->_data =
       SlotType::Image( _links_fbo.width,
                        _links_fbo.height,
@@ -219,7 +222,7 @@ namespace LinksRouting
     _links_fbo.bind();
 
     glClearColor(0,0,0,0);
-    glClear(GL_COLOR_BUFFER_BIT);
+    glClear(GL_COLOR_BUFFER_BIT | GL_STENCIL_BUFFER_BIT);
 
     if( _subscribe_links->_data->empty() )
     {
@@ -252,8 +255,10 @@ namespace LinksRouting
       }
     }
 
+    glEnable(GL_STENCIL_TEST);
     for(int pass = 0; pass <= 1; ++pass)
       rendered_anything |= renderLinks(*_subscribe_links->_data, pass);
+    glDisable(GL_STENCIL_TEST);
 
     if( !_subscribe_popups->_data->popups.empty() )
     {
@@ -535,6 +540,10 @@ namespace LinksRouting
         }
         else
         {
+          // Don't draw where region highlights already have been drawn
+          glStencilFunc(GL_EQUAL, 0, 1);
+          glStencilOp(GL_KEEP, GL_KEEP, GL_KEEP);
+
           LinkDescription::nodes_t nodes;
           for( auto& segment: fork->outgoing )
           {
@@ -603,6 +612,10 @@ namespace LinksRouting
                                 const int pass,
                                 const bool do_transform )
   {
+    // Mask every region covered be a highlight to prevent drawing links on top
+    glStencilFunc(GL_ALWAYS, 1, 1);
+    glStencilOp(GL_KEEP, GL_KEEP, GL_REPLACE);
+
     bool rendered_anything = false;
 
     if( pass > 0 && do_transform )
