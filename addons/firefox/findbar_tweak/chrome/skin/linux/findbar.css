@@ -1,0 +1,119 @@
+@namespace url(http://www.mozilla.org/keymaster/gatekeeper/there.is.only.xul);
+@-moz-document
+	url("chrome://browser/content/browser.xul"),
+	url("chrome://global/content/viewSource.xul"),
+	url("chrome://global/content/viewPartialSource.xul") {
+
+	/* Rounded inner corners */
+	window:not([findbartweak-FF25]) findbar[movetotop]:before {
+		-moz-margin-start: -16px;
+	}
+	
+	window[findbartweak-FF25] findbar[movetotop]:before {
+		-moz-margin-start: -24px;
+	}
+	window[findbartweak-FF25] findbar[movetotop]:after {
+		-moz-margin-start: 8px;
+	}
+	window[findbartweak-FF25] findbar[movetotop]:before,
+	window[findbartweak-FF25] findbar[movetotop]:after {
+		margin-top: -4px;
+	}
+	
+	findbar[movetotop]:not([inPDFJS]):-moz-locale-dir(ltr):before,
+	findbar[movetotop]:not([inPDFJS]):-moz-locale-dir(rtl):after {
+		box-shadow: 	2px -2px 0 -2px ThreeDShadow,
+		                7px -4px 0px -4px -moz-dialog,
+		                6px -4px 0px -4px -moz-dialog;
+	}
+	findbar[movetotop]:not([inPDFJS]):-moz-locale-dir(ltr):after,
+	findbar[movetotop]:not([inPDFJS]):-moz-locale-dir(rtl):before {
+		box-shadow: 	-2px -2px 0 -2px ThreeDShadow,
+		                -7px -4px 0px -4px -moz-dialog,
+		                -6px -4px 0px -4px -moz-dialog;
+	}
+	
+	/* Find Bar */
+	findbar[movetotop]:not([inPDFJS]) {
+		background-color: -moz-dialog;
+		border-bottom: 1px solid rgb(0,0,0);
+		border-right: 1px solid rgb(0,0,0);
+		border-left: 1px solid rgb(0,0,0);
+		-moz-border-bottom-colors: ThreeDShadow;
+		-moz-border-right-colors: ThreeDShadow;
+		-moz-border-left-colors: ThreeDShadow;
+	}
+	
+	/* FF25 Tweaks */
+	#main-window[noToolboxBorder]:not([disablechrome]) #navigator-toolbox,
+	#main-window[findbartweak-FF25Tweaks]:not([disablechrome]) #navigator-toolbox[tabsontop=true] {
+		border-bottom: none;
+	}
+	
+	window[findbartweak-FF25Tweaks]:not([disablechrome="true"]) #browser > *:not([renderabove]):not([noTopBorder]):not(.omnisidebar_switch) {
+		border-top: 1px solid ThreeDShadow;
+	}
+	
+	/* For the toolbar button */
+	toolbar[iconsize="small"] #findbartweak-button image { max-height: 16px; }
+	
+	toolbar[iconsize="large"] #findbartweak-button image {
+		list-style-image: url("chrome://findbartweak-os/skin/button.png");
+	}
+	
+	/* Textbox resizers */
+	window:not([findbartweak-FF25]) findbar .findbar-textbox {
+		min-width: 180px;
+	}
+	
+	window[findbartweak-FF25] findbar .findbar-textbox {
+		min-width: 14em;
+	}
+	
+	findbar .find-textbox-resizer {
+		width: 4px;
+		height: calc(1.2em + 5px); /* I think this faithfully represents font-height plus box-padding, thus should work with OS font zoom */
+	}
+	
+	window:not([findbartweak-FF25]) findbar resizer[anonid="find-left-resizer"] {
+		-moz-margin-end: -7px;
+		-moz-margin-start: 3px;
+	}
+	window:not([findbartweak-FF25]) findbar resizer[anonid="find-right-resizer"] {
+		-moz-margin-start: -7px;
+		-moz-margin-end: 3px;
+	}
+	
+	window[findbartweak-FF25] findbar resizer[anonid="find-left-resizer"] {
+		-moz-margin-end: -3px;
+		-moz-margin-start: -1px;
+	}
+	window[findbartweak-FF25] findbar resizer[anonid="find-right-resizer"] {
+		-moz-margin-start: -3px;
+		-moz-margin-end: -1px;
+	}
+	
+	/* Grid stuff */
+	grid[anonid="findGrid"]:not([gridSpacers="none"]) row.topSpacer[flex="0"],
+	grid[anonid="findGrid"][gridSpacers="single"] row.bottomSpacer[flex="0"] {
+		height: 16px;
+	}
+	grid[anonid="findGrid"][gridSpacers="double"] row.bottomSpacer[flex="0"] {
+		height: 32px;
+	}
+	
+	/* Find in Tabs */
+	#findbartweak-findInTabs-box[movetotop]:not(:-moz-lwtheme) {
+		background-color: -moz-dialog;
+	}
+	
+	window:not([findbartweak-FF25Tweaks]) #findbartweak-findInTabs-box[movetotop] {
+		border-bottom: 1px solid rgb(0,0,0);
+		-moz-border-bottom-colors: ThreeDShadow;
+	}
+	
+	window[findbartweak-FF25] #findbartweak-findInTabs-box:not([movetotop]) {
+		border-top: 2px solid;
+		-moz-border-top-colors: ThreeDShadow ThreeDHighlight;
+	}
+}

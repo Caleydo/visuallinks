@@ -1,0 +1,96 @@
+<!ENTITY Optwindow.style "width: 33.5em;">
+
+<!ENTITY Options.title "FindBar Tweak">
+<!ENTITY OptHighlights.label "Highlights">
+<!ENTITY OptSightsTab.label "Sights">
+<!ENTITY OptGeneral.label "General">
+<!ENTITY OptAppearance.label "Appearance">
+<!ENTITY Opttweaks.label "Tweaks">
+<!ENTITY Optabout.label "About">
+
+<!ENTITY Optgen.label "Findbar Options">
+<!ENTITY Optdisplay.label "Findbar Position">
+<!ENTITY OptButtonAndLabels.label "Buttons and Labels">
+<!ENTITY Optgrid.label "Highlights Grid">
+
+<!ENTITY OpthighlightByDefault.label "Highlight all matches by default">
+<!ENTITY OpthideWhenFinderHidden.label "Remove highlights when the Findbar is closed">
+<!ENTITY OptgridInScrollbar.label "Show highlights grid in the scrollbar">
+<!ENTITY OptuseCounter.label "Show hits counter in the Findbar">
+<!ENTITY OptfindInTabs.label "Enable 'Find in All Tabs'">
+<!ENTITY OptalwaysOpenFIT.label "Open 'Find in All Tabs' with the Findbar">
+<!ENTITY OptmaxFIT.label "Don't find if the number of hits in a tab exceeds:">
+
+<!ENTITY Optcolor.label "Highlights Color">
+<!ENTITY OptselectColor.label "Current Hit Color">
+<!ENTITY OptcolorReset.label "(reset)">
+<!ENTITY OptcolorKeepOSdefault.label "Keep default contrast color (recommended)">
+
+<!ENTITY OpthighlightOnFindAgain.label "Also highlight on 'Find Again' (F3)">
+<!ENTITY OptgridLimit.labela "Don't use the grid if it exceeds">
+<!ENTITY OptgridLimit.labelb "highlights">
+<!ENTITY OptminNoDelay.labela "Delay highlights if search term is shorter than">
+<!ENTITY OptminNoDelay.labelb "characters">
+<!ENTITY OptadjustGridPadding.labela "Adjust distance between the grid and the border:">
+<!ENTITY OptadjustGridPadding.labelb "pixels">
+<!ENTITY OptadjustGridWidth.labela "Adjust width of the grid:">
+<!ENTITY OptadjustGridWidth.labelb "pixels">
+
+<!ENTITY Optsights.label "Focus Sights">
+<!ENTITY OptsightsCurrentHit.label "Current Hit">
+<!ENTITY OptsightsAllHighlights.label "All Highlights">
+<!ENTITY OptsightsCurrent.label "Show sights on the current search hit">
+<!ENTITY OptsightsHighlights.label "Show sights on all the highlighted hits">
+<!ENTITY OptsightsHighlights.warning "Warning: This can be very resource intensive! Rendering and page scrolling may become slow!">
+<!ENTITY OptsightsStyle.label "Sights Style (click to preview)">
+<!ENTITY OptsightsStyle.focus "Focus Location">
+<!ENTITY OptsightsStyle.circle "Circle Location">
+<!ENTITY OptsightsRepeat.label "Animation repetitions:">
+<!ENTITY OptsightsColor.label "Sights Color">
+<!ENTITY OptsightsSameColor.label "Use the same color from highlights">
+<!ENTITY OptsightsSameColorCurrent.label "Use the same color from the current hit">
+
+<!ENTITY OpthideLabels.label "Hide button labels">
+<!ENTITY OpthideLabels.labelFF25 "Show button icons instead of labels">
+<!ENTITY OpthideFindLabel.label "Hide 'Find:' label">
+<!ENTITY OpthideClose.label "Hide the Findbar close button">
+<!ENTITY OptmovetoTop.label "Move to the top of the browser">
+<!ENTITY OptmovetoTop.labelFF25 "Place above the webpage">
+<!ENTITY OptmovetoRight.label "Place on the right">
+<!ENTITY OptmovetoBottom.label "Move to the bottom of the browser">
+<!ENTITY OptFF25Tweaks.label "Integrate with the rest of the chrome on top">
+<!ENTITY OptblurCloses.label "Close the Findbar when it loses focus">
+<!ENTITY OptperTab.label "Findbar starts closed in new tabs">
+<!ENTITY OptonStartup.label "Remember Findbar opened/closed state on startup">
+
+<!ENTITY OptopenFindbar.label "When opening the Findbar">
+<!ENTITY OptquickFindOptions.label "Quick Findbar">
+<!ENTITY OptkeepButtons.label "Show buttons in the Quick Findbar">
+<!ENTITY OptFAYT.label "Search for text when I start typing">
+<!ENTITY OptFAYTTimeout.beforeLabel "Autoclose after">
+<!ENTITY OptFAYTTimeout.afterLabel "seconds">
+<!ENTITY OptFAYTmode.caption "Findbar Mode">
+<!ENTITY OptFAYTmode.quickFind "Use Quick Findbar when I start typing to search for text">
+<!ENTITY OptFAYTmode.normalFind "Always use normal Findbar">
+<!ENTITY OptFAYTmode.alwaysQuick "Always use Quick Findbar">
+
+<!ENTITY OptkeyboardShortcut.label "Keyboard Shortcut">
+<!ENTITY OptctrlFCloses.win "Ctrl+F also closes the Findbar">
+<!ENTITY OptctrlFCloses.mac "Command+F also closes the Findbar">
+<!ENTITY OptctrlFprefill.label "Fill the Findbar with the selected text when opening it">
+<!ENTITY OptctrlFOnValue.label "Only close when search is the same as the selected text">
+<!ENTITY OptSelectingText.label "When Selecting Text">
+<!ENTITY OptfillSelectedText.label "Fill the Findbar with the selected text">
+<!ENTITY OptfillSelectedOpenFindbar.label "Show the Quick Findbar when selected text is used">
+<!ENTITY OptdblClickEatSpaces.label "Double-clicking on a word selects also the following space">
+<!ENTITY OptdblClickStopAtPunctuation.label "Double-clicking on a word stops selection at punctuation">
+<!ENTITY OptNativePrefs.label "Firefox Native Preferences">
+<!ENTITY OptNativePrefs.warning "The add-on should handle everything automatically. Only use these if you absolutely need it!">
+<!ENTITY OptResetNativeOnDisabled.label "Reset all changed native preferences when disabling the add-on">
+<!ENTITY OptResetNativeNow.label "Reset all changed native preferences">
+
+<!ENTITY findbartweakabout.name "FindBar Tweak">
+<!ENTITY findbartweakabout.by "by Quicksaver">
+<!ENTITY findbartweakabout.desc "All information about the add-on and its developer can be found in its Mozilla Add-ons Homepage. If you liked the add-on, please consider leaving there a nice review or a small contribution to help support its continued development. Bug reports and suggestions can be made in the technical support webpage.">
+<!ENTITY findbartweakabout.home "Add-on Homepage">
+<!ENTITY findbartweakabout.tech "Technical Support">

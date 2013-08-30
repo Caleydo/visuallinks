@@ -1,0 +1,219 @@
+@namespace url(http://www.mozilla.org/keymaster/gatekeeper/there.is.only.xul);
+@-moz-document
+	url("chrome://browser/content/browser.xul"),
+	url("chrome://global/content/viewSource.xul"),
+	url("chrome://global/content/viewPartialSource.xul") {
+	
+	/* Rounded inner corners */
+	findbar[movetotop]:before {
+		-moz-margin-start: -18px;
+	}
+	findbar[movetotop]:after {
+		-moz-margin-start: 2px;
+	}
+	findbar[movetotop]:before,
+	findbar[movetotop]:after {
+		margin-top: -4px;
+	}
+	findbar[movetotop]:not([inPDFJS]):-moz-locale-dir(ltr):before,
+	findbar[movetotop]:not([inPDFJS]):-moz-locale-dir(rtl):after {
+		box-shadow:	2px -2px 0 -2px rgba(0,0,0,0.57),
+				7px -4px 0px -4px -moz-mac-chrome-active,
+				6px -4px 0px -4px -moz-mac-chrome-active;
+	}
+	findbar[movetotop]:not([inPDFJS]):-moz-locale-dir(ltr):after,
+	findbar[movetotop]:not([inPDFJS]):-moz-locale-dir(rtl):before {
+		box-shadow: 	-2px -2px 0 -2px rgba(0,0,0,0.57),
+				-7px -4px 0px -4px -moz-mac-chrome-active,
+				-6px -4px 0px -4px -moz-mac-chrome-active;
+	}
+	findbar[movetotop]:not([inPDFJS]):-moz-locale-dir(ltr):-moz-window-inactive:before,
+	findbar[movetotop]:not([inPDFJS]):-moz-locale-dir(rtl):-moz-window-inactive:after {
+		box-shadow: 	2px -2px 0 -2px rgba(0,0,0,0.32),
+				7px -4px 0px -4px -moz-mac-chrome-inactive,
+				6px -4px 0px -4px -moz-mac-chrome-inactive;
+	}
+	findbar[movetotop]:not([inPDFJS]):-moz-locale-dir(ltr):-moz-window-inactive:after,
+	findbar[movetotop]:not([inPDFJS]):-moz-locale-dir(rtl):-moz-window-inactive:before {
+		box-shadow: 	-2px -2px 0 -2px rgba(0,0,0,0.32),
+				-7px -4px 0px -4px -moz-mac-chrome-inactive,
+				-6px -4px 0px -4px -moz-mac-chrome-inactive;
+	}
+	
+	/* Find Bar */
+	findbar[movetotop]:not([inPDFJS]) {
+		background-color: -moz-mac-chrome-active;
+		border-bottom: 1px solid rgba(0,0,0,0.57);
+		border-right: 1px solid rgba(0,0,0,0.57);
+		border-left: 1px solid rgba(0,0,0,0.57);
+		-moz-border-bottom-colors: rgba(0,0,0,0.57);
+		-moz-border-right-colors: rgba(0,0,0,0.57);
+		-moz-border-left-colors: rgba(0,0,0,0.57);
+	}
+	findbar[movetotop]:not([inPDFJS]):-moz-window-inactive {
+		background-color: -moz-mac-chrome-inactive;
+		border-bottom: 1px solid rgba(0,0,0,0.32);
+		border-right: 1px solid rgba(0,0,0,0.32);
+		border-left: 1px solid rgba(0,0,0,0.32);
+		-moz-border-bottom-colors: rgba(0,0,0,0.32);
+		-moz-border-right-colors: rgba(0,0,0,0.32);
+		-moz-border-left-colors: rgba(0,0,0,0.32);
+	}
+	
+	window[findbartweak-FF25] .browserContainer findbar:not([position="top"]) {
+		border-bottom: none;
+	}
+	
+	window[findbartweak-FF25] findbar:not([position="top"]):-moz-lwtheme {
+		border-top: 1px solid #888;
+	}
+	
+	/* FF25 Tweaks */
+	window[noToolboxBorder] #navigator-toolbox toolbar,
+	window[findbartweak-FF25Tweaks] #navigator-toolbox toolbar,
+	window[noToolboxBorder] #navigator-toolbox toolbar:-moz-window-inactive,
+	window[findbartweak-FF25Tweaks] #navigator-toolbox toolbar:-moz-window-inactive {
+		-moz-border-bottom-colors: transparent;
+	}
+	
+	window[findbartweak-FF25Tweaks]:not([disablechrome="true"]) #browser > *:not([renderabove]):not([noTopBorder]):not(.omnisidebar_switch) {
+		border-top: 1px solid rgba(0,0,0,0.57);
+	}
+	window[findbartweak-FF25Tweaks]:not([disablechrome="true"]) #browser > *:not([renderabove]):not([noTopBorder]):not(.omnisidebar_switch):-moz-window-inactive {
+		border-top: 1px solid rgba(0,0,0,0.32);
+	}
+	
+	window[findbartweak-FF25Tweaks] tabbrowser findbar:not(:-moz-lwtheme) {
+		background-color: -moz-mac-chrome-active;
+		background-image: none;
+	}
+	window[findbartweak-FF25Tweaks] tabbrowser findbar:not(:-moz-lwtheme):-moz-window-inactive {
+		background-color: -moz-mac-chrome-inactive;
+		background-image: none;
+	}
+	
+	window[findbartweak-FF25Tweaks] findbar:-moz-lwtheme,
+	window[findbartweak-FF25Tweaks] #content:-moz-lwtheme {
+		background: none;
+	}
+	
+	/* For the toolbar button */
+	toolbar[mode="full"] #findbartweak-button image {
+		margin: 1px 0;
+	}
+	
+	/* Textbox resizers */
+	findbar .findbar-textbox {
+		min-width: 176px;
+	}
+	
+	findbar .find-textbox-resizer {
+		width: 6px;
+		height: 1.6em; /* I think this faithfully represents font-height plus box-padding, thus should work with OS font zoom */
+	}
+	
+	window:not([findbartweak-FF25]) findbar resizer[anonid="find-left-resizer"] {
+		-moz-margin-end: -9px;
+		-moz-margin-start: 3px;
+	}
+	window:not([findbartweak-FF25]) findbar resizer[anonid="find-right-resizer"] {
+		-moz-margin-start: -9px;
+		-moz-margin-end: 3px;
+	}
+	
+	window[findbartweak-FF25] findbar resizer[anonid="find-left-resizer"] {
+		width: 6px;
+		min-width: 6px;
+		max-width: 6px;
+		-moz-margin-end: -4px;
+		-moz-margin-start: -2px;
+	}
+	window[findbartweak-FF25] findbar resizer[anonid="find-right-resizer"] {
+		width: 6px;
+		min-width: 6px;
+		max-width: 6px;
+		-moz-margin-start: -4px;
+		-moz-margin-end: -2px;
+	}
+	
+	/* Grid stuff */
+	grid[anonid="findGrid"]:not([gridSpacers="none"]) row.topSpacer[flex="0"],
+	grid[anonid="findGrid"][gridSpacers="single"] row.bottomSpacer[flex="0"] {
+		height: 0px;
+	}
+	grid[anonid="findGrid"][gridSpacers="double"] row.bottomSpacer[flex="0"] {
+		height: 14px;
+	}
+	
+	/* OSX version doesn't have these images, by hiding the labels we are pretty much making the buttons useless, so I'm adding the images back.
+	Not true anymore in FF25 with the new find bar */
+	window:not([findbartweak-FF25]) findbar[hideLabels] .findbar-find-next {
+		list-style-image: url("chrome://findbartweak-os/skin/find.png");
+		-moz-image-region: rect(0px 14px 14px 0px);
+	}
+	window:not([findbartweak-FF25]) findbar[hideLabels] .findbar-find-next:hover {
+		-moz-image-region: rect(14px 14px 28px 0px);
+	}
+	window:not([findbartweak-FF25]) findbar[hideLabels] .findbar-find-next[disabled="true"] {
+		-moz-image-region: rect(28px 14px 42px 0px) !important;
+	}
+	
+	window:not([findbartweak-FF25]) findbar[hideLabels] .findbar-find-previous {
+		list-style-image: url("chrome://findbartweak-os/skin/find.png");
+		-moz-image-region: rect(0px 28px 14px 14px);
+	}
+	window:not([findbartweak-FF25]) findbar[hideLabels] .findbar-find-previous:hover {
+		-moz-image-region: rect(14px 28px 28px 14px);
+	}
+	window:not([findbartweak-FF25]) findbar[hideLabels] .findbar-find-previous[disabled="true"] {
+		-moz-image-region: rect(28px 28px 42px 14px) !important;
+	}
+	
+	.findbar-cs-button:not([checked="true"]),
+	window[findbartweak-FF25] findbar[hideLabels] toolbarbutton[anonid="find-case-sensitive"]:not([checked="true"]) {
+		-moz-image-region: rect(16px 16px 32px 0px);
+	}
+	
+	window[findbartweak-FF25] findbar[hideLabels] toolbarbutton[anonid="highlight"][checked="true"] {
+		-moz-image-region: rect(0px 32px 16px 16px);
+	}
+	
+	window:not([findbartweak-FF25]) findbar[hideLabels] toolbarbutton[anonid="highlight"] image {
+		margin: 3px 0;
+	}
+	
+	/* Find in Tabs */
+	#findbartweak-findInTabs-box[movetotop]:not(:-moz-lwtheme) {
+		background-color: -moz-mac-chrome-active;
+	}
+	#findbartweak-findInTabs-box[movetotop]:not(:-moz-lwtheme):-moz-window-inactive {
+		background-color: -moz-mac-chrome-inactive;
+	}
+	
+	window:not([findbartweak-FF25Tweaks]) #findbartweak-findInTabs-box[movetotop] {
+		border-bottom: 1px solid rgba(0,0,0,0.57);
+		-moz-border-bottom-colors: rgba(0,0,0,0.57);
+	}
+	window:not([findbartweak-FF25Tweaks]) #findbartweak-findInTabs-box[movetotop]:-moz-window-inactive {
+		border-bottom: 1px solid rgba(0,0,0,0.32);
+		-moz-border-bottom-colors: rgba(0,0,0,0.32);
+	}
+	
+	#findbartweak-findInTabs-box:not([movetotop]):not(:-moz-lwtheme) {
+		background-image: -moz-linear-gradient(50% 0%, rgb(208, 208, 208), rgb(232, 232, 232));
+	}
+	
+	window[findbartweak-FF25] #findbartweak-findInTabs-box:not([movetotop]) {
+		border-top: 1px solid #888;
+	}
+	
+	.findbar-tabs image,
+	.findbar-tabs-update image,
+	.findbar-cs-button image {
+		min-height: 14px;
+	}
+	
+	window[findbartweak-FF25] findbar toolbarbutton[anonid="findbartweak-find-tabs"] + toolbarbutton[anonid="highlight"] {
+		-moz-margin-start: 0;
+	}
+}
