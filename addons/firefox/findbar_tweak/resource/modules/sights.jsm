@@ -269,6 +269,23 @@ this.delayCurrentSights = function(e) {
 	timerAid.init('delayCurrentSights', function() { currentSights(e); }, 10);
 };
 
+this.updateLinks = function(e) {
+	// Report selection to vislink extension
+	var mainWindow = window.QueryInterface(Components.interfaces.nsIInterfaceRequestor)
+		         .getInterface(Components.interfaces.nsIWebNavigation)
+		         .QueryInterface(Components.interfaces.nsIDocShellTreeItem)
+		         .rootTreeItem
+		         .QueryInterface(Components.interfaces.nsIInterfaceRequestor)
+		         .getInterface(Components.interfaces.nsIDOMWindow);
+	if( !mainWindow.reportVisLinks )
+		return;
+
+	if( gFindBar._findField.value.length < 2 )
+		mainWindow.abortAll();
+	else
+		mainWindow.reportVisLinks(gFindBar._findField.value);
+}
+
 this.currentSights = function(e) {
 	cancelCurrentSights();
 	
@@ -586,6 +603,8 @@ this.toggleSightsCurrent = function() {
 		listenerAid.remove(window, 'UpdatedStatusFindBar', currentSightsOnUpdateStatus);
 		listenerAid.remove(window, 'SelectedFIThit', delayCurrentSights);
 	}
+
+	listenerAid.add(window, 'FoundFindBar', updateLinks);
 	
 	observerAid.notify('ReHighlightAll');
 };

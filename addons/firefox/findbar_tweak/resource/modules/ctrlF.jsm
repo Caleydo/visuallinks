@@ -1,6 +1,18 @@
 moduleAid.VERSION = '1.3.2';
 
 this.ctrlF = function(event) {
+
+  // Report selection to vislink extension
+  var mainWindow = window.QueryInterface(Components.interfaces.nsIInterfaceRequestor)
+                         .getInterface(Components.interfaces.nsIWebNavigation)
+                         .QueryInterface(Components.interfaces.nsIDocShellTreeItem)
+                         .rootTreeItem
+                         .QueryInterface(Components.interfaces.nsIInterfaceRequestor)
+                         .getInterface(Components.interfaces.nsIDOMWindow);
+  if( mainWindow.reportVisLinks )
+    mainWindow.reportVisLinks(gFindBar._getInitialSelection());
+
+
 	// See if there is text selection and if it's the same as the findbar's value
 	if(prefAid.ctrlFClosesOnValue && prefAid.FAYTprefill && !gFindBar.hidden) {
 		var selText = gFindBar._getInitialSelection();

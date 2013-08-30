@@ -383,6 +383,9 @@ function removeAllRouteData()
 //------------------------------------------------------------------------------
 function reportVisLinks(id, found)
 {
+  if( status != 'active' || !id.length )
+    return;
+
   if( debug )
     var start = Date.now();
 
