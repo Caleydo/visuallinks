@@ -188,7 +188,8 @@ namespace LinkDescription
       void setLinkPoints(const points_t& points);
       points_t& getLinkPoints();
       const points_t& getLinkPoints() const;
-      float2 getBestLinkPoint(const float2& from_pos) const;
+      float2 getBestLinkPoint( const float2& from_pos,
+                               bool use_vertices = false ) const;
 
       points_t& getLinkPointsChildren();
       const points_t& getLinkPointsChildren() const;

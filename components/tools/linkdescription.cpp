@@ -104,12 +104,12 @@ namespace LinkDescription
   }
 
   //----------------------------------------------------------------------------
-  float2 Node::getBestLinkPoint(const float2& from_pos) const
+  float2 Node::getBestLinkPoint(const float2& from_pos, bool use_vertices) const
   {
     float2 min_vert;
     float min_dist = std::numeric_limits<float>::max();
 
-    for(auto const& p: getLinkPoints())
+    for(auto const& p: use_vertices ? getVertices() : getLinkPoints())
     {
       float dist = (p - from_pos).length();
       if( dist < min_dist )

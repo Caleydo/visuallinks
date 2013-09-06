@@ -630,6 +630,7 @@ namespace LinksRouting
           new_node->set("filled", true);
           new_node->set("show-in-preview", false);
           new_node->set("type", "outside-scroll");
+          new_node->set("is-icon", true);
 
           updateNode(*new_node, desktop, local_view, windows, first_above);
           hedge->addNode(new_node);

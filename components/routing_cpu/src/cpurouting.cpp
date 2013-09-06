@@ -64,6 +64,7 @@ namespace LinksRouting
       link_points,
       link_points_children
     );
+    node->set("is-icon", true);
     //node->set("covered", true);
     //node->set("filled", true);
 
@@ -311,9 +312,9 @@ namespace LinksRouting
       routeGlobal(it->_link.get());
 
       if( _global_num_nodes )
-      _global_center /= _global_num_nodes;
+        _global_center /= _global_num_nodes;
 
-      float2 center = _global_center;
+      float2 global_center = _global_center;
       float min_dist = std::numeric_limits<float>::max();
       OrderedSegments segments;
 
@@ -334,10 +335,10 @@ namespace LinksRouting
             if( phase == 0 )
             {
               float2 node_center = node->getCenter() + offset;
-              float dist = (node_center - _global_center).length();
+              float dist = (node_center - global_center).length();
               if( dist < min_dist )
               {
-                center = node_center;
+                _global_center = node_center;
                 min_dist = dist;
               }
               continue;
@@ -347,8 +348,8 @@ namespace LinksRouting
             segment.set("covered", node->get<bool>("covered") && !node->get<bool>("hover"));
             segment.set("widen-end", node->get<bool>("widen-end", true));
             segment.nodes.push_back(node);
-            segment.trail.push_back(center);
-            segment.trail.push_back(offset + node->getBestLinkPoint(center - offset) );
+            segment.trail.push_back(_global_center);
+            segment.trail.push_back(offset + node->getBestLinkPoint(_global_center - offset, !node->get<bool>("is-icon")));
 
             segments.insert(
               fork->outgoing.insert(fork->outgoing.end(), segment)
@@ -357,8 +358,6 @@ namespace LinksRouting
 
       routeForceBundling(segments, false);
 
-      for(auto& segment: segments)
-        segment->trail = smooth(segment->trail, 0.4, 8);
 #endif
 
 //      auto info = _link_infos.find(it->_id);
@@ -926,9 +925,7 @@ namespace LinksRouting
       step_size *= 0.5;
     }
 
-    // -----------------------
-    // Finally clean up routes
-
+    // Clean up routes
     if( trim_root )
     {
       size_t num_skip = 0;
@@ -975,6 +972,23 @@ namespace LinksRouting
       }
     }
 
+    for(auto& segment: segments)
+    {
+      auto const& node = segment->nodes.back();
+
+      if( node->get<bool>("is-icon", false) )
+        continue;
+
+      auto const offset = node->getParent()->get<float2>("screen-offset");
+      float2 link_point = node->getBestLinkPoint(_global_center - offset);
+      link_point = node->getCenter();
+
+      if( segment->trail.size() > 3 )
+        segment->trail.pop_back();
+      segment->trail.back() = offset + link_point;
+      segment->trail = smooth(segment->trail, 0.4, 2);
+    }
+
 #if 1
     int max_clean = std::min<int>(_num_simplify, segments.size());
     for(int i = 0; i < max_clean; ++i)
@@ -983,17 +997,28 @@ namespace LinksRouting
       for(int other_i = i + 1; other_i < max_clean; ++other_i)
       {
         auto& other_trail = segments[other_i]->trail;
-        size_t max_trail = std::min(trail.size(), other_trail.size() - 1);
-        for(size_t j = max_trail; j --> 1; --j)
-          if( (other_trail[j] - trail[j]).length() < 5 )
+        int max_trail = std::min(trail.size(), other_trail.size()) - 2;
+        for(int j = max_trail; j > 0; --j)
+        {
+          float dist = (other_trail[j] - trail[j]).length() + 0.1;
+          if( dist < 35 )
           {
-            for(size_t k = 0; k < j; ++k)
-              other_trail[k] = trail[j];
+            for(int k = 0; k <= j; ++k)
+            {
+              float f = std::min<float>((j - k) / dist / 10, 1.f);
+              other_trail[k] = f * trail[k] + (1 - f) * other_trail[k];
+            }
             break;
           }
+        }
       }
     }
 #endif
+
+    // Finally apply some smoothing
+    for(auto& segment: segments)
+      segment->trail = smooth(segment->trail, 0.3, 8);
+
 //    {
 //      auto& trail = segments[i]->trail;
 //      if( trail.size() < 3 )
