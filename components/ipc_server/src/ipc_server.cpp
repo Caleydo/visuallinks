@@ -277,6 +277,12 @@ namespace LinksRouting
   }
 
   //----------------------------------------------------------------------------
+  bool IPCServer::getOutsideSeeThrough() const
+  {
+    return routingActive() && _outside_see_through;
+  }
+
+  //----------------------------------------------------------------------------
   IPCServer::PopupIterator
   IPCServer::addPopup( const ClientInfo& client_info,
                        const SlotType::TextPopup::Popup& popup )
@@ -412,6 +418,12 @@ namespace LinksRouting
         removeCoveredPreview(it->preview);
       outlines.erase(it);
     }
+  }
+
+  //----------------------------------------------------------------------------
+  bool IPCServer::routingActive() const
+  {
+    return _subscribe_routing->_data->active != "NoRouting";
   }
 
   //----------------------------------------------------------------------------

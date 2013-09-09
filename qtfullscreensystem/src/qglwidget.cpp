@@ -184,6 +184,7 @@ ShaderPtr loadShader( QString vert, QString frag )
 #endif
     _core.attachComponent(&_routing_cpu);
     _core.attachComponent(&_routing_cpu_dijkstra);
+    _core.attachComponent(&_routing_dummy);
 #ifdef USE_GPU_ROUTING
     _core.attachComponent(&_routing_gpu);
 #endif

@@ -408,13 +408,17 @@ namespace LinksRouting
   //----------------------------------------------------------------------------
   void ClientInfo::updateRegions(const WindowRegions& windows)
   {
+    bool create_hidden_vis = _ipc_server->routingActive();
+
     clear();
     if( true ) //_dirty & WINDOW )
     {
       LinkDescription::points_t& icon = _minimized_icon->getVertices();
       icon.clear();
 
-      if( _window_info.minimized ) //&& !_window_info.title.contains("Airbus A300 - Wikipedia") )
+      if(    create_hidden_vis
+          && _window_info.minimized
+        ) //&& !_window_info.title.contains("Airbus A300 - Wikipedia") )
       {
         const QRect& region_launcher = _window_info.region_launcher;
         QPoint pos
@@ -568,19 +572,20 @@ namespace LinksRouting
              || (  (*region)->get<bool>("outside")
                 && (*region)->get<bool>("on-screen")) )
           {
-            _xray_previews.push_back
-            (
-              _ipc_server->addCoveredPreview
+            if( create_hidden_vis )
+              _xray_previews.push_back
               (
-                link_id,
-                *this,
-                *region,
-                tile_map_uncompressed,
-                getViewportAbs(),
-                getScrollRegionAbs(),
-                (*region)->get<bool>("outside")
-              )
-            );
+                _ipc_server->addCoveredPreview
+                (
+                  link_id,
+                  *this,
+                  *region,
+                  tile_map_uncompressed,
+                  getViewportAbs(),
+                  getScrollRegionAbs(),
+                  (*region)->get<bool>("outside")
+                )
+              );
           }
 
           ++region;
@@ -588,70 +593,73 @@ namespace LinksRouting
 
         hedge->addNodes(changed_nodes);
 
-        for( size_t i = 0; i < 4; ++i )
-        {
-          OutsideScroll& out = outside_scroll[i];
-          if( !out.num_outside )
-            continue;
-
-          if( out.normal.x == 0 )
+        if( create_hidden_vis )
+          for( size_t i = 0; i < 4; ++i )
           {
-            out.pos.x /= out.num_outside;
-            clamp<float>
-            (
-              out.pos.x,
-              local_view.left() + 12,
-              local_view.right() - 12
-            );
+            OutsideScroll& out = outside_scroll[i];
+            if( !out.num_outside )
+              continue;
+
+            if( out.normal.x == 0 )
+            {
+              out.pos.x /= out.num_outside;
+              clamp<float>
+              (
+                out.pos.x,
+                local_view.left() + 12,
+                local_view.right() - 12
+              );
+            }
+            else
+            {
+              out.pos.y /= out.num_outside;
+              clamp<float>
+              (
+                out.pos.y,
+                local_view.top() + 12,
+                local_view.bottom() - 12
+              );
+            }
+
+            float2 pos = out.pos;
+            LinkDescription::points_t link_points, link_points_children;
+            link_points_children.push_back(pos);
+            link_points.push_back(pos += 7 * out.normal);
+
+            LinkDescription::points_t points;
+            points.push_back(pos +=  3 * out.normal + 12 * out.normal.normal());
+            points.push_back(pos -= 10 * out.normal + 12 * out.normal.normal());
+            points.push_back(pos += 10 * out.normal - 12 * out.normal.normal());
+
+            auto new_node = std::make_shared<LinkDescription::Node>(points, link_points, link_points_children);
+            new_node->set("outside-scroll", "side[" + std::to_string(static_cast<unsigned long long>(i)) + "]");
+            new_node->set("filled", true);
+            new_node->set("show-in-preview", false);
+            new_node->set("type", "outside-scroll");
+            new_node->set("is-icon", true);
+
+            updateNode(*new_node, desktop, local_view, windows, first_above);
+            hedge->addNode(new_node);
+
+            if( new_node->get<bool>("covered") )
+              num_covered += 1;
+
+            createPopup( out.pos + getScrollRegionAbs().topLeft() + 13 * out.normal,
+                         out.normal,
+                         std::to_string(static_cast<unsigned long long>(out.num_outside)),
+                         hedge->getNodes(),
+                         new_node,
+                         link_id );
           }
-          else
-          {
-            out.pos.y /= out.num_outside;
-            clamp<float>
-            (
-              out.pos.y,
-              local_view.top() + 12,
-              local_view.bottom() - 12
-            );
-          }
-
-          float2 pos = out.pos;
-          LinkDescription::points_t link_points, link_points_children;
-          link_points_children.push_back(pos);
-          link_points.push_back(pos += 7 * out.normal);
-
-          LinkDescription::points_t points;
-          points.push_back(pos +=  3 * out.normal + 12 * out.normal.normal());
-          points.push_back(pos -= 10 * out.normal + 12 * out.normal.normal());
-          points.push_back(pos += 10 * out.normal - 12 * out.normal.normal());
-
-          auto new_node = std::make_shared<LinkDescription::Node>(points, link_points, link_points_children);
-          new_node->set("outside-scroll", "side[" + std::to_string(static_cast<unsigned long long>(i)) + "]");
-          new_node->set("filled", true);
-          new_node->set("show-in-preview", false);
-          new_node->set("type", "outside-scroll");
-          new_node->set("is-icon", true);
-
-          updateNode(*new_node, desktop, local_view, windows, first_above);
-          hedge->addNode(new_node);
-
-          if( new_node->get<bool>("covered") )
-            num_covered += 1;
-
-          createPopup( out.pos + getScrollRegionAbs().topLeft() + 13 * out.normal,
-                       out.normal,
-                       std::to_string(static_cast<unsigned long long>(out.num_outside)),
-                       hedge->getNodes(),
-                       new_node,
-                       link_id );
-        }
       }
     }
 
     LinkDescription::points_t& outline = _covered_outline->getVertices();
     outline.clear();
 
-    if( (_window_info.covered || num_covered) && !_window_info.minimized )
+    if(    create_hidden_vis
+        && (_window_info.covered || num_covered)
+        && !_window_info.minimized )
     {
       _outlines.push_back( _ipc_server->addOutline(*this) );
       QPoint offset = _window_info.minimized

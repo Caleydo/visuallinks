@@ -14,6 +14,7 @@
 #include "glcostanalysis.h"
 #include "cpurouting.h"
 #include "cpurouting-dijkstra.h"
+#include "dummyrouting.h"
 #if USE_GPU_ROUTING
 # include "gpurouting.h"
 #endif
@@ -122,6 +123,7 @@ namespace qtfullscreensystem
       LinksRouting::GlCostAnalysis  _cost_analysis;
       LinksRouting::CPURouting      _routing_cpu;
       LinksRouting::Dijkstra::CPURouting _routing_cpu_dijkstra;
+      LinksRouting::DummyRouting    _routing_dummy;
 #if USE_GPU_ROUTING
       LinksRouting::GPURouting      _routing_gpu;
 #endif

@@ -65,7 +65,7 @@ namespace LinksRouting
       int getPreviewWidth() const { return _preview_width; }
       int getPreviewHeight() const { return _preview_height; }
       bool getPreviewAutoWidth() const { return _preview_auto_width; }
-      bool getOutsideSeeThrough() const { return _outside_see_through; }
+      bool getOutsideSeeThrough() const;
       Rect desktopRect() const { return *_subscribe_desktop_rect->_data; }
 
       typedef SlotType::TextPopup::Popups::iterator PopupIterator;
@@ -92,6 +92,8 @@ namespace LinksRouting
       OutlineIterator addOutline(const ClientInfo& client_info);
       void removeOutline(const OutlineIterator& outline);
       void removeOutlines(const std::list<OutlineIterator>& outlines);
+
+      bool routingActive() const;
 
     private slots:
 
