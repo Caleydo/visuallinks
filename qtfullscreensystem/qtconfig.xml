@@ -24,7 +24,7 @@
   <CPURouting>
     <SegmentLength type="Integer" val="120" />
     <StepSize type="Float" val="0.4" />
-    <SpringConstant type="Float" val="300" />
+    <SpringConstant type="Float" val="400" />
     <NumIterations type="Integer" val="200" />
     <NumSteps type="Integer" val="5" />
     <AngleCompatWeight type="Float" val="0.95" />

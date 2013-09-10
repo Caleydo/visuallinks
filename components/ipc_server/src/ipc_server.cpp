@@ -1225,7 +1225,7 @@ namespace LinksRouting
     {
       float2 offset = preview.node->getParent()->get<float2>("screen-offset");
       if(    !preview.region.contains(float2(x, y) - offset)
-          && !preview.preview_region.contains(x, y) )
+          && !(preview.isVisible() && preview.preview_region.contains(x, y)) )
         return false;
 
       preview.node->getParent()->setOrClear("hover", false);
