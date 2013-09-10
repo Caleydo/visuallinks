@@ -981,7 +981,6 @@ namespace LinksRouting
 
       auto const offset = node->getParent()->get<float2>("screen-offset");
       float2 link_point = node->getBestLinkPoint(_global_center - offset);
-      link_point = node->getCenter();
 
       if( segment->trail.size() > 3 )
         segment->trail.pop_back();

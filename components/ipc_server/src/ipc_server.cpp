@@ -391,9 +391,9 @@ namespace LinksRouting
     outline.title = to_string(winfo.title);
     outline.region_outline.pos = winfo.region.topLeft();
     outline.region_outline.size = winfo.region.size();
-    outline.region_title.pos = winfo.region.topLeft();
+    outline.region_title.pos = winfo.region.topLeft() + float2(2, 5);
     outline.region_title.size.x = outline.title.size() * 7;
-    outline.region_title.size.y = 25;
+    outline.region_title.size.y = 20;
     outline.preview_valid = false;
 
     auto& outlines = _slot_outlines->_data->popups;

@@ -530,12 +530,19 @@ ShaderPtr loadShader( QString vert, QString frag )
     painter.setPen(Qt::white);
     for( auto const& outline: _subscribe_outlines->_data->popups )
     {
+      size_t len = outline.title.size();
+      if( !outline.preview->isVisible() )
+        len = std::min<size_t>(19, len);
+      QString title = QString::fromAscii(outline.title.data(), (int)len);
+      if( len < outline.title.size() )
+        title += "...";
+
       painter.drawText( outline.region_title.pos.x - _window_offset.x() + 5,
-                        outline.region_title.pos.y - outline.region_title.size.y,
+                        outline.region_title.pos.y - outline.region_title.size.y - 4,
                         outline.region_title.size.x,
                         outline.region_title.size.y,
                         Qt::AlignLeft | Qt::AlignVCenter,
-                        QString::fromStdString(outline.title)
+                        title
                       );
     }
   }

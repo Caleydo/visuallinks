@@ -248,10 +248,15 @@ namespace LinksRouting
 //                    0,
 //                    Color(0,0,0,0),
 //                    0.4 * _colors.front() );
-        renderRect( outline.region_title,
-                    0,
-                    0,
-                    0.4 * _colors.front() );
+        Rect reg_title = outline.region_title;
+        if( !outline.preview->isVisible() )
+          reg_title.size.x = std::min(150.f, reg_title.size.x);
+
+        float fac = outline.preview->isVisible()
+                  ? 1
+                  : 0.5;
+
+        renderRect(reg_title, 0, 0, fac * _colors.front());
       }
     }
 

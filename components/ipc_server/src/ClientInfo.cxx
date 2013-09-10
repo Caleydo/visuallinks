@@ -666,7 +666,8 @@ namespace LinksRouting
           ? QPoint()
           : getScrollRegionAbs().topLeft();
 
-      const Rect reg_title = _outlines.back()->region_title - offset;
+      Rect reg_title = _outlines.back()->region_title - offset;
+      reg_title.size.x = std::min(150.f, reg_title.size.x);
       outline.push_back(reg_title.topLeft());
       outline.push_back(reg_title.topRight());
       outline.push_back(reg_title.bottomRight());
