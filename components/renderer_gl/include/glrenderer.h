@@ -49,6 +49,7 @@ namespace LinksRouting
 
       Partitions *_partitions_src,
                  *_partitions_dest;
+      unsigned int _margin_left;
 
       /** Subscribe to the routed links */
       slot_t<LinkDescription::LinkList>::type _subscribe_links;

@@ -402,6 +402,13 @@ namespace LinksRouting
     popup.hover_region.dim = ci->viewport.size();
     popup.hover_region.scroll_region.size = ci->preview_size;
     popup.hover_region.tile_map = ci->tile_map;
+
+    size_t height = ci->tile_map->partitions_src.back().y
+                  - ci->tile_map->partitions_src.front().x;
+
+    if( height < 350 )
+      popup.hover_region.zoom = 1;
+
     _popups.push_back( _ipc_server->addPopup(*ci, popup) );
   }
 
@@ -474,7 +481,6 @@ namespace LinksRouting
         if( hedge->get<bool>("no-route") )
           continue;
 
-        LinkDescription::nodes_t changed_nodes;
         const std::string& link_id = hedge->get<std::string>("link-id");
 
         /*
@@ -590,8 +596,6 @@ namespace LinksRouting
 
           ++region;
         }
-
-        hedge->addNodes(changed_nodes);
 
         if( create_hidden_vis )
           for( size_t i = 0; i < 4; ++i )
@@ -832,6 +836,8 @@ namespace LinksRouting
 
     Partitions partitions_src,
                partitions_dest;
+    size_t     margin_left = 0,
+               margin_right = 0;
 
     if( do_partitions )
     {
@@ -881,6 +887,10 @@ namespace LinksRouting
         cur_pos = std::max<int>(min_height, cur_pos);
 
         preview_size.setHeight(cur_pos);
+        margin_left = 170;
+        size_t width = preview_size.width() - margin_left;
+        margin_right = std::max<size_t>(width, 680) - 680;
+        preview_size.setWidth(width - margin_right);
       }
       else
         partitions_dest = partitions_src;
@@ -900,6 +910,8 @@ namespace LinksRouting
 
     tile_map->partitions_src = partitions_src;
     tile_map->partitions_dest = partitions_dest;
+    tile_map->margin_left = margin_left;
+    tile_map->margin_right = margin_right;
 
     for(auto& popup: _popups)
     {

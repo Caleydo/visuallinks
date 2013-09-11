@@ -151,6 +151,8 @@ HierarchicTileMap::HierarchicTileMap( unsigned int width,
                                       unsigned int height,
                                       unsigned int tile_width,
                                       unsigned int tile_height ):
+   margin_left(0),
+   margin_right(0),
   _width( width ),
   _height( height ),
   _tile_width( tile_width ),

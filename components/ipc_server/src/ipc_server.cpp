@@ -59,7 +59,7 @@ namespace LinksRouting
     assert(widget);
     registerArg("DebugRegions", _debug_regions);
     registerArg("DebugFullPreview", _debug_full_preview_path);
-    registerArg("PreviewWidth", _preview_width = 700);
+    registerArg("PreviewWidth", _preview_width = 800);
     registerArg("PreviewHeight", _preview_height = 400);
     registerArg("PreviewAutoWidth", _preview_auto_width = true);
     registerArg("OutsideSeeThrough", _outside_see_through = true);
@@ -187,6 +187,7 @@ namespace LinksRouting
                           req->second.y * tile_map->getTileHeight() ),
                   req->second.tile_size );
         src *= scale;
+        src.pos.x += tile_map->margin_left;
 
         std::cout << "request tile " << src.toString(true) << std::endl;
         req->second.socket->write(QString(
@@ -1181,6 +1182,14 @@ namespace LinksRouting
                                      QWsSocket& socket,
                                      ClientInfo& client_info ) -> bool
     {
+      if( popup.region.contains(x, y) )
+      {
+        client_info.activateWindow();
+        popup.hover_region.fadeIn();
+        _interaction_handler.updateRegion(&socket, popup);
+        return true;
+      }
+
       if(    !popup.hover_region.isVisible()
           || !popup.hover_region.contains(x, y) )
         return false;
@@ -1315,7 +1324,7 @@ namespace LinksRouting
                                      ClientInfo& client_info ) -> bool
     {
       auto& reg = popup.hover_region;
-      if(    !popup_visible // Only one popup/preview at the same time
+      if(    !popup_visible // Only one popup at the same time
           && (  popup.region.contains(x, y)
              || (reg.isVisible() && reg.contains(x,y))
              ) )
@@ -1352,20 +1361,21 @@ namespace LinksRouting
       return false;
     });
 
+    bool preview_visible = false;
     changed |= foreachPreview([&]( SlotType::XRayPopup::HoverRect& preview,
                                    QWsSocket& socket,
                                    ClientInfo& client_info ) -> bool
     {
       auto const& p = preview.node->getParent();
 
-      if(   !popup_visible // Only one popup/preview at the same time
+      if(   !preview_visible // Only one preview at the same time
           && ( preview.region.contains( float2(x, y)
                                       - p->get<float2>("screen-offset"))
             || (preview.isVisible() && preview.preview_region.contains(x,y))
              )
         )
       {
-        popup_visible = true;
+        preview_visible = true;
         if( preview.isVisible() && !preview.isFadeOut() )
           return false;
 
@@ -1379,7 +1389,7 @@ namespace LinksRouting
       }
       else if( preview.isVisible() )
       {
-        if( !preview.isFadeOut() )
+        if( !preview.isFadeOut() && !popup_visible )
           preview.delayedFadeOut();
       }
       else if( preview.isFadeIn() )

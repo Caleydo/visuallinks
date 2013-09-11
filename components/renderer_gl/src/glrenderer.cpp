@@ -123,6 +123,7 @@ namespace LinksRouting
     Configurable("GLRenderer"),
     _partitions_src(nullptr),
     _partitions_dest(nullptr),
+    _margin_left(0),
     _blur_x_shader(nullptr),
     _blur_y_shader(nullptr)
   {
@@ -230,9 +231,6 @@ namespace LinksRouting
       return 0;
     }
 
-    _partitions_src = 0;
-    _partitions_dest = 0;
-
     glPushAttrib(GL_VIEWPORT_BIT);
     glViewport(0, 0, _links_fbo.width, _links_fbo.height);
 
@@ -273,9 +271,6 @@ namespace LinksRouting
       {
         if( !popup.region.isVisible() )
           continue;
-
-        _partitions_src = 0;
-        _partitions_dest = 0;
 
         renderRect(popup.region.region, popup.region.border);
         rendered_anything = true;
@@ -365,6 +360,7 @@ namespace LinksRouting
         {
           _partitions_src = &tile_map->partitions_src;
           _partitions_dest = &tile_map->partitions_dest;
+          _margin_left = tile_map->margin_left;
         }
 
         Color color_cur = _color_cur;
@@ -380,6 +376,10 @@ namespace LinksRouting
         glEnd();
 
         _color_cur = color_cur;
+
+        _partitions_src = 0;
+        _partitions_dest = 0;
+        _margin_left = 0;
 
         glPopMatrix();
         glMatrixMode(GL_PROJECTION);
@@ -885,6 +885,8 @@ namespace LinksRouting
         }
         break;
       }
+
+      x -= _margin_left;
     }
 #endif
     ::glVertex2f(x, y);

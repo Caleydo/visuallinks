@@ -96,6 +96,9 @@ class HierarchicTileMap
     Partitions partitions_src,
                partitions_dest;
 
+    unsigned int margin_left,
+                 margin_right;
+
   private:
     unsigned int _width,
                  _height,
