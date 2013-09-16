@@ -17,6 +17,7 @@ var routing = null;
 var cfg = new Object();
 var tile_requests = null;
 var tile_timeout = false;
+var do_report = true;
 
 var prefs = Components.classes["@mozilla.org/fuel/application;1"]
                       .getService(Components.interfaces.fuelIApplication)
@@ -383,7 +384,7 @@ function removeAllRouteData()
 //------------------------------------------------------------------------------
 function reportVisLinks(id, found)
 {
-  if( status != 'active' || !id.length )
+  if( !do_report || status != 'active' || !id.length )
     return;
 
   if( debug )
@@ -560,6 +561,14 @@ function register(match_title = false)
 
           last_id = msg.id;
           last_stamp = msg.stamp;
+
+          do_report = false;
+
+          gFindBar._findField.value = msg.id;
+          gFindBar.open(gFindBar.FIND_TYPEAHEAD);
+          gFindBar._find();
+
+          do_report = true;
 
           setTimeout('reportVisLinks("'+msg.id+'", true)',0);
         }

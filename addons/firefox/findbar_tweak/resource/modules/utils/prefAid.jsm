@@ -157,8 +157,12 @@ this.prefAid = {
 			}
 		}
 		
-		for(var i = 0; i < prefAid._onChange[pref].length; i++) {
-			prefAid._onChange[pref][i]();
+		if(typeof(prefAid._onChange[pref]) == 'undefined') {
+			Cu.reportError('Setting listener on unset preference: '+pref);
+		} else {
+			for(var i = 0; i < prefAid._onChange[pref].length; i++) {
+				prefAid._onChange[pref][i]();
+			}
 		}
 	},
 	

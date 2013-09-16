@@ -12,11 +12,10 @@ this.ctrlF = function(event) {
   if( mainWindow.reportVisLinks )
     mainWindow.reportVisLinks(gFindBar._getInitialSelection());
 
-
 	// See if there is text selection and if it's the same as the findbar's value
-	if(prefAid.ctrlFClosesOnValue && prefAid.FAYTprefill && !gFindBar.hidden) {
+	if(/*prefAid.ctrlFClosesOnValue && prefAid.FAYTprefill &&*/ !gFindBar.hidden) {
 		var selText = gFindBar._getInitialSelection();
-		if(selText && selText != gFindBar._findField.value) {
+		if(selText /*&& selText != gFindBar._findField.value*/) {
 			gFindBar.onFindCommand();
 			gFindBar._setHighlightTimeout();
 			return;

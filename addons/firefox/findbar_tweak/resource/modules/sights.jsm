@@ -270,6 +270,7 @@ this.delayCurrentSights = function(e) {
 };
 
 this.updateLinks = function(e) {
+Cu.reportError('Update');
 	// Report selection to vislink extension
 	var mainWindow = window.QueryInterface(Components.interfaces.nsIInterfaceRequestor)
 		         .getInterface(Components.interfaces.nsIWebNavigation)
