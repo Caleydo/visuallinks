@@ -22,9 +22,9 @@
 
 #include <QApplication>
 #include <QBitmap>
-#include <QDesktopServices>
 #include <QDesktopWidget>
 #include <QMoveEvent>
+#include <QStandardPaths>
 #include <QStaticText>
 
 #include <QGLShader>
@@ -95,6 +95,14 @@ ShaderPtr loadShader( QString vert, QString frag )
   return program;
 }
 
+//----------------------------------------------------------------------------
+GLWidget::GLWidget(QWidget* parent):
+  Configurable("QGLWidget"),
+  QWidget(parent),
+  _server(&_mutex_slot_links, &_cond_render, this)
+{
+
+}
   //----------------------------------------------------------------------------
   GLWidget::GLWidget(int& argc, char *argv[]):
     Configurable("QGLWidget"),
@@ -108,7 +116,7 @@ ShaderPtr loadShader( QString vert, QString frag )
     QApplication::setApplicationName("VisLinks");
 
     const QDir config_dir =
-      QDesktopServices::storageLocation(QDesktopServices::DataLocation);
+      QStandardPaths::writableLocation(QStandardPaths::DataLocation);
     const QString user_config = config_dir.filePath("config.xml");
 
     {
@@ -203,10 +211,6 @@ ShaderPtr loadShader( QString vert, QString frag )
     //std::cout << "Is virtual desktop: "
     //          << QApplication::desktop()->isVirtualDesktop()
     //          << std::endl;
-
-    //QxtGlobalShortcut* shortcut = new QxtGlobalShortcut(this);
-    //connect(shortcut, SIGNAL(activated()), this, SLOT(onGlobalLinkShortcut()));
-    //qDebug() << shortcut->setShortcut(QKeySequence("ctrl+|"));
   }
 
   //----------------------------------------------------------------------------
@@ -456,19 +460,20 @@ ShaderPtr loadShader( QString vert, QString frag )
     {
       if( _subscribe_links->isValid() )
       {
+        setMask( QRegion(0, 0, size().width(), size().height()) );
         //writeTexture(_subscribe_links, QString("links%1.png").arg(counter));
-        QBitmap mask = QBitmap::fromImage( links.createMaskFromColor( qRgba(0,0,0, 0) ) );
-        setMask
-        (
-          /*_subscribe_xray->_data->img
-          ? QRegion(mask).unite(_subscribe_xray->_data->region.toQRect())
-          :*/ mask
-        );
+//        QBitmap mask = QBitmap::fromImage( links.createMaskFromColor( qRgba(0,0,0, 0) ) );
+//        setMask
+//        (
+//          /*_subscribe_xray->_data->img
+//          ? QRegion(mask).unite(_subscribe_xray->_data->region.toQRect())
+//          :*/ mask
+//        );
   //      mask.save(QString("mask%1.png").arg(counter));
       }
       else
 #if defined(WIN32) || defined(_WIN32)
-      setMask(QRegion(size().width() - 2, size().height() - 2, 1, 1));
+        setMask(QRegion(size().width() - 2, size().height() - 2, 1, 1));
 #else
         setMask(QRegion(-1, -1, 1, 1));
 #endif
@@ -499,7 +504,7 @@ ShaderPtr loadShader( QString vert, QString frag )
   void GLWidget::waitForData()
   {
     QMutexLocker lock(&_mutex_slot_links);
-    _cond_render.wait(&_mutex_slot_links, 30);
+    _cond_render.wait(&_mutex_slot_links, 200);
   }
 
   //----------------------------------------------------------------------------
@@ -531,7 +536,7 @@ ShaderPtr loadShader( QString vert, QString frag )
       size_t len = outline.title.size();
       if( !outline.preview->isVisible() )
         len = std::min<size_t>(19, len);
-      QString title = QString::fromAscii(outline.title.data(), (int)len);
+      QString title = QString::fromLatin1(outline.title.data(), (int)len);
       if( len < outline.title.size() )
         title += "...";
 
@@ -724,12 +729,6 @@ ShaderPtr loadShader( QString vert, QString frag )
 //      _fbo_desktop->toImage().save( QString("desktop%1.png").arg(counter++) );
 
     _screenshot = QPixmap();
-  }
-
-  //----------------------------------------------------------------------------
-  void GLWidget::onGlobalLinkShortcut()
-  {
-    qDebug() << "link!";
   }
 
 } // namespace qtfullscreensystem

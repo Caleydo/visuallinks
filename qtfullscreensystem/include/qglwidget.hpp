@@ -40,6 +40,7 @@ namespace qtfullscreensystem
 
     public:
 
+      explicit GLWidget(QWidget* parent = 0);
       GLWidget(int& argc, char *argv[]);
       virtual ~GLWidget();
 
@@ -87,10 +88,6 @@ namespace qtfullscreensystem
       void updateScreenShot( QPoint window_offset,
                              QPoint window_end,
                              QGLPixelBuffer* pbuffer );
-
-    protected slots:
-
-      void onGlobalLinkShortcut();
 
     private:
 

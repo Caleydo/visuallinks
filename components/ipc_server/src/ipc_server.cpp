@@ -333,7 +333,7 @@ namespace LinksRouting
                                 bool extend )
   {
     QRect preview_region =
-      scroll_region.intersect(extend ? desktopRect().toQRect() : viewport);
+      scroll_region.intersected(extend ? desktopRect().toQRect() : viewport);
     QRect source_region
     (
       preview_region.topLeft() - scroll_region.topLeft(),

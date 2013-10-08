@@ -48,6 +48,8 @@ namespace qtfullscreensystem
       _pbuffer->format().majorVersion(),
       _pbuffer->format().minorVersion()
     );
+
+    _pbuffer->context()->moveToThread(this);
   }
 
   //----------------------------------------------------------------------------

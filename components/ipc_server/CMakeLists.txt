@@ -2,20 +2,14 @@ set(COMPONENTROOT ${CMAKE_CURRENT_SOURCE_DIR})
 set(COMPONENTSRC_DIR ${COMPONENTROOT}/src)
 set(COMPONENTINC_DIR ${COMPONENTROOT}/include)
 
-find_package(Qt4 REQUIRED)
 include_directories(
   ${LINKS_INCLUDE_DIR}
   ${COMPONENTINC_DIR}
   ${PROJROOT}/components/tools
-  ${QT_INCLUDES}
 )
 
 set(HEADER_FILES
   include/ClientInfo.hxx
-#  ${COMPONENTINC_DIR}/ipc_server.hpp
-)
-
-set( HEADER_FILES_MOC
   include/ipc_server.hpp
   include/window_monitor.hpp
 )
@@ -33,13 +27,8 @@ set(CL_FILES
 
 add_definitions(-DQXT_STATIC)
 
-QT4_WRAP_CPP(HEADER_FILES_MOC_GENERATED ${HEADER_FILES_MOC})
-set( HEADER_FILES 
-  ${HEADER_FILES}
-  ${HEADER_FILES_MOC_GENERATED}
-)
-
 add_library(ipc_server ${HEADER_FILES} ${SOURCE_FILES} ${CL_FILES})
+qt5_use_modules(ipc_server Script Widgets OpenGL Network)
 target_link_libraries( ipc_server
   QtWebSocket
   qxt

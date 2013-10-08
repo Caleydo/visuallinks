@@ -8,11 +8,13 @@
 #include "slotdata/image.hpp"
 #include "slotdata/polygon.hpp"
 
+#ifndef QWINDOWDEFS_H
 #ifdef _WIN32
 # include <windows.h>
   typedef HWND WId;
 #else
   typedef unsigned long WId;
+#endif
 #endif
 
 namespace LinksRouting

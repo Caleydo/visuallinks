@@ -287,6 +287,7 @@ uint QxtWindowSystem::idleTime()
     }
 
     uint idle = 0;
+#if 0
     if (xssResolved)
     {
         XScreenSaverInfo* info = _xScreenSaverAllocInfo();
@@ -297,5 +298,6 @@ uint QxtWindowSystem::idleTime()
         if (info)
             XFree(info);
     }
+#endif
     return idle;
 }

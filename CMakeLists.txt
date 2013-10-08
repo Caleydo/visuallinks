@@ -15,6 +15,16 @@ include( cmake/CopyFiles.cmake )
 include( cmake/AddComponent.cmake )
 include( cmake/AddSubdirOption.cmake )
 
+# Find includes in corresponding build directories
+set(CMAKE_INCLUDE_CURRENT_DIR ON)
+# Instruct CMake to run moc automatically when needed.
+set(CMAKE_AUTOMOC ON)
+
+# Widgets finds its own dependencies (QtGui and QtCore).
+find_package(Qt5Widgets REQUIRED)
+find_package(Qt5Script REQUIRED)
+find_package(Qt5OpenGL REQUIRED)
+
 # ------------------------------------------------------------------------------
 # Warning when using in-source build
 # ------------------------------------------------------------------------------

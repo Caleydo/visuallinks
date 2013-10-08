@@ -26,6 +26,8 @@ namespace qtfullscreensystem
       Application(int& argc, char *argv[]);
       virtual ~Application();
 
+      virtual bool notify(QObject* receiver, QEvent* e);
+
     private:
 
       QTimer    _timer;

@@ -1,9 +1,5 @@
 # files
 set( HEADER_FILES
-  
-)
-
-set( HEADER_FILES_MOC
   include/application.hpp
   include/qglwidget.hpp
 )
@@ -35,7 +31,7 @@ set (ADDITIONAL_LIBS
 
 # dependencies & build
 find_package(OpenGL REQUIRED)
-find_package(Qt4 REQUIRED QtCore QtOpenGL QtScript)
+
 if(LinksComponent_routing_gpu)
   find_package(OpenCL REQUIRED)
   include_directories(${OPENCL_INCLUDE_DIRS})
@@ -48,33 +44,23 @@ if(WIN32)
   set(ADDITIONAL_LIBS ${ADDITIONAL_LIBS} ${GLEW_LIBRARIES})
 endif(WIN32)
 
-include(${QT_USE_FILE})
-add_definitions(${QT_DEFINITIONS} -DQXT_STATIC)
+add_definitions(-DQXT_STATIC)
 
 set(SYSTEMROOT ${CMAKE_CURRENT_SOURCE_DIR})
 include_directories(
   ${LINKS_INCLUDE_DIR}
   ${COMPONENTS_INC_DIR}
   ${SYSTEMROOT}
-  ${QT_INCLUDES}
   ${OPENGL_INCLUDE_DIR}
   ${ADDITIONAL_INCLUDE_DIRS}
   include
 )
 
-QT4_WRAP_CPP(HEADER_FILES_MOC_GENERATED ${HEADER_FILES_MOC})
-set( HEADER_FILES 
-  ${HEADER_FILES}
-  ${HEADER_FILES_MOC_GENERATED}
-)
-
 add_executable(qtfullscreensystem ${HEADER_FILES} ${SOURCE_FILES} ${SHADER_FILES})
 target_link_libraries( qtfullscreensystem
   ${OPENGL_gl_LIBRARY}
-  ${QT_QTCORE_LIBRARY}
-  ${QT_QTGUI_LIBRARY}
-  ${QT_QTOPENGL_LIBRARY}
   ${ADDITIONAL_LIBS}
 )
+qt5_use_modules(qtfullscreensystem Gui OpenGL Network)
 use_components(qtfullscreensystem)
 runtime_files(qtfullscreensystem RUNTIME_FILES)

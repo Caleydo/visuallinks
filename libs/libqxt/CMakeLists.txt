@@ -3,12 +3,9 @@ set( HEADER_FILES
   include/QxtGui/QxtWindowSystem
   include/QxtGui/qxtwindowsystem.h
 #  include/QxtGui/QxtGlobalShortcut
+#  include/QxtGui/qxtglobalshortcut.h
   include/qxtglobal.h
 #  src/widgets/qxtglobalshortcut_p.h
-)
-
-set( HEADER_FILES_MOC
-#  include/QxtGui/qxtglobalshortcut.h
 )
 
 set( SOURCE_FILES
@@ -28,22 +25,16 @@ else()
 endif()
 
 # ...
-find_package(Qt4 REQUIRED)
 include_directories(
-  ${QT_INCLUDE_DIR}
   include
   include/QxtGui
   src/core
   src/widgets
 )
-include(${QT_USE_FILE})
-
 add_definitions(-DQT_NO_DEBUG -DQXT_STATIC)
-
-QT4_WRAP_CPP(HEADER_FILES_MOC_GENERATED ${HEADER_FILES_MOC})
 
 ADD_LIBRARY(qxt STATIC
   ${SOURCE_FILES}
   ${HEADER_FILES}
-  ${HEADER_FILES_MOC_GENERATED}
 )
+qt5_use_modules(qxt Network Widgets X11Extras)

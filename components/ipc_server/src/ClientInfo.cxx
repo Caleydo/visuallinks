@@ -224,8 +224,8 @@ namespace LinksRouting
       _window_info = *window_info;
       _dirty |= WINDOW;
 
-//      if( _window_info.title.contains("Airbus A300 - Wikipedia") )
-//        a300_client = this;
+      if( _window_info.title.contains("Airbus A300 - Wikipedia") )
+        a300_client = this;
     }
 
     updateRegions(windows);
@@ -425,7 +425,7 @@ namespace LinksRouting
 
       if(    create_hidden_vis
           && _window_info.minimized
-        ) //&& !_window_info.title.contains("Airbus A300 - Wikipedia") )
+          && !_window_info.title.contains("Airbus A300 - Wikipedia") )
       {
         const QRect& region_launcher = _window_info.region_launcher;
         QPoint pos
@@ -470,7 +470,7 @@ namespace LinksRouting
           local_view(-scroll_region.topLeft(), viewport.size());
 
     // Limit outside indicators to desktop region
-    local_view = local_view.intersect(desktop);
+    local_view = local_view.intersected(desktop);
 
     for(auto& node: _nodes)
     {

@@ -30,4 +30,20 @@ namespace qtfullscreensystem
 
   }
 
+  //----------------------------------------------------------------------------
+  bool Application::notify(QObject* receiver, QEvent* e)
+  {
+    switch( e->type() )
+    {
+      case QEvent::MouseButtonPress:
+      case QEvent::MouseButtonRelease:
+      case QEvent::MouseButtonDblClick:
+      case QEvent::MouseMove:
+      case QEvent::Wheel:
+        return true;
+      default:
+        return QApplication::notify(receiver, e);
+    }
+  }
+
 } // namespace qtfullscreensystem

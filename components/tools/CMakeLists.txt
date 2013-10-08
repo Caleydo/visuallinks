@@ -40,8 +40,5 @@ add_subdirectory(glsl)
 add_definitions(-DNOMULTISAMPLING)
 add_library(tools ${HEADER_FILES} ${SOURCE_FILES})
 
-find_package(Qt4 REQUIRED)
-include_directories(${QT_INCLUDES})
 add_library(tools-qt ${HEADER_FILES_QT} ${SOURCE_FILES_QT})
-
-
+qt5_use_modules(tools-qt Script)
