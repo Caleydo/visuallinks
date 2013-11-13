@@ -10,10 +10,23 @@
 
 #include <sstream>
 
+#ifdef _WIN32
+# include <windows.h>
+#endif
+
 namespace LinksRouting
 {
   namespace
   {
+#ifdef _WIN32
+    std::istream& operator>>(std::istream& strm, HWND& wid)
+    {
+      unsigned long ptr = 0;
+      strm >> ptr;
+      wid = reinterpret_cast<HWND>(ptr);
+      return strm;
+    }
+#endif
     class Converter
     {
       public:

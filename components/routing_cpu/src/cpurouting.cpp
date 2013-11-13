@@ -1,6 +1,8 @@
 #include "cpurouting.h"
 #include "log.hpp"
 
+#include <algorithm>
+#include <cmath>
 #include <limits>
 
 template<typename T>
@@ -233,9 +235,9 @@ namespace LinksRouting
   float normalizePi(float rad)
   {
     while(rad < -M_PI)
-      rad += 2 * M_PI;
+      rad += 2.f * static_cast<float>(M_PI);
     while(rad > M_PI)
-      rad -= 2 * M_PI;
+      rad -= 2.f * static_cast<float>(M_PI);
     return rad;
   };
 
@@ -895,7 +897,7 @@ namespace LinksRouting
 
               float trail_comp =
                   (1 - _angle_comp_weight)
-                + _angle_comp_weight * std::max(0., cos(delta_angle));
+                + _angle_comp_weight * std::max<float>(0., cos(delta_angle));
 
               float2 dir = other_trail[j] - trail[j];
               float dist = dir.length();

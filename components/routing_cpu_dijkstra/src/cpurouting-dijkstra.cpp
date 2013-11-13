@@ -399,17 +399,21 @@ namespace Dijkstra
 
     struct MiniumFinder
     {
-      size_t costs[8][5] = {{0}},
-             num_bundles[8] = {0},
+      size_t costs[8][5],
+             num_bundles[8],
              cur_cost = 0,
-             cur_pos[8] = {0},
+             cur_pos[8],
              min_cost = size_t(-1),
-             min_pos[8] = {0};
+             min_pos[8];
 
       MiniumFinder( Outgoings const& outgoings,
                     Grids const& grids,
                     float2 const& pos )
       {
+        memset(num_bundles, 0, sizeof(num_bundles));
+        memset(cur_pos, 0, sizeof(cur_pos));
+        memset(min_pos, 0, sizeof(min_pos));
+
         // Precalculate costs for rotating the max 8 edge bundles by +-2
         // fields
         for(int i = 0; i < 8; ++i)
@@ -476,7 +480,7 @@ namespace Dijkstra
       }
     };
 
-    MiniumFinder min_finder(outgoings, _grids, float2(min_node.x, min_node.y));
+    MiniumFinder min_finder(outgoings, this->_grids, float2(min_node.x, min_node.y));
     min_finder.run();
 
 //    std::cout << "min_cost = " << min_finder.min_cost
@@ -503,7 +507,7 @@ namespace Dijkstra
       float2 new_dir = offsetFromIndex(dest);
       for(auto const link: outgoings[i])
       {
-        min_node.grid = &_grids[ link ];
+        min_node.grid = &this->_grids[ link ];
         min_node->setParentOffset(new_dir.x, new_dir.y);
       }
     }

@@ -57,7 +57,7 @@ namespace LinksRouting
 
     bool isValid() const
     {
-      return id && id != static_cast<WId>(-1);
+      return id != 0;
     }
   };
   typedef std::vector<WindowInfo> WindowInfos;

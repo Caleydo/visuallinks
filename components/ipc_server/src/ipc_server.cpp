@@ -908,7 +908,7 @@ namespace LinksRouting
         };
 
         float min_dist = dist[0];
-        int min_index = 0;
+        size_t min_index = 0;
 
         for( size_t i = 1; i < 4; ++i )
           if( dist[i] < min_dist )
@@ -1084,16 +1084,7 @@ namespace LinksRouting
   {
     bool modified = false;
     hedge->resetNodeParents();
-    WId client_wid =
-#ifdef _WIN32
-      reinterpret_cast<WId>
-      (
-#endif
-        hedge->get<unsigned long>("client_wid", 0)
-#ifdef _WIN32
-      )
-#endif
-    ;
+    WId client_wid = hedge->get<WId>("client_wid", 0);
 
     QRect region, scroll_region;
     auto client_info = findClientInfo(client_wid);

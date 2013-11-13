@@ -1,6 +1,7 @@
 #include "glcostanalysis.h"
 #include "slotdata/image.hpp"
 
+#include <algorithm>
 #include <stdexcept>
 
 namespace LinksRouting
@@ -48,11 +49,11 @@ namespace LinksRouting
   //----------------------------------------------------------------------------
   bool GlCostAnalysis::initGL()
   {
-    size_t widthSaliency = _subscribe_desktop->_data->width / _downsampleSaliency,
-           heightSaliency = _subscribe_desktop->_data->height / _downsampleSaliency;
+    unsigned int widthSaliency = _subscribe_desktop->_data->width / _downsampleSaliency,
+                 heightSaliency = _subscribe_desktop->_data->height / _downsampleSaliency;
     _downsampleSaliencyToCost = std::max(1,_downsampleCost / _downsampleSaliency );
-    size_t widthCost = widthSaliency / _downsampleSaliencyToCost,
-           heightCost = heightSaliency / _downsampleSaliencyToCost;
+    unsigned int widthCost = widthSaliency / _downsampleSaliencyToCost,
+                 heightCost = heightSaliency / _downsampleSaliencyToCost;
 
     _feature_map_fbo.init(widthSaliency, heightSaliency, GL_RGBA32F, 1, false, GL_NEAREST);
     _saliency_map_fbo.init(widthSaliency, heightSaliency, GL_R32F, 3, false, GL_NEAREST);

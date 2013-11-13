@@ -35,14 +35,18 @@ shaders!
 #include <iostream>
 
 #ifdef _WIN32
-#define WIN32_LEAN_AND_MEAN
-#define NOMINMAX
-#include <windows.h>
-#include <GL/glew.h>
+# ifndef WIN32_LEAN_AND_MEAN
+#  define WIN32_LEAN_AND_MEAN
+# endif
+# ifndef NOMINMAX
+#  define NOMINMAX
+# endif
+# include <windows.h>
+# include <GL/glew.h>
 #else
-#define GL_GLEXT_PROTOTYPES 1
-#include <GL/gl.h>
-#include <GL/glext.h>
+# define GL_GLEXT_PROTOTYPES 1
+# include <GL/gl.h>
+# include <GL/glext.h>
 #endif
 
 #include <unordered_map>

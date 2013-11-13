@@ -13,9 +13,10 @@
 #include <set>
 
 #ifdef _WIN32
-typedef HWND WId;
+# include <windows.h>
+  typedef HWND WId;
 #else
-typedef unsigned long WId;
+  typedef unsigned long WId;
 #endif
 
 namespace LinksRouting

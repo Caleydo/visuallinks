@@ -34,7 +34,7 @@ class JSONParser;
 
 namespace LinksRouting
 {
-  class ClientInfo;
+  struct ClientInfo;
 
   class IPCServer:
     public QObject,

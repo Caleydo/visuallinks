@@ -136,10 +136,10 @@ namespace gl
         glBindTexture(GL_TEXTURE_2D, this->depthBuffer);
         glTexImage2D(GL_TEXTURE_2D, 0, GL_DEPTH_COMPONENT, _width, _height, 0,
                      GL_DEPTH_COMPONENT, GL_UNSIGNED_INT, 0);
-        glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, depthFilter);
-        glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, depthFilter);
-        glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP);
-        glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, depthFilter);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, depthFilter);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP);
         glTexEnvi(GL_TEXTURE_ENV, GL_TEXTURE_ENV_MODE, GL_REPLACE);
         glFramebufferTexture2D(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT,
                                GL_TEXTURE_2D, this->depthBuffer, 0);
@@ -170,7 +170,7 @@ namespace gl
         glBindTexture(GL_TEXTURE_2D, colorBuffers[i]);
         glTexImage2D(GL_TEXTURE_2D, 0, colorInternalFormat, _width, _height, 0,
                      GL_RGBA, GL_UNSIGNED_BYTE, NULL);
-        glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, colorFilter);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, colorFilter);
         if( supportMipMaps && colorFilter == GL_LINEAR )
           glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER,
                           GL_LINEAR_MIPMAP_LINEAR);
@@ -245,7 +245,7 @@ namespace gl
       return;
     if( depthBuffer != 0 )
       glDeleteTextures(1, &depthBuffer);
-    glDeleteTextures(colorBuffers.size(), &colorBuffers[0]);
+    glDeleteTextures(static_cast<GLsizei>(colorBuffers.size()), &colorBuffers[0]);
     glDeleteFramebuffersEXT(1, &fbo);
     is_init = false;
   }
@@ -269,8 +269,8 @@ namespace gl
     else
       glBindFramebuffer(GL_FRAMEBUFFER, 0);
   }
-  void FBO::draw(int width,
-                 int height,
+  void FBO::draw(size_t width,
+                 size_t height,
                  int posx,
                  int posy,
                  int colorBuffer,
@@ -287,7 +287,7 @@ namespace gl
     if( resetviewport )
     {
       glPushAttrib(GL_VIEWPORT_BIT);
-      glViewport(posx, posy, width, height);
+	  glViewport(posx, posy, static_cast<GLsizei>(width), static_cast<GLsizei>(height));
     }
 
     calculateCoords(vertexcoords, draw, width, height, posx, posy,

@@ -39,7 +39,7 @@ namespace LinksRouting
     HierarchicTileMapPtr tile_map,
                          tile_map_uncompressed;
 
-    explicit ClientInfo(IPCServer* ipc_server = nullptr, WId wid = -1);
+    explicit ClientInfo(IPCServer* ipc_server = nullptr, WId wid = 0);
     ClientInfo(const ClientInfo&) = delete;
     ~ClientInfo();
 

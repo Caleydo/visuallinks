@@ -2,18 +2,18 @@
 set( HEADER_FILES
   include/QxtGui/QxtWindowSystem
   include/QxtGui/qxtwindowsystem.h
-  include/QxtGui/QxtGlobalShortcut
+#  include/QxtGui/QxtGlobalShortcut
   include/qxtglobal.h
-  src/widgets/qxtglobalshortcut_p.h
+#  src/widgets/qxtglobalshortcut_p.h
 )
 
 set( HEADER_FILES_MOC
-  include/QxtGui/qxtglobalshortcut.h
+#  include/QxtGui/qxtglobalshortcut.h
 )
 
 set( SOURCE_FILES
   src/core/qxtglobal.cpp
-  src/widgets/qxtglobalshortcut.cpp
+#  src/widgets/qxtglobalshortcut.cpp
   src/widgets/qxtwindowsystem.cpp
 )
 
@@ -23,8 +23,8 @@ elseif(APPLE)
   set(SOURCE_FILES ${SOURCE_FILES} src/widgets/x11/qxtwindowsystem_mac.cpp)
   set(HEADER_FILES ${HEADER_FILES} src/widgets/x11/qxtwindowsystem_mac.h)
 else()
-  set(SOURCE_FILES ${SOURCE_FILES} src/widgets/x11/qxtwindowsystem_x11.cpp
-                                   src/widgets/x11/qxtglobalshortcut_x11.cpp )
+  set(SOURCE_FILES ${SOURCE_FILES} src/widgets/x11/qxtwindowsystem_x11.cpp)
+#                                   src/widgets/x11/qxtglobalshortcut_x11.cpp )
 endif()
 
 # ...

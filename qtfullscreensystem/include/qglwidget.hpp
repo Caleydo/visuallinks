@@ -1,6 +1,10 @@
 #ifndef _GLWIDGET_HPP_
 #define _GLWIDGET_HPP_
 
+#ifdef _WIN32
+# include <GL/glew.h>
+#endif
+
 #include "render_thread.hpp"
 
 #include "slots.hpp"

@@ -76,6 +76,11 @@ WId QxtWindowSystem::findWindow(const QString& title)
     });
 }
 
+bool QxtWindowSystem::isVisible(WId wid)
+{
+  return ::IsWindowVisible(wid);
+}
+
 WId QxtWindowSystem::windowAt(const QPoint& pos)
 {
     POINT pt;

@@ -6,6 +6,7 @@
  */
 
 #include "PartitionHelper.hxx"
+#include <algorithm>
 
 //------------------------------------------------------------------------------
 void PartitionHelper::add(const float2& interval)

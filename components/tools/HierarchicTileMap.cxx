@@ -6,8 +6,9 @@
  */
 
 #include "HierarchicTileMap.hpp"
+#include <algorithm>
 #include <cassert>
-#include <stdint.h>
+#include <cstdint>
 
 //----------------------------------------------------------------------------
 Layer::Layer(HierarchicTileMap* map):

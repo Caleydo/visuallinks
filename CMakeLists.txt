@@ -69,7 +69,7 @@ set(COMMON_FILES  ${LINKS_INCLUDE_DIR}/common/plainlinkdescription.h
                   )
 
 if(WIN32)
-  add_definitions( "/wd4250" )
+  add_definitions(/wd4250 /wd4800 -DNOMINMAX -DWIN32_LEAN_AND_MEAN -D_USE_MATH_DEFINES)
 endif(WIN32)
 
 if(CMAKE_COMPILER_IS_GNUCXX)

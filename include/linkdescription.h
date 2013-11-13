@@ -6,6 +6,7 @@
 #include "float2.hpp"
 #include "string_utils.h"
 
+#include <functional>
 #include <list>
 #include <map>
 #include <vector>
