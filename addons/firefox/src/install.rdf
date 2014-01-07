@@ -1,20 +1,26 @@
-<?xml version="1.0"?><RDF xmlns="http://www.w3.org/1999/02/22-rdf-syntax-ns#"     xmlns:em="http://www.mozilla.org/2004/em-rdf#"><Description about="urn:mozilla:install-manifest">
+<?xml version="1.0"?>
 
-<!-- Required Items -->
-<em:id>werner.puff@gmx.net</em:id>
-<em:name>Visual Links Client</em:name>
-<em:version>1.0</em:version>
-
-<em:targetApplication>
-    <Description>
+<RDF xmlns="http://www.w3.org/1999/02/22-rdf-syntax-ns#"
+     xmlns:em="http://www.mozilla.org/2004/em-rdf#">
+  <Description about="urn:mozilla:install-manifest">
+  
+    <!-- Required Items -->
+    <em:id>hidden-content@caleydo.org</em:id>
+    <em:name>Hidden Content Client</em:name>
+    <em:version>1.0</em:version>
+    
+    <em:targetApplication>
+      <Description>
         <em:id>{ec8030f7-c20a-464f-9b0e-13a3a9e97384}</em:id>
-        <em:minVersion>1.5</em:minVersion>
+        <em:minVersion>11.0</em:minVersion><!-- WebSocket >= 11.0 -->
         <em:maxVersion>*</em:maxVersion>
-    </Description>
-</em:targetApplication>
+      </Description>
+    </em:targetApplication>
+    
+    <!-- Optional Items -->
+    <em:creator>Thomas Geymayer</em:creator>
+    <em:description>Integrate Firefox into our hidden content visualization system.</em:description>
+    <em:homepageURL>hidden-content.caleydo.org</em:homepageURL>
 
-<!-- Optional Items -->
-<em:creator>Rahul Bansal</em:creator>
-<em:description>A Firefox toolbar with Google Search facility!</em:description>
-<em:homepageURL>http://www.devilsworkshop.org/</em:homepageURL>
-</Description></RDF>
+  </Description>
+</RDF>

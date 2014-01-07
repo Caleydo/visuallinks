@@ -134,6 +134,6 @@
     </groupbox>
   </prefpane>
   
-  <script type="application/x-javascript" src="chrome://mypl/content/throttle.js" />
-  <script type="application/x-javascript" src="chrome://mypl/content/preferences.js" />
+  <script type="application/x-javascript" src="chrome://hidden-content/content/throttle.js" />
+  <script type="application/x-javascript" src="chrome://hidden-content/content/preferences.js" />
 </prefwindow>

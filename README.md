@@ -5,7 +5,7 @@ Context Preserving Visual Links and Hidden Content Visualization
 
 ## Dependencies
 
-qt-sdk, (openCL -> optional)
+qt-sdk
 
 Install dependencies:
 
@@ -27,7 +27,7 @@ Create build directory and check for dependencies:
     $ mkdir build && cd build
     $ cmake ..
 
-Change settings (eg. disable GPU routing) with ccmake:
+Change settings (eg. enable building search widget) with ccmake:
 
     $ ccmake ..
 
@@ -35,10 +35,10 @@ Change settings (eg. disable GPU routing) with ccmake:
 
 ### VisLink
 
-Create a file named `werner.puff@gmx.net` inside your Firefox extension directory
+Create a file named `hidden-content@caleydo.org` inside your Firefox extension directory
 with a single line containing the full path to `<repo>/addons/firefox/src`
 
-(Alternatively just install <repo>/addons/firefox/src/src.xpi as addon. With this
+(Alternatively just install <repo>/addons/firefox/hidden-content.xpi as addon. With this
 method the addon will not be automatically updated.)
 
 After installing the add-on you will need to add the icon that hooks firefox up to the visual links application to the toolbar.

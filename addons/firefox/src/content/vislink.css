@@ -1,26 +1,26 @@
 #vislink
 {
-  list-style-image: url("chrome://mypl/content/icon-16.png");
+  list-style-image: url("chrome://hidden-content/content/icon-16.png");
 }
 
 #vislink.active
 {
-  list-style-image: url("chrome://mypl/content/icon-active-16.png");
+  list-style-image: url("chrome://hidden-content/content/icon-active-16.png");
 }
 
 #vislink.error
 {
-  list-style-image: url("chrome://mypl/content/icon-error-16.png");
+  list-style-image: url("chrome://hidden-content/content/icon-error-16.png");
 }
 
 #vislink-search-next
 {
-  list-style-image: url("chrome://mypl/content/search-next-16.png");
+  list-style-image: url("chrome://hidden-content/content/search-next-16.png");
 }
 
 #vislink-search-prev
 {
-  list-style-image: url("chrome://mypl/content/search-prev-16.png");
+  list-style-image: url("chrome://hidden-content/content/search-prev-16.png");
 }
 
 #vislink textbox

@@ -1,18 +1,18 @@
 <?xml version="1.0"?>                 
-<?xml-stylesheet href="chrome://mypl/content/vislink.css" type="text/css"?>
+<?xml-stylesheet href="chrome://hidden-content/content/vislink.css" type="text/css"?>
 
 <overlay id="Scrapper-Overlay" xmlns="http://www.mozilla.org/keymaster/gatekeeper/there.is.only.xul">
 
-<script type="application/x-javascript" src="chrome://mypl/content/grab.js" />
-<script type="application/x-javascript" src="chrome://mypl/content/Queue.js" />
-<script type="application/x-javascript" src="chrome://mypl/content/throttle.js" />
-<script type="application/x-javascript" src="chrome://mypl/content/myjs.js" />
+<script type="application/x-javascript" src="chrome://hidden-content/content/grab.js" />
+<script type="application/x-javascript" src="chrome://hidden-content/content/Queue.js" />
+<script type="application/x-javascript" src="chrome://hidden-content/content/throttle.js" />
+<script type="application/x-javascript" src="chrome://hidden-content/content/myjs.js" />
 
 <toolbarpalette id="BrowserToolbarPalette">
   <toolbarbutton type="menu-button"
 	             id="vislink"
-	             label="vislink"
-	             tooltiptext="VisLink"
+	             label="Hidden Content"
+	             tooltiptext="Visualize Hidden Content"
 	             oncommand="onVisLinkButton(event)"
 	             class="toolbarbutton-1 chromeclass-toolbar-additional vislink">
     <menupopup id="vislink_menu">
@@ -21,7 +21,7 @@
       </div>
       <menuseparator />
       <menuitem label="Abort all" oncommand="onAbort('', -1)"/>
-      <menuitem label="Settings" oncommand="window.open('chrome://mypl/content/preferences.xul', 'VisLinks - Settings', 'chrome');"/>
+      <menuitem label="Settings" oncommand="window.open('chrome://hidden-content/content/preferences.xul', 'VisLinks - Settings', 'chrome');"/>
       <menuseparator />
     </menupopup>
   </toolbarbutton>
