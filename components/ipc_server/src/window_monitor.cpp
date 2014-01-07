@@ -224,7 +224,7 @@ namespace LinksRouting
         title.remove(QRegExp("\\W")); // Title of Unity launchers has all non
                                       // alphanumeric characters removed
 
-        if( title == name || title == name + "MozillaFirefox" )
+        if( title == name || title == name + "MozillaFirefox" || title == name + "Aurora" )
         {
           match = true;
         }

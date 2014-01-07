@@ -441,7 +441,7 @@ namespace LinksRouting
         icon.push_back( pos + QPoint(ICON_SIZE,-ICON_SIZE) );
 
         LinkDescription::points_t link_points(1);
-        link_points[0] = pos += QPoint(ICON_SIZE, 0);
+        link_points[0] = pos += QPoint(0.7 * ICON_SIZE, 0);
         _minimized_icon->setLinkPoints(link_points);
 
         if( !_nodes.empty() )
