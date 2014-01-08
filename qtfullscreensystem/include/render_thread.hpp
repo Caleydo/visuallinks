@@ -31,6 +31,7 @@ namespace qtfullscreensystem
       void resize(int w, int h);
       void run();
       void stop();
+      void doFrame();
 
     private:
 

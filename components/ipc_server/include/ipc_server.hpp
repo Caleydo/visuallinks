@@ -46,7 +46,7 @@ namespace LinksRouting
 
     public:
 
-      IPCServer(QMutex* mutex, QWaitCondition* cond_data, QWidget* widget);
+      IPCServer(QMutex* mutex, QWaitCondition* cond_data);
       virtual ~IPCServer();
 
       void publishSlots(SlotCollector& slot_collector);

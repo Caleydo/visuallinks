@@ -42,4 +42,5 @@ void main()
   color.r *= min(250.0 / d, 1.0);
 #endif
   gl_FragColor = color;
+  gl_FragColor = link_color;
 }

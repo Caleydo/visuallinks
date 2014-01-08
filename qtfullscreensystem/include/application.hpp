@@ -9,15 +9,35 @@
 #ifndef _APPLICATION_HPP_
 #define _APPLICATION_HPP_
 
-#include "qglwidget.hpp"
+#include "Shader.hpp"
+#include "Window.hpp"
+
+#include "staticcore.h"
+#include "xmlconfig.h"
+#include "ipc_server.hpp"
+#include "cpurouting.h"
+#include "cpurouting-dijkstra.h"
+#include "dummyrouting.h"
+#if USE_GPU_ROUTING
+# include "glcostanalysis.h"
+# include "gpurouting.h"
+#endif
+#include "glrenderer.h"
 
 #include <QApplication>
+#include <QOffscreenSurface>
+#include <QOpenGLContext>
+#include <QOpenGLFramebufferObject>
 #include <QTimer>
 
 namespace qtfullscreensystem
 {
+  namespace LR = LinksRouting;
 
-  class Application: public QApplication
+  class Application:
+    public QApplication,
+    public LR::Component,
+    public LR::ComponentArguments
   {
     Q_OBJECT
 
@@ -26,13 +46,66 @@ namespace qtfullscreensystem
       Application(int& argc, char *argv[]);
       virtual ~Application();
 
-      virtual bool notify(QObject* receiver, QEvent* e);
+      void publishSlots(LR::SlotCollector& slots);
+      void subscribeSlots(LR::SlotSubscriber& slot_subscriber);
 
-    private:
+    signals:
+      void frame();
 
-      QTimer    _timer;
-      GLWidget  _gl_widget;
+    public slots:
 
+      void update();
+
+    protected:
+
+      // ----------
+      // Slots
+      // ----------
+
+      LR::slot_t<LR::SlotType::Image>::type             _slot_desktop;
+      LR::slot_t<Rect>::type                            _slot_desktop_rect;
+      LR::slot_t<LR::SlotType::MouseEvent>::type        _slot_mouse;
+      LR::slot_t<LR::SlotType::TextPopup>::type         _slot_popups;
+
+      // TODO make readonly
+      LR::slot_t<LR::SlotType::Image>::type             _subscribe_links,
+                                                        _subscribe_xray_fbo;
+      LR::slot_t<LR::SlotType::Image>::type             _subscribe_costmap;
+      LR::slot_t<LR::LinkDescription::LinkList>::type   _subscribe_routed_links;
+      LR::slot_t<LR::SlotType::CoveredOutline>::type    _subscribe_outlines;
+
+      // ----------
+      // Components
+      // ----------
+
+      LR::StaticCore            _core;
+      LR::XmlConfig             _config,
+                                _user_config;
+      LR::IPCServer             _server;
+      LR::CPURouting            _routing_cpu;
+      LR::Dijkstra::CPURouting  _routing_cpu_dijkstra;
+      LR::DummyRouting          _routing_dummy;
+#if USE_GPU_ROUTING
+      LR::GlCostAnalysis        _cost_analysis;
+      LR::GPURouting            _routing_gpu;
+#endif
+      LR::GlRenderer            _renderer;
+
+      // ----------
+      // Rendering
+      // ----------
+
+      QOffscreenSurface                         _offscreen_surface;
+      QOpenGLContext                            _gl_ctx;
+      std::unique_ptr<QOpenGLFramebufferObject> _fbo;
+      QImage                                    _fbo_image;
+      ShaderPtr                                 _shader_blend;
+
+      std::vector<WindowRef>    _windows;
+
+      // Locks/Mutex
+      QMutex            _mutex_slot_links;
+      QWaitCondition    _cond_render;
   };
 
 } // namespace qtfullscreensystem

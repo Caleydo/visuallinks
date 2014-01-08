@@ -47,16 +47,15 @@ namespace LinksRouting
 
   //----------------------------------------------------------------------------
   IPCServer::IPCServer( QMutex* mutex,
-                        QWaitCondition* cond_data,
-                        QWidget* widget ):
+                        QWaitCondition* cond_data ):
     Configurable("QtWebsocketServer"),
-    _window_monitor(widget, std::bind(&IPCServer::regionsChanged, this, _1)),
+    _window_monitor(std::bind(&IPCServer::regionsChanged, this, _1)),
     _mutex_slot_links(mutex),
     _cond_data_ready(cond_data),
     _dirty_flags(0),
     _interaction_handler(this)
   {
-    assert(widget);
+    //assert(widget);
     registerArg("DebugRegions", _debug_regions);
     registerArg("DebugFullPreview", _debug_full_preview_path);
     registerArg("PreviewWidth", _preview_width = 800);
@@ -734,6 +733,12 @@ namespace LinksRouting
                            request->second.zoom,
                            data.constData() + 2,
                            data.size() - 2 );
+
+    QImage img( (const uchar*)data.constData() + 2,
+                request->second.tile_size.x,
+                request->second.tile_size.y,
+                QImage::Format_ARGB32 );
+    img.save( QString("tile-%1-%2").arg(request->second.x).arg(request->second.y));
 
     dirtyRender();
   }

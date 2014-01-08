@@ -1,14 +1,18 @@
 # files
 set( HEADER_FILES
   include/application.hpp
-  include/qglwidget.hpp
+#  include/qglwidget.hpp
+  include/Shader.hpp
+  include/Window.hpp
 )
 
 set( SOURCE_FILES
   src/application.cpp
   src/main.cpp
-  src/qglwidget.cpp
-  src/render_thread.cpp
+#  src/qglwidget.cpp
+#  src/render_thread.cpp
+  src/Shader.cpp
+  src/Window.cpp
 )
 
 set( SHADER_FILES
@@ -57,10 +61,11 @@ include_directories(
 )
 
 add_executable(qtfullscreensystem ${HEADER_FILES} ${SOURCE_FILES} ${SHADER_FILES})
+use_components(qtfullscreensystem)
+qt5_use_modules(qtfullscreensystem Gui OpenGL Network)
 target_link_libraries( qtfullscreensystem
   ${OPENGL_gl_LIBRARY}
   ${ADDITIONAL_LIBS}
 )
-qt5_use_modules(qtfullscreensystem Gui OpenGL Network)
-use_components(qtfullscreensystem)
+
 runtime_files(qtfullscreensystem RUNTIME_FILES)

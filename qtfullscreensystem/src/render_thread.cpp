@@ -25,31 +25,7 @@ namespace qtfullscreensystem
     _do_render( false ),
     _do_resize( false )
   {
-    if( !QGLFormat::hasOpenGL() )
-      qFatal("OpenGL not supported!");
 
-    if( !QGLFramebufferObject::hasOpenGLFramebufferObjects() )
-      qFatal("OpenGL framebufferobjects not supported!");
-
-    if( !QGLPixelBuffer::hasOpenGLPbuffers() )
-      qFatal("OpenGL pbuffer not supported!");
-
-    QGLFormat format;
-    format.setAlpha(true);
-    _pbuffer =
-      QSharedPointer<QGLPixelBuffer>(new QGLPixelBuffer(QSize(w, h), format));
-
-    if( !_pbuffer->isValid() )
-      qFatal("Unable to create OpenGL context (not valid)");
-
-    qDebug
-    (
-      "Created pbuffer with OpenGL %d.%d",
-      _pbuffer->format().majorVersion(),
-      _pbuffer->format().minorVersion()
-    );
-
-    _pbuffer->context()->moveToThread(this);
   }
 
   //----------------------------------------------------------------------------
@@ -64,6 +40,33 @@ namespace qtfullscreensystem
   void RenderThread::run()
   {
     assert(_gl_widget);
+
+    //_gl_widget->getOpenGLContext()->makeCurrent(_pbuffer.data());
+    //qDebug() << _gl_widget->getOpenGLContext()->surface();
+
+    if( !QGLFormat::hasOpenGL() )
+      qFatal("OpenGL not supported!");
+
+    if( !QGLFramebufferObject::hasOpenGLFramebufferObjects() )
+      qFatal("OpenGL framebufferobjects not supported!");
+
+    if( !QGLPixelBuffer::hasOpenGLPbuffers() )
+      qFatal("OpenGL pbuffer not supported!");
+
+    QGLFormat format;
+    format.setAlpha(true);
+    _pbuffer =
+      QSharedPointer<QGLPixelBuffer>(new QGLPixelBuffer(QSize(_w, _h), format));
+
+    if( !_pbuffer->isValid() )
+      qFatal("Unable to create OpenGL context (not valid)");
+
+    qDebug
+    (
+      "Created pbuffer with OpenGL %d.%d",
+      _pbuffer->format().majorVersion(),
+      _pbuffer->format().minorVersion()
+    );
 
     _do_render = true;
 
@@ -85,14 +88,14 @@ namespace qtfullscreensystem
       }
 
 #ifdef USE_GPU_ROUTING
-      _gl_widget->render(0, _pbuffer.data());
+      _gl_widget->render(0);
       //std::cout << "done" << _pbuffer->doneCurrent() << std::endl;
       //_gl_widget->swapBuffers();
 
       PROFILE_LAP("* pass #0")
 #endif
 
-      _gl_widget->render(1, _pbuffer.data());
+      _gl_widget->render(1);
 
       PROFILE_LAP("* pass #1")
 
@@ -119,6 +122,50 @@ namespace qtfullscreensystem
   void RenderThread::stop()
   {
     _do_render = false;
+  }
+
+  //----------------------------------------------------------------------------
+  void RenderThread::doFrame()
+  {
+    assert(_gl_widget);
+
+    //_gl_widget->makeCurrent();
+    _pbuffer->makeCurrent();
+
+    PROFILE_START()
+
+    if( _do_resize )
+    {
+      glViewport(0,0,_w,_h);
+      //glOrtho(0, static_cast<float>(w)/h, 0, 1, -1.0, 1.0);
+      _do_resize = false;
+    }
+
+#ifdef USE_GPU_ROUTING
+    _gl_widget->render(0);
+    //std::cout << "done" << _pbuffer->doneCurrent() << std::endl;
+    //_gl_widget->swapBuffers();
+
+    PROFILE_LAP("* pass #0")
+#endif
+
+    _gl_widget->render(1);
+
+      PROFILE_LAP("* pass #1")
+
+#ifdef USE_GPU_ROUTING
+    //_gl_widget->swapBuffers();
+    //_gl_widget->doneCurrent();
+    msleep(10);
+    /*if( --screenshot_counter < 0 )
+    {*/
+      _gl_widget->captureScreen();
+      /*screenshot_counter = 5;
+    }*/
+#endif
+    PROFILE_LAP("* total")
+
+    _pbuffer->doneCurrent();
   }
 
 } // namespace qtfullscreensystem

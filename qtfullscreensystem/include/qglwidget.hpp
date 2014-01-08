@@ -25,7 +25,9 @@
 #include "glrenderer.h"
 
 #include <QMutex>
-#include <QGLWidget>
+#include <QOffscreenSurface>
+#include <QOpenGLContext>
+#include <QOpenGLFramebufferObject>
 #include <QGLFramebufferObject>
 #include <memory>
 
@@ -60,7 +62,7 @@ namespace qtfullscreensystem
       /**
        * Do actual render (To be called eg. by renderthread)
        */
-      void render(int pass, QGLPixelBuffer* pbuffer);
+      void render(int pass);
 
       /**
        * Start rendering thread
@@ -72,7 +74,13 @@ namespace qtfullscreensystem
        */
       void waitForData();
 
+      QOpenGLContext* getOpenGLContext() { return &_gl_ctx; }
+
       QImage _image;
+
+    public slots:
+
+      void waitForFrame();
 
     protected:
 
@@ -86,10 +94,14 @@ namespace qtfullscreensystem
       virtual void wheelEvent(QWheelEvent *event);
 
       void updateScreenShot( QPoint window_offset,
-                             QPoint window_end,
-                             QGLPixelBuffer* pbuffer );
+                             QPoint window_end );
 
     private:
+
+      QOffscreenSurface         _offscreen_surface;
+      QOpenGLContext            _gl_ctx;
+
+      std::unique_ptr<QOpenGLFramebufferObject> _fbo;
 
       QSharedPointer<RenderThread> _render_thread;
 

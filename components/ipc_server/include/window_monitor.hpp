@@ -99,8 +99,7 @@ namespace LinksRouting
        * @param own_id  id of own window where links are renderd (will be
        *                ignored)
        */
-      WindowMonitor( const QWidget* own_widget,
-                     RegionsCallback cb_regions_changed );
+      WindowMonitor(RegionsCallback cb_regions_changed);
 
 
       /**
@@ -116,7 +115,6 @@ namespace LinksRouting
 
     protected:
 
-      const QWidget *_own_widget;
       QRect          _desktop_rect;
       WindowInfos    _regions,
 		             _last_regions;

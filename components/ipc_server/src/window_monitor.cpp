@@ -14,6 +14,7 @@
 #include <QDesktopWidget>
 #include <QDebug>
 #include <QProcess>
+#include <QWindow>
 
 namespace LinksRouting
 {
@@ -121,9 +122,7 @@ namespace LinksRouting
   }
 
   //----------------------------------------------------------------------------
-  WindowMonitor::WindowMonitor( const QWidget* own_widget,
-                                RegionsCallback cb_regions_changed ):
-    _own_widget(own_widget),
+  WindowMonitor::WindowMonitor(RegionsCallback cb_regions_changed):
 	_timeout(-1),
 	_cb_regions_changed(cb_regions_changed),
 	_launcher_size(0)
@@ -148,12 +147,15 @@ namespace LinksRouting
   WindowInfos WindowMonitor::getWindowInfos() const
   {
     WId maximized_wid = 0;
+    std::vector<WId> own_wids;
+    for(QWindow const* w: QGuiApplication::topLevelWindows())
+      own_wids.push_back(w->winId());
 
     // Now get the actual list of windows
     WindowInfos regions;
     foreach(WId id, QxtWindowSystem::windows())
     {
-      if( id == _own_widget->winId() )
+      if( std::find(own_wids.begin(), own_wids.end(), id) != own_wids.end() )
         continue;
 
       QRect region = QxtWindowSystem::windowGeometry(id);

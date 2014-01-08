@@ -27,8 +27,8 @@
 #include <QStandardPaths>
 #include <QStaticText>
 
+#include <QScreen>
 #include <QGLShader>
-#include <QGLPixelBuffer>
 
 #define LOG_ENTER_FUNC() qDebug() << __FUNCTION__
 
@@ -140,7 +140,7 @@ GLWidget::GLWidget(QWidget* parent):
     //--------------------------------
 
     // fullscreen
-    setGeometry( QApplication::desktop()->screen(-1)->geometry() );
+    setGeometry( QGuiApplication::primaryScreen()->availableVirtualGeometry() );
 
     // don't allow user to change the window size
     setFixedSize( size() );
@@ -149,21 +149,24 @@ GLWidget::GLWidget(QWidget* parent):
     setWindowFlags( Qt::WindowStaysOnTopHint
                   | Qt::FramelessWindowHint
                   | Qt::MSWindowsOwnDC
+                  | Qt::WindowTransparentForInput
                   //| Qt::X11BypassWindowManagerHint
                   );
     setAttribute(Qt::WA_ShowWithoutActivating);
-#ifdef USE_DESKTOP_BLEND
     setAttribute(Qt::WA_TranslucentBackground);
+#ifdef USE_DESKTOP_BLEND1
+    //setAttribute(Qt::WA_TranslucentBackground);
 #else
-    setWindowOpacity(0.5);
+    //setWindowOpacity(0.5);
 #endif
 
+#if 0
 #if defined(WIN32) || defined(_WIN32)
     setMask(QRegion(size().width() - 2, size().height() - 2, 1, 1));
 #else
     setMask(QRegion(-1, -1, 1, 1));
 #endif
-
+#endif
     setMouseTracking(true);
 
     //--------------------------------
@@ -205,8 +208,26 @@ GLWidget::GLWidget(QWidget* parent):
     LinksRouting::SlotSubscriber subscriber = _core.getSlotSubscriber();
     subscribeSlots(subscriber);
 
-    _render_thread =
-      QSharedPointer<RenderThread>(new RenderThread(this, width(), height()));
+    QSurfaceFormat fmt;
+    fmt.setRenderableType(QSurfaceFormat::RenderableType::OpenGL);
+    fmt.setProfile(QSurfaceFormat::OpenGLContextProfile::CoreProfile);
+    fmt.setAlphaBufferSize(8);
+
+    _offscreen_surface.setFormat(fmt);
+    _offscreen_surface.setScreen( QGuiApplication::primaryScreen() );
+    _offscreen_surface.create();
+
+    _gl_ctx.setFormat(fmt);
+    if( !_gl_ctx.create() )
+      qFatal("Failed to create OpenGL context.");
+    if( !_gl_ctx.format().hasAlpha() )
+      qFatal("Failed to enable alpha blending.");
+    if( !_gl_ctx.makeCurrent(&_offscreen_surface) )
+      qFatal("Could not activate OpenGL context.");
+
+//    _render_thread =
+//      QSharedPointer<RenderThread>(new RenderThread(this, width(), height()));
+//    _gl_ctx->moveToThread(_render_thread.data());
 
     //std::cout << "Is virtual desktop: "
     //          << QApplication::desktop()->isVirtualDesktop()
@@ -277,6 +298,9 @@ GLWidget::GLWidget(QWidget* parent):
       qFatal("Unable to init Glew");
 #endif
 
+
+    _fbo.reset( new QOpenGLFramebufferObject(size()) );
+
     if( !_debug_desktop_image.empty() )
     {
 //      LOG_INFO("Using image instead of screenshot: " << _debug_desktop_image);
@@ -320,11 +344,13 @@ GLWidget::GLWidget(QWidget* parent):
     glEnable(GL_BLEND);
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 
+    glViewport(0,0, width(), height());
+
     _core.initGL();
   }
 
   //----------------------------------------------------------------------------
-  void GLWidget::render(int pass, QGLPixelBuffer* pbuffer)
+  void GLWidget::render(int pass)
   {
     PROFILE_START()
 
@@ -365,6 +391,16 @@ GLWidget::GLWidget(QWidget* parent):
     }
 
     PROFILE_RESULT("  core")
+
+    if( !_fbo->bind() )
+      qFatal("failed to bind FBO");
+    //render(1);
+
+    glClearColor(0,0,0,0);
+
+//    glMatrixMode(GL_PROJECTION);
+//    glLoadIdentity();
+//    glOrtho(0, width(), height(), 0, 0, 1);
 
     // normal draw...
     glClear(GL_COLOR_BUFFER_BIT);
@@ -425,11 +461,14 @@ GLWidget::GLWidget(QWidget* parent):
 
     static int counter = 0;
 
+    if( !_fbo->release() )
+      qFatal("failed to release FBO");
+
     glFinish();
 
     PROFILE_RESULT("  GL wait")
 
-    QImage links = pbuffer->toImage();
+//    QImage links = pbuffer->toImage();
     //--------------------------------------------------------------------------
     auto writeTexture = []
     (
@@ -455,21 +494,22 @@ GLWidget::GLWidget(QWidget* parent):
 
     //glPopAttrib();
 
+#if 0
     //links.save(QString("fbo%1.png").arg(counter));
     if( old_flags & MASK_DIRTY )
     {
       if( _subscribe_links->isValid() )
       {
         setMask( QRegion(0, 0, size().width(), size().height()) );
-        //writeTexture(_subscribe_links, QString("links%1.png").arg(counter));
-//        QBitmap mask = QBitmap::fromImage( links.createMaskFromColor( qRgba(0,0,0, 0) ) );
-//        setMask
-//        (
-//          /*_subscribe_xray->_data->img
-//          ? QRegion(mask).unite(_subscribe_xray->_data->region.toQRect())
-//          :*/ mask
-//        );
-  //      mask.save(QString("mask%1.png").arg(counter));
+        writeTexture(_subscribe_links, QString("links%1.png").arg(counter));
+        QBitmap mask = QBitmap::fromImage( links.createMaskFromColor( qRgba(0,0,0, 0) ) );
+        setMask
+        (
+          /*_subscribe_xray->_data->img
+          ? QRegion(mask).unite(_subscribe_xray->_data->region.toQRect())
+          :*/ mask
+        );
+        mask.save(QString("mask%1.png").arg(counter));
       }
       else
 #if defined(WIN32) || defined(_WIN32)
@@ -477,14 +517,13 @@ GLWidget::GLWidget(QWidget* parent):
 #else
         setMask(QRegion(-1, -1, 1, 1));
 #endif
-
       PROFILE_RESULT("  updateMask")
     }
-
+#endif
     ++counter;
-    _image = links;
+    //_image = links;
 
-    update();
+    //update();
 
     PROFILE_RESULT("  update")
 	/*
@@ -497,21 +536,33 @@ GLWidget::GLWidget(QWidget* parent):
   //----------------------------------------------------------------------------
   void GLWidget::startRender()
   {
-    _render_thread->start();
+    //_render_thread->start();
   }
 
   //----------------------------------------------------------------------------
   void GLWidget::waitForData()
   {
     QMutexLocker lock(&_mutex_slot_links);
-    _cond_render.wait(&_mutex_slot_links, 200);
+    _cond_render.wait(&_mutex_slot_links, 100);
+  }
+
+  //----------------------------------------------------------------------------
+  void GLWidget::waitForFrame()
+  {
+    waitForData();
+    update();
   }
 
   //----------------------------------------------------------------------------
   void GLWidget::paintEvent(QPaintEvent *event)
   {
+    if( !_fbo )
+      setupGL();
+
+    render(1);
+
     QPainter painter(this);
-    painter.drawImage(QPoint(0,0), _image);
+    painter.drawImage(QPoint(0,0), _fbo->toImage());
 
     for( auto popup = _slot_popups->_data->popups.begin();
               popup != _slot_popups->_data->popups.end();
@@ -548,6 +599,8 @@ GLWidget::GLWidget(QWidget* parent):
                         title
                       );
     }
+
+    QTimer::singleShot(0, this, SLOT(waitForFrame()));
   }
 
   //----------------------------------------------------------------------------
@@ -559,7 +612,7 @@ GLWidget::GLWidget(QWidget* parent):
     LOG_ENTER_FUNC() << "(" << w << "|" << h << ")"
                      << static_cast<float>(w)/h << ":" << 1;
 
-    _render_thread->resize(w, h);
+    //_render_thread->resize(w, h);
   }
 
   //----------------------------------------------------------------------------
@@ -574,10 +627,10 @@ GLWidget::GLWidget(QWidget* parent):
     if(    window_offset != _window_offset
         || window_end != _window_end )
     {
-//      LOG_ENTER_FUNC() << "window frame="
-//                       << window_offset
-//                       <<" <-> "
-//                       <<  window_end;
+      LOG_ENTER_FUNC() << "window frame="
+                       << window_offset
+                       <<" <-> "
+                       <<  window_end;
 
       _window_offset = window_offset;
       _window_end = window_end;
@@ -591,7 +644,7 @@ GLWidget::GLWidget(QWidget* parent):
       // Moves the window to the top- and leftmost position. As long as the
       // offset changes either the user is moving the window or the window is
       // being created.
-      move( QPoint(0,0) );
+      move( QPoint(49,24) );
     }
   }
   
@@ -654,8 +707,7 @@ GLWidget::GLWidget(QWidget* parent):
 
   //----------------------------------------------------------------------------
   void GLWidget::updateScreenShot( QPoint window_offset,
-                                   QPoint window_end,
-                                   QGLPixelBuffer* pbuffer )
+                                   QPoint window_end )
   {
     if( _screenshot.isNull() || !_fbo_desktop[0] || !_fbo_desktop[1] )
       return;
@@ -670,7 +722,7 @@ GLWidget::GLWidget(QWidget* parent):
     shader->bind();
 
     glActiveTexture(GL_TEXTURE0);
-    GLuint tid = pbuffer->bindTexture(_screenshot, GL_TEXTURE_2D);//, GL_RGBA, QGLContext::NoBindOption);
+    GLuint tid;// = pbuffer->bindTexture(_screenshot, GL_TEXTURE_2D);//, GL_RGBA, QGLContext::NoBindOption);
 
     glActiveTexture(GL_TEXTURE1);
     glBindTexture(GL_TEXTURE_2D, _subscribe_links->_data->id);

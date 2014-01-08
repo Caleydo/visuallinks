@@ -108,6 +108,7 @@ add_component(routing_cpu_dijkstra)
 add_component(routing_dummy)
 add_component(routing_gpu off)
 #add_component(transparencyanalysis off)
+
 #message("comp inc:\n${COMPONENTS_INC_DIR} \ncomp libs:\n${COMPONENTS_LIBS}\ndepeping files:\n${COMPONENTS_DEPENDING_FILES}")
 
 # OpenCL GPU routing
