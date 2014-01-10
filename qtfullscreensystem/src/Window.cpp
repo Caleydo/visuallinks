@@ -1,5 +1,5 @@
 /*
- * Window.cpp
+ * RenderWindow.cpp
  *
  *  Created on: Oct 29, 2013
  *      Author: tom
@@ -19,11 +19,12 @@
 
 namespace qtfullscreensystem
 {
-
   //----------------------------------------------------------------------------
-  Window::Window(const QRect& geometry):
+  RenderWindow::RenderWindow(const QRect& geometry):
     _geometry(geometry),
-    _img(nullptr)
+    _img(nullptr),
+    _do_drag(false),
+    _last_mouse_pos(0,0)
   {
     qDebug() << "new window" << geometry;
     setGeometry(geometry);
@@ -48,7 +49,14 @@ namespace qtfullscreensystem
   }
 
   //----------------------------------------------------------------------------
-  void Window::setImage(QImage const* img)
+  void RenderWindow::subscribeSlots(LR::SlotSubscriber& slot_subscriber)
+  {
+    _subscribe_mouse =
+      slot_subscriber.getSlot<LR::SlotType::MouseEvent>("/mouse");
+  }
+
+  //----------------------------------------------------------------------------
+  void RenderWindow::setImage(QImage const* img)
   {
     _img = img;
   }
@@ -84,15 +92,14 @@ namespace qtfullscreensystem
   }
 
   //----------------------------------------------------------------------------
-  void Window::moveEvent(QMoveEvent *event)
+  void RenderWindow::moveEvent(QMoveEvent *event)
   {
-    // X11: Window decorators add decoration after creating the window.
+    // X11: RenderWindow decorators add decoration after creating the window.
     // Win7: may not allow a window on top of the task bar
     //So we need to get the new frame of the window before drawing...
 //    QPoint window_offset = mapToGlobal(QPoint());
 //    QPoint window_end = mapToGlobal(QPoint(width(), height()));
 
-    qDebug() << "move" << geometry();
     _geometry.setTopLeft(pos());
 
 //    if(    window_offset != _window_offset
@@ -120,20 +127,21 @@ namespace qtfullscreensystem
   }
 
   //----------------------------------------------------------------------------
-  void Window::paintEvent(QPaintEvent* e)
+  void RenderWindow::paintEvent(QPaintEvent* e)
   {
     QPainter painter(this);
-    QRect reg = _geometry.translated(-QGuiApplication::primaryScreen()->availableVirtualGeometry().topLeft());
+    QRect reg = _geometry.translated(
+      -QGuiApplication::primaryScreen()->availableVirtualGeometry().topLeft()
+    );
     //qDebug() << "paint" << geometry() << _geometry << reg;
 
     const QBitmap& mask = createMaskFromColor(*_img, qRgba(0,0,0, 0), reg);
     //mask.save(QString("mask-%1-%2.png").arg((uint64_t)this).arg(counter++));
 
     setMask(mask);
-    painter.setBrush( QColor(255,127,127,127) );
-    painter.setPen( QColor(127, 255, 127,64) );
-
-    painter.drawRect(0,0,_geometry.width(),_geometry.height());
+    painter.drawImage( QRectF(0, 0, -1, -1),
+                       *_img,
+                       QRectF(reg) );
 #if 0
     static size_t x = 0,
                   y = 0;
@@ -165,9 +173,47 @@ namespace qtfullscreensystem
   }
 
   //----------------------------------------------------------------------------
-  void Window::mouseMoveEvent(QMouseEvent *e)
+  void RenderWindow::mouseReleaseEvent(QMouseEvent *event)
   {
-    qDebug() << "mouse" << e;
+    if( _do_drag )
+      _do_drag = false;
+    else
+      _subscribe_mouse->_data->triggerClick(event->globalX(), event->globalY());
+  }
+
+  //----------------------------------------------------------------------------
+  void RenderWindow::mouseMoveEvent(QMouseEvent *event)
+  {
+    auto& mouse = *_subscribe_mouse->_data;
+    qDebug() << "mouse" << event;
+
+    if( !event->buttons() )
+      mouse.triggerMove(event->globalX(), event->globalY());
+    else if( event->buttons() & Qt::LeftButton )
+    {
+      float2 pos(event->globalX(), event->globalY());
+      if( _do_drag )
+        mouse.triggerDrag(pos - _last_mouse_pos);
+      else
+        _do_drag = true;
+      _last_mouse_pos = pos;
+    }
+  }
+
+  //----------------------------------------------------------------------------
+  void RenderWindow::leaveEvent(QEvent *event)
+  {
+    _subscribe_mouse->_data->triggerLeave();
+  }
+
+  //----------------------------------------------------------------------------
+  void RenderWindow::wheelEvent(QWheelEvent *event)
+  {
+    _subscribe_mouse->_data->triggerScroll(
+      event->delta(),
+      float2(event->globalX(), event->globalY()),
+      event->modifiers()
+    );
   }
 
 } // namespace qtfullscreensystem

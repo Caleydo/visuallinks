@@ -85,8 +85,6 @@ namespace qtfullscreensystem
 //    registerArg("DebugDesktopImage", _debug_desktop_image);
 //    registerArg("DumpScreenshot", _dump_screenshot = 0);
 
-    _core.init();
-
     QSurfaceFormat fmt;
     fmt.setRenderableType(QSurfaceFormat::RenderableType::OpenGL);
     fmt.setProfile(QSurfaceFormat::OpenGLContextProfile::CoreProfile);
@@ -104,11 +102,13 @@ namespace qtfullscreensystem
 
     for(QScreen* s: QGuiApplication::screens())
     {
-      auto w = std::make_shared<Window>(s->availableGeometry());
+      auto w = std::make_shared<RenderWindow>(s->availableGeometry());
       w->setImage(&_fbo_image);
       w->show();
       _windows.push_back(w);
     }
+
+    _core.init();
 
     QTimer *timer = new QTimer(this);
     connect(timer, SIGNAL(timeout()), this, SLOT(update()));
@@ -155,6 +155,9 @@ namespace qtfullscreensystem
       slot_subscriber.getSlot<LR::LinkDescription::LinkList>("/links");
     _subscribe_outlines =
       slot_subscriber.getSlot<LR::SlotType::CoveredOutline>("/covered-outlines");
+
+    for(auto& w: _windows)
+      w->subscribeSlots(slot_subscriber);
   }
 
   //----------------------------------------------------------------------------
