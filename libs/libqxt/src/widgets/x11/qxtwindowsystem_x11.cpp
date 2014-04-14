@@ -133,14 +133,9 @@ bool QxtWindowSystem::isVisible(WId wid)
   Display* display = QX11Info::display();
   bool hidden = false;
 
-  static Atom wm_state = 0;
-  if( !wm_state )
-    wm_state = XInternAtom(display, "_NET_WM_STATE", True);
-  static Atom wm_hidden = 0;
-  if( !wm_hidden )
-    wm_hidden = XInternAtom(display, "_NET_WM_STATE_HIDDEN", True);
+  static Atom wm_state  = XInternAtom(display, "_NET_WM_STATE", True),
+              wm_hidden = XInternAtom(display, "_NET_WM_STATE_HIDDEN", True);
 
-  WindowList res;
   Atom type = 0;
   int format = 0;
   uchar* data = 0;
