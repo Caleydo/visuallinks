@@ -96,7 +96,7 @@ add_component(renderer_gl)
 add_component(routing_cpu)
 add_component(routing_cpu_dijkstra)
 add_component(routing_dummy)
-#add_component(routing_gpu off)
+add_component(routing_gpu off)
 #add_component(transparencyanalysis off)
 #message("comp inc:\n${COMPONENTS_INC_DIR} \ncomp libs:\n${COMPONENTS_LIBS}\ndepeping files:\n${COMPONENTS_DEPENDING_FILES}")
 
@@ -110,10 +110,6 @@ message("--------------------")
 #add default applications
 add_subdir_option(qtfullscreensystem QTFullscreenSystem)
 add_subdir_option(qtsearch QtSearch FALSE)
-add_subdir_option(qt-ncc QtNormalizedCrossCorrelationTest FALSE EXCLUDE_FROM_ALL)
-add_subdir_option(qt-ocr QtOCRTest FALSE EXCLUDE_FROM_ALL)
-#add_subdirectory(${PROJROOT}/singleimagesystem ${BIN_DIR}/singleimagesystem)
-
 
 #add interface files to the project
 add_custom_target(InterfaceFiles SOURCES ${INTERFACE_FILES})
