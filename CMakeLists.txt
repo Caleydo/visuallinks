@@ -1,5 +1,5 @@
 project(LinksSystem)
-cmake_minimum_required(VERSION 2.6)
+cmake_minimum_required(VERSION 2.8.8)
 
 set(PROJROOT ${CMAKE_CURRENT_SOURCE_DIR})
 set(LINKS_INCLUDE_DIR ${PROJROOT}/include)
@@ -24,6 +24,7 @@ set(CMAKE_AUTOMOC ON)
 find_package(Qt5Widgets REQUIRED)
 find_package(Qt5Script REQUIRED)
 find_package(Qt5OpenGL REQUIRED)
+find_package(Qt5WebSockets REQUIRED)
 
 # ------------------------------------------------------------------------------
 # Warning when using in-source build
@@ -89,11 +90,9 @@ endif()
 add_subdirectory(${COMPONENTS_DIR}/tools)
 include_directories(
   ${COMPONENTS_DIR}/tools
-  libs/qtwebsocket/QtWebsocket
   libs/libqxt/include
 )
 
-add_subdirectory(libs/qtwebsocket/QtWebsocket)
 add_subdirectory(libs/libqxt)
 
 #TODO we should do that in a better way, so we can get the include directories and libs to link out of the subdirectory..

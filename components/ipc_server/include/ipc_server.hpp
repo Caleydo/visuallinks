@@ -11,6 +11,7 @@
 
 #include <QtCore>
 #include <QtOpenGL/qgl.h>
+#include <QWebSocketServer>
 #include <qwindowdefs.h>
 
 #include "common/componentarguments.h"
@@ -22,9 +23,6 @@
 #include "slotdata/polygon.hpp"
 #include "slotdata/text_popup.hpp"
 #include "window_monitor.hpp"
-
-#include "QWsServer.h"
-#include "QWsSocket.h"
 
 #include "datatypes.h"
 #include <stdint.h>
@@ -100,12 +98,11 @@ namespace LinksRouting
       void onClientConnection();
       void onTextReceived(QString data);
       void onBinaryReceived(QByteArray data);
-      void onPong(quint64 elapsedTime);
       void onClientDisconnection();
 
     protected:
 
-      typedef std::map<QWsSocket*, std::unique_ptr<ClientInfo>> ClientInfos;
+      typedef std::map<QWebSocket*, std::unique_ptr<ClientInfo>> ClientInfos;
 
       void onInitiate( LinkDescription::LinkList::iterator& link,
                        const QString& id,
@@ -115,7 +112,7 @@ namespace LinksRouting
 
       void regionsChanged(const WindowRegions& regions);
       ClientInfos::iterator findClientInfo(WId wid);
-      QWsSocket* getSocketByWId(WId wid);
+      QWebSocket* getSocketByWId(WId wid);
 
       bool updateHedge( const WindowRegions& regions,
                         LinkDescription::HyperEdge* hedge );
@@ -130,12 +127,12 @@ namespace LinksRouting
       void onDrag(const float2& delta);
 
       typedef std::function<bool( SlotType::TextPopup::Popup&,
-                                  QWsSocket&,
+                                  QWebSocket&,
                                   ClientInfo& )> popup_callback_t;
       bool foreachPopup(const popup_callback_t& cb);
 
       typedef std::function<bool( SlotType::XRayPopup::HoverRect&,
-                                  QWsSocket&,
+                                  QWebSocket&,
                                   ClientInfo& )> preview_callback_t;
       bool foreachPreview(const preview_callback_t& cb);
 
@@ -144,7 +141,7 @@ namespace LinksRouting
 
     private:
 
-      QWsServer          *_server;
+      QWebSocketServer   *_server;
       ClientInfos         _clients;
       WindowMonitor       _window_monitor;
 
@@ -202,7 +199,7 @@ namespace LinksRouting
 
         struct TileRequest
         {
-          QWsSocket* socket;
+          QWebSocket* socket;
           HierarchicTileMapWeakPtr tile_map;
           int zoom;
           size_t x, y;
@@ -216,7 +213,7 @@ namespace LinksRouting
         int           _new_request;
 
         InteractionHandler(IPCServer* server);
-        bool updateRegion( QWsSocket* socket,
+        bool updateRegion( QWebSocket* socket,
                            SlotType::TextPopup::Popup& popup,
                            float2 center = float2(-9999, -9999),
                            float2 rel_pos = float2() );
@@ -224,7 +221,7 @@ namespace LinksRouting
 
         protected:
           bool updateTileMap( const HierarchicTileMapPtr& tile_map,
-                              QWsSocket* socket,
+                              QWebSocket* socket,
                               const Rect& rect,
                               int zoom );
       } _interaction_handler;

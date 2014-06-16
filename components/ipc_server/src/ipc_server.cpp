@@ -12,6 +12,7 @@
 #include "JSONParser.h"
 
 #include <QMutex>
+#include <QWebSocket>
 
 #include <algorithm>
 #include <map>
@@ -125,16 +126,21 @@ namespace LinksRouting
   void IPCServer::init()
   {
     int port = 4487;
-    _server = new QWsServer(this);
+    _server = new QWebSocketServer(
+      QStringLiteral("Hidden Content Server"),
+      QWebSocketServer::NonSecureMode,
+      this
+    );
     if( !_server->listen(QHostAddress::Any, port) )
     {
       LOG_ERROR("Failed to start WebSocket server on port " << port << ": "
                 << _server->errorString() );
+      return;
     }
-    else
-      LOG_INFO("WebSocket server listening on port " << port);
 
-    connect(_server, SIGNAL(newConnection()), this, SLOT(onClientConnection()));
+    LOG_INFO("WebSocket server listening on port " << port);
+    connect( _server, &QWebSocketServer::newConnection,
+             this, &IPCServer::onClientConnection );
   }
 
   //----------------------------------------------------------------------------
@@ -189,7 +195,7 @@ namespace LinksRouting
         src.pos.x += tile_map->margin_left;
 
         std::cout << "request tile " << src.toString(true) << std::endl;
-        req->second.socket->write(QString(
+        req->second.socket->sendTextMessage(QString(
         "{"
           "\"task\": \"GET\","
           "\"id\": \"preview-tile\","
@@ -232,7 +238,7 @@ namespace LinksRouting
 
     foreachPopup
     (
-      [&](SlotType::TextPopup::Popup& popup, QWsSocket&, ClientInfo&) -> bool
+      [&](SlotType::TextPopup::Popup& popup, QWebSocket&, ClientInfo&) -> bool
       {
         if( popup.node )
         {
@@ -250,7 +256,7 @@ namespace LinksRouting
     Rect preview_region;
     foreachPreview
     (
-      [&](SlotType::XRayPopup::HoverRect& preview, QWsSocket&, ClientInfo&)
+      [&](SlotType::XRayPopup::HoverRect& preview, QWebSocket&, ClientInfo&)
          -> bool
       {
         updatePopup(preview);
@@ -429,25 +435,22 @@ namespace LinksRouting
   //----------------------------------------------------------------------------
   void IPCServer::onClientConnection()
   {
-    QWsSocket* client_socket = _server->nextPendingConnection();
-    QObject* client_object = qobject_cast<QObject*>(client_socket);
+    QWebSocket* client = _server->nextPendingConnection();
 
-    connect(client_object, SIGNAL(frameReceived(QString)), this, SLOT(onTextReceived(QString)));
-    connect(client_object, SIGNAL(frameReceived(QByteArray)), this, SLOT(onBinaryReceived(QByteArray)));
-    connect(client_object, SIGNAL(disconnected()), this, SLOT(onClientDisconnection()));
-    connect(client_object, SIGNAL(pong(quint64)), this, SLOT(onPong(quint64)));
+    connect(client, &QWebSocket::textMessageReceived, this, &IPCServer::onTextReceived);
+    connect(client, &QWebSocket::binaryMessageReceived, this, &IPCServer::onBinaryReceived);
+    connect(client, &QWebSocket::disconnected, this, &IPCServer::onClientDisconnection);
 
-    _clients[ client_socket ].reset(new ClientInfo(this));
+    _clients[ client ].reset(new ClientInfo(this));
 
-    LOG_INFO(   "Client connected: "
-             << client_socket->peerAddress().toString()
-             << ":" << client_socket->peerPort() );
+    LOG_INFO( "Client connected: " << client->peerAddress().toString()
+                                   << ":" << client->peerPort() );
   }
 
   //----------------------------------------------------------------------------
   void IPCServer::onTextReceived(QString data)
   {
-    auto client = _clients.find(qobject_cast<QWsSocket*>(sender()));
+    auto client = _clients.find(qobject_cast<QWebSocket*>(sender()));
     if( client == _clients.end() )
     {
       LOG_WARN("Received message from unknown client: " << data);
@@ -545,7 +548,7 @@ namespace LinksRouting
               + "\"";
         }
 
-        client->first->write
+        client->first->sendTextMessage
         ("{"
             "\"task\": \"GET-FOUND\","
             "\"id\": \"" + id.replace('"', "\\\"") + "\","
@@ -663,7 +666,7 @@ namespace LinksRouting
 
         for(auto socket = _clients.begin(); socket != _clients.end(); ++socket)
           if( sender() != socket->first )
-            socket->first->write(data);
+            socket->first->sendTextMessage(data);
       }
       else
       {
@@ -744,15 +747,9 @@ namespace LinksRouting
   }
 
   //----------------------------------------------------------------------------
-  void IPCServer::onPong(quint64 elapsedTime)
-  {
-
-  }
-
-  //----------------------------------------------------------------------------
   void IPCServer::onClientDisconnection()
   {
-    QWsSocket * socket = qobject_cast<QWsSocket*>(sender());
+    QWebSocket * socket = qobject_cast<QWebSocket*>(sender());
     if( !socket )
       return;
 
@@ -839,7 +836,7 @@ namespace LinksRouting
     );
 
     for(auto socket = _clients.begin(); socket != _clients.end(); ++socket)
-      socket->first->write(request);
+      socket->first->sendTextMessage(request);
   }
 
   //----------------------------------------------------------------------------
@@ -1065,7 +1062,7 @@ namespace LinksRouting
   }
 
   //----------------------------------------------------------------------------
-  QWsSocket* IPCServer::getSocketByWId(WId wid)
+  QWebSocket* IPCServer::getSocketByWId(WId wid)
   {
     auto client = findClientInfo(wid);
     (
@@ -1175,7 +1172,7 @@ namespace LinksRouting
     QMutexLocker lock_links(_mutex_slot_links);
 
     bool changed = foreachPopup([&]( SlotType::TextPopup::Popup& popup,
-                                     QWsSocket& socket,
+                                     QWebSocket& socket,
                                      ClientInfo& client_info ) -> bool
     {
       if( popup.region.contains(x, y) )
@@ -1214,7 +1211,7 @@ namespace LinksRouting
         }
       }
 
-      socket.write(QString(
+      socket.sendTextMessage(QString(
       "{"
         "\"task\": \"SET\","
         "\"id\": \"scroll-y\","
@@ -1225,7 +1222,7 @@ namespace LinksRouting
     });
 
     changed |= foreachPreview([&]( SlotType::XRayPopup::HoverRect& preview,
-                                   QWsSocket& socket,
+                                   QWebSocket& socket,
                                    ClientInfo& client_info ) -> bool
     {
       float2 offset = preview.node->getParent()->get<float2>("screen-offset");
@@ -1266,7 +1263,7 @@ namespace LinksRouting
 
       scroll_y -= client_info.scroll_region.top();
 
-      socket.write(QString(
+      socket.sendTextMessage(QString(
         "{"
           "\"task\": \"SET\","
           "\"id\": \"scroll-y\","
@@ -1316,7 +1313,7 @@ namespace LinksRouting
     bool popup_visible = false;
     SlotType::TextPopup::Popup* hide_popup = nullptr;
     bool changed = foreachPopup([&]( SlotType::TextPopup::Popup& popup,
-                                     QWsSocket& socket,
+                                     QWebSocket& socket,
                                      ClientInfo& client_info ) -> bool
     {
       auto& reg = popup.hover_region;
@@ -1359,7 +1356,7 @@ namespace LinksRouting
 
     bool preview_visible = false;
     changed |= foreachPreview([&]( SlotType::XRayPopup::HoverRect& preview,
-                                   QWsSocket& socket,
+                                   QWebSocket& socket,
                                    ClientInfo& client_info ) -> bool
     {
       auto const& p = preview.node->getParent();
@@ -1409,7 +1406,7 @@ namespace LinksRouting
                          / static_cast<float>(_preview_height);
 
     if( foreachPopup([&]( SlotType::TextPopup::Popup& popup,
-                      QWsSocket& socket,
+                      QWebSocket& socket,
                       ClientInfo& client_info ) -> bool
     {
       if( !popup.hover_region.isVisible() )
@@ -1478,7 +1475,7 @@ namespace LinksRouting
                          / static_cast<float>(_preview_height);
 
     if( foreachPopup([&]( SlotType::TextPopup::Popup& popup,
-                          QWsSocket& socket,
+                          QWebSocket& socket,
                           ClientInfo& client_info ) -> bool
     {
       if( !popup.hover_region.isVisible() )
@@ -1511,7 +1508,7 @@ namespace LinksRouting
         continue;
       }
 
-      QWsSocket* client_socket = static_cast<QWsSocket*>(popup->client_socket);
+      QWebSocket* client_socket = static_cast<QWebSocket*>(popup->client_socket);
       ClientInfos::iterator client = _clients.find(client_socket);
 
       if( client == _clients.end() )
@@ -1562,7 +1559,7 @@ namespace LinksRouting
         continue;
       }
 
-      QWsSocket* client_socket = static_cast<QWsSocket*>(preview->client_socket);
+      QWebSocket* client_socket = static_cast<QWebSocket*>(preview->client_socket);
       ClientInfos::iterator client = _clients.find(client_socket);
 
       if( client == _clients.end() )
@@ -1630,7 +1627,7 @@ namespace LinksRouting
 
   //----------------------------------------------------------------------------
   bool IPCServer::InteractionHandler::updateRegion(
-    QWsSocket* socket,
+    QWebSocket* socket,
     SlotType::TextPopup::Popup& popup,
     float2 center,
     float2 rel_pos )
@@ -1697,7 +1694,7 @@ namespace LinksRouting
     SlotType::XRayPopup::HoverRect& popup )
   {
     updateTileMap( popup.tile_map.lock(),
-                   static_cast<QWsSocket*>(popup.client_socket),
+                   static_cast<QWebSocket*>(popup.client_socket),
                    popup.source_region,
                    -1 );
   }
@@ -1705,7 +1702,7 @@ namespace LinksRouting
   //----------------------------------------------------------------------------
   bool IPCServer::InteractionHandler::updateTileMap(
     const HierarchicTileMapPtr& tile_map,
-    QWsSocket* socket,
+    QWebSocket* socket,
     const Rect& src,
     int zoom )
   {
