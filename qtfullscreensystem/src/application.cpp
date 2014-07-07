@@ -106,6 +106,10 @@ namespace qtfullscreensystem
       w->setImage(&_fbo_image);
       w->show();
       _windows.push_back(w);
+
+      auto mw = std::make_shared<RenderWindow>(s->availableGeometry());
+      mw->show();
+      _mask_windows.push_back(mw);
     }
 
     _core.init();
@@ -157,6 +161,8 @@ namespace qtfullscreensystem
       slot_subscriber.getSlot<LR::SlotType::CoveredOutline>("/covered-outlines");
 
     for(auto& w: _windows)
+      w->subscribeSlots(slot_subscriber);
+    for(auto& w: _mask_windows)
       w->subscribeSlots(slot_subscriber);
   }
 
@@ -297,10 +303,11 @@ namespace qtfullscreensystem
     //_fbo_image.save(QString("fbo%1.png").arg(counter));
 
     int timeout = 5;
-    for(auto& w: _windows)
+    for(size_t i = 0; i < _windows.size(); ++i)
     {
       //w->update();
-      QTimer::singleShot(timeout, w.get(), SLOT(update()));
+      QTimer::singleShot(timeout, _windows[i].get(), SLOT(update()));
+      QTimer::singleShot(timeout, _mask_windows[i].get(), SLOT(update()));
 
       // Waiting a bit between updates seems to reduce artifacts...
       timeout += 30;

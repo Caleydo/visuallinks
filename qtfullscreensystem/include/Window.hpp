@@ -10,6 +10,7 @@
 
 #include <slots.hpp>
 #include <slotdata/mouse_event.hpp>
+#include <slotdata/text_popup.hpp>
 
 #include <QWidget>
 #include <memory>
@@ -36,6 +37,9 @@ namespace qtfullscreensystem
       float2  _last_mouse_pos;
 
       LR::slot_t<LR::SlotType::MouseEvent>::type _subscribe_mouse;
+      LR::slot_t<LR::SlotType::TextPopup>::type _subscribe_popups;
+      LR::slot_t<LR::SlotType::CoveredOutline>::type _subscribe_outlines;
+      LR::slot_t<LR::SlotType::XRayPopup>::type _subscribe_xray;
 
       virtual void moveEvent(QMoveEvent *event);
       virtual void paintEvent(QPaintEvent* e);

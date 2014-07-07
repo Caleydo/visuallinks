@@ -10,6 +10,16 @@
 
 namespace LinksRouting
 {
+
+  //----------------------------------------------------------------------------
+  Direction dirFromNorm(const float2& normal)
+  {
+    if( normal.x == 0 )
+      return normal.y > 0 ? Direction::UP : Direction::DOWN;
+    else
+      return normal.x > 0 ? Direction::RIGHT : Direction::LEFT;
+  }
+
 namespace LinkDescription
 {
 

@@ -551,7 +551,8 @@ namespace LinksRouting
                            LabelAlign::RIGHT );
             }
 
-            if( (*region)->get<bool>("covered") )
+            if(     (*region)->get<bool>("covered")
+                && !(*region)->get<bool>("outside") )
               num_covered += 1;
 
             if(    /*(*region)->get<bool>("hidden")
@@ -645,7 +646,8 @@ namespace LinksRouting
             updateNode(*new_node, desktop, local_view, windows, first_above);
             hedge->addNode(new_node);
 
-            if( new_node->get<bool>("covered") )
+            if(     new_node->get<bool>("covered")
+                && !new_node->get<bool>("outside") )
               num_covered += 1;
 
             createPopup( out.pos + getScrollRegionAbs().topLeft() + 13 * out.normal,

@@ -15,6 +15,9 @@
 
 namespace LinksRouting
 {
+  enum class Direction { LEFT, UP, RIGHT, DOWN };
+  Direction dirFromNorm(const float2& normal);
+
   typedef std::function<void()> ExitCallback;
 
 namespace LinkDescription

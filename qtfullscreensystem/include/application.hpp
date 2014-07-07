@@ -102,6 +102,7 @@ namespace qtfullscreensystem
       ShaderPtr                                 _shader_blend;
 
       std::vector<WindowRef>    _windows;
+      std::vector<WindowRef>    _mask_windows;
 
       // Locks/Mutex
       QMutex            _mutex_slot_links;
