@@ -38,6 +38,7 @@
               {
                 'task': 'REGISTER',
                 'name': 'Optional Name',
+                'cmds': ['list', 'of', 'supported', 'cmds', 'eg.', 'open-url'],
                 'pos': [px, py],
                 'region': [x, y, width, height]
               }
@@ -142,4 +143,16 @@
                 'task': 'SET',
                 'id': '/routing',
                 'val': 'CPURouting'
+              }
+
+   CMD        Forward a command to a client supporting this type of command. Eg.
+              'open-url' request a client (usually a browser) to open an URL in
+              a new browser window.
+
+              {
+                'task': 'CMD',
+                'cmd': 'open-url',
+                'url': 'http://google.at',
+                'width': 300,
+                'height': 200
               }

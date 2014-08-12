@@ -15,6 +15,8 @@
 #include "slotdata/text_popup.hpp"
 #include "window_monitor.hpp"
 
+#include <QSet>
+
 template<typename T>
 void clamp(T& val, T min, T max)
 {
@@ -45,6 +47,9 @@ namespace LinksRouting
 
     void setWindowId(WId wid);
     const WindowInfo& getWindowInfo() const;
+
+    void addCommand(const QString& type);
+    bool supportsCommand(const QString& cmd) const;
 
     /**
      * Parse and update scroll region
@@ -143,6 +148,8 @@ namespace LinksRouting
         CENTER,
         RIGHT
       };
+
+      QSet<QString>                 _cmds; //!< Supported commands
 
       uint32_t                      _dirty;
       IPCServer                    *_ipc_server;

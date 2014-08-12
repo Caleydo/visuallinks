@@ -63,6 +63,18 @@ namespace LinksRouting
   }
 
   //----------------------------------------------------------------------------
+  void ClientInfo::addCommand(const QString& type)
+  {
+    _cmds.insert(type);
+  }
+
+  //----------------------------------------------------------------------------
+  bool ClientInfo::supportsCommand(const QString& cmd) const
+  {
+    return _cmds.contains(cmd);
+  }
+
+  //----------------------------------------------------------------------------
   void ClientInfo::parseScrollRegion( const JSONParser& json )
   {
     if( json.hasChild("scroll-region") )

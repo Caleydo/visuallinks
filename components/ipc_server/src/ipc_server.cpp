@@ -481,6 +481,12 @@ namespace LinksRouting
                           ? windows.windowIdAt(msg.getValue<QPoint>("pos"))
                           : windows.findId(msg.getValue<QString>("title"));
             client_info.setWindowId(wid);
+
+            if( msg.hasChild("cmds") )
+            {
+              for(QString cmd: msg.getValue<QStringList>("cmds"))
+                client_info.addCommand(cmd);
+            }
           }
           client_info.update(windows);
           return;
@@ -490,6 +496,17 @@ namespace LinksRouting
           client_info.setScrollPos( msg.getValue<QPoint>("pos") );
           client_info.update(_window_monitor.getWindows());
           return dirtyLinks();
+        }
+        else if( task == "CMD" )
+        {
+          QString cmd = msg.getValue<QString>("cmd");
+          for(auto socket = _clients.begin(); socket != _clients.end(); ++socket)
+          {
+            if(    sender() != socket->first
+                && socket->second->supportsCommand(cmd) )
+              return (void)socket->first->sendTextMessage(data);
+          }
+          return;
         }
       }
 

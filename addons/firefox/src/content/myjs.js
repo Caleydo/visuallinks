@@ -512,6 +512,7 @@ function register(match_title = false)
         var msg = {
           task: 'REGISTER',
           name: "Firefox",
+          cmds: ['open-url'],
           viewport: getViewport()
         };
         if( match_title )
@@ -631,8 +632,23 @@ function register(match_title = false)
           if( msg.id == 'scroll-y' )
             smoothScrollTo(msg.val);
         }
+        else if( msg.task == 'CMD' )
+        {
+          if( msg.cmd == 'open-url' )
+          {
+            var flags = 'menubar,toolbar,location,status,alwaysRaised';
+            if( typeof(msg.width) != 'undefined' )
+              flags += ',width=' + msg.width;
+            if( typeof(msg.height) != 'undefined' )
+              flags += ',height' + msg.height;
+
+            window.open(msg.url, '_blank', flags);
+          }
+          else
+            alert("Unknown command: " + event.data);
+        }
         else
-          alert(event.data);
+          alert("Unknown message: " + event.data);
       }
 	}
 	catch (err)
