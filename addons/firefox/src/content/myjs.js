@@ -137,6 +137,35 @@ function onPageLoad(event)
   else
     checkAutoConnect(event);
 
+  var view = content.document.defaultView;
+  var location = view ? view.location : null;
+
+  var hcd_str = "#hidden-content-data=";
+  var hcd_len = hcd_str.length;
+  var hcd_pos = location.hash.indexOf(hcd_str);
+
+  if( hcd_pos >= 0 )
+  {
+    var src_id = null;
+
+    var hcd = location.hash.substr(hcd_pos + hcd_len);
+    location.hash = location.hash.substr(0, hcd_pos);
+
+    var data = JSON.parse(hcd);
+    if( data )
+    {
+      var scroll = data['scroll'];
+      if( scroll instanceof Array )
+        content.scrollTo(scroll[0], scroll[1]);
+
+      src_id = data['tab-id'];
+    }
+
+    // Automatically connect new windows created by links system.
+    if( stopped )
+      setTimeout('start(true, "' + src_id + '");', 0);
+  }
+
   content.addEventListener("keydown", onKeyDown, false);
   content.addEventListener("keyup", onKeyUp, false);
 }
@@ -164,9 +193,16 @@ function onTabChangeImpl()
 
 function onLoad(e)
 {
-  if(    e.originalTarget.defaultView.frameElement
-      || e.originalTarget != content.document )
-    // Ignore frame and background tab load events
+  // Ignore frame load events
+  if( e.originalTarget.defaultView.frameElement )
+    return;
+
+  // Unique tab identifier (eg. for synchronized scrolling)
+  var tab_id = Sha1.hash(Date.now() + location.href);
+  content.document._hcd_tab_id = tab_id;
+
+  // Ignore background tab load events
+  if( e.originalTarget != content.document )
     return;
 
   tab_changed = false;
@@ -175,6 +211,10 @@ function onLoad(e)
 
 function onUnload(e)
 {
+  var tab_id = e.originalTarget['_hcd_tab_id'];
+//  if( tab_id )
+//    alert('close: ' + tab_id);
+
   if(    e.originalTarget.defaultView.frameElement
       || e.originalTarget != content.document )
     // Ignore frame and background tab unload events
@@ -209,6 +249,31 @@ function onKeyUp(e)
   }
 }
 
+function onDragStart(e)
+{
+  var tab = gBrowser.tabContainer._getDragTargetTab(e);
+  var browser = tab ? tab.linkedBrowser
+                    : gBrowser;
+
+  var dt = e.dataTransfer;
+  if( tab )
+    dt.mozSetDataAt(TAB_DROP_TYPE, tab, 0);
+
+  var vp = getViewport();
+  var scroll = getScrollRegion();
+
+  dt.mozSetDataAt(
+    "text/plain",
+    JSON.stringify({
+      'url': browser.currentURI.spec,
+      'scroll': [-scroll.x, -scroll.y],
+      'view': [vp[2], vp[3]],
+      'tab-id': content.document._hcd_tab_id
+    }),
+    0
+  );
+}
+
 /**
  * Load window hook
  */
@@ -216,10 +281,16 @@ window.addEventListener("load", function window_load()
 {
   gBrowser.addEventListener("load", onLoad, true);
   gBrowser.addEventListener("beforeunload", onUnload, true);
-  //gBrowser.addTab("http://127.0.0.1:30828/search?flags=8&num=10&q=america&start=0&s=yksDNyehVZo2SvO2BRHGoLhH26k");
 
   var container = gBrowser.tabContainer;
   container.addEventListener("TabSelect", onTabChange, false);
+
+  // Drag tabs from address bar/identity icon
+  var ibox = document.getElementById("identity-box");
+  ibox.addEventListener('dragstart', onDragStart, false);
+
+  // Drag tabs from tab bar
+  gBrowser.tabContainer.addEventListener('dragstart', onDragStart, true);
 });
 
 /**
@@ -255,11 +326,11 @@ function smoothScrollTo(y_target)
   }
 }
 
-function start(match_title = false)
+function start(match_title = false, src_id = 0)
 {
   // start client
   stopped = false;
-  if( register(match_title) )
+  if( register(match_title, src_id) )
   {
 //    window.addEventListener('unload', stopVisLinks, false);
     window.addEventListener('scroll', onScroll, false);
@@ -466,7 +537,8 @@ function onScrollImpl()
 {
   send({
     'task': 'SCROLL',
-    'pos': [-content.scrollX, -content.scrollY]
+    'pos': [-content.scrollX, -content.scrollY],
+    'tab-id': content.document._hcd_tab_id
   });
 }
 var onScroll = throttle(onScrollImpl, 100);
@@ -491,18 +563,18 @@ function stop()
 }
 
 //------------------------------------------------------------------------------
-function register(match_title = false)
+function register(match_title = false, src_id = 0)
 {
   menu = document.getElementById("vislink_menu");
   items_routing = document.getElementById("routing-selector");
 
-	// Get the box object for the link button to get window handler from the
-	// window at the position of the box
-	var box = document.getElementById("vislink").boxObject;
+    // Get the box object for the link button to get window handler from the
+    // window at the position of the box
+    var box = document.getElementById("vislink").boxObject;
 
-	try
-	{
-	  tile_requests = new Queue();
+    try
+    {
+      tile_requests = new Queue();
 
       socket = new WebSocket('ws://localhost:4487', 'VLP');
       socket.binaryType = "arraybuffer";
@@ -519,7 +591,10 @@ function register(match_title = false)
           msg.title = gBrowser.contentTitle;
         else
           msg.pos = [box.screenX + box.width / 2, box.screenY + box.height / 2];
+        if( src_id )
+          msg['src-id'] = src_id;
         send(msg);
+
         var props = {
           'CPURouting:SegmentLength': 'Integer',
           'CPURouting:NumIterations': 'Integer',
@@ -636,13 +711,21 @@ function register(match_title = false)
         {
           if( msg.cmd == 'open-url' )
           {
-            var flags = 'menubar,toolbar,location,status,alwaysRaised';
-            if( typeof(msg.width) != 'undefined' )
-              flags += ',width=' + msg.width;
-            if( typeof(msg.height) != 'undefined' )
-              flags += ',height' + msg.height;
+            var flags = 'menubar,toolbar,location,status,scrollbars';
+            var url = msg.url;
 
-            window.open(msg.url, '_blank', flags);
+            delete msg.cmd;
+            delete msg.task;
+            delete msg.url;
+
+            if( typeof(msg.view) != 'undefined' )
+            {
+              flags += ',width=' + msg.view[0] + ',height=' + msg.view[1];
+              delete msg.view;
+            }
+
+            url += '#hidden-content-data=' + JSON.stringify(msg);
+            window.open(url, '_blank', flags);
           }
           else
             alert("Unknown command: " + event.data);
