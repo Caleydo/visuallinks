@@ -251,30 +251,65 @@ function onKeyUp(e)
   }
 }
 
-function onDragStart(e)
+function _getCurrentTabData(e)
 {
   var tab = gBrowser.tabContainer._getDragTargetTab(e);
   var browser = tab ? tab.linkedBrowser
                     : gBrowser;
+  var vp = getViewport();
+  var scroll = getScrollRegion();
+
+  return {
+    "url": browser.currentURI.spec,
+    "scroll": [-scroll.x, -scroll.y],
+    "view": [vp[2], vp[3]],
+    "tab-id": content.document._hcd_tab_id,
+    "screenPos": [e.screenX, e.screenY]
+  };
+}
+
+function _websocketDrag(e)
+{
+  e.stopImmediatePropagation();
+  e.preventDefault();
+
+  var data = _getCurrentTabData(e);
+  var s = new WebSocket('ws://localhost:24803', 'VLP');
+  s.onopen = function(e)
+  {
+    s.send(JSON.stringify(data));
+    s.close();
+  };
+  socket.onerror = function(e)
+  {
+    alert(e);
+  };
+}
+
+function onDocumentClick(e)
+{
+  if( !e.ctrlKey )
+    return;
+
+  e.preventDefault();
+  e.stopImmediatePropagation();
+}
+
+function onTabDblClick(e)
+{
+  if( e.ctrlKey )
+    return _websocketDrag(e);
+}
+
+/*function onDragStart(e)
+{
+  return _websocketDrag(e);
 
   var dt = e.dataTransfer;
   if( tab )
     dt.mozSetDataAt(TAB_DROP_TYPE, tab, 0);
-
-  var vp = getViewport();
-  var scroll = getScrollRegion();
-
-  dt.mozSetDataAt(
-    "text/plain",
-    JSON.stringify({
-      'url': browser.currentURI.spec,
-      'scroll': [-scroll.x, -scroll.y],
-      'view': [vp[2], vp[3]],
-      'tab-id': content.document._hcd_tab_id
-    }),
-    0
-  );
-}
+  dt.mozSetDataAt("text/plain", JSON.stringify(_getCurrentTabData()), 0);
+}*/
 
 /**
  * Load window hook
@@ -283,16 +318,20 @@ window.addEventListener("load", function window_load()
 {
   gBrowser.addEventListener("load", onLoad, true);
   gBrowser.addEventListener("beforeunload", onUnload, true);
+  gBrowser.addEventListener("mousedown", onDocumentClick, true);
+  gBrowser.addEventListener("click", onTabDblClick, true);
 
   var container = gBrowser.tabContainer;
   container.addEventListener("TabSelect", onTabChange, false);
 
   // Drag tabs from address bar/identity icon
   var ibox = document.getElementById("identity-box");
-  ibox.addEventListener('dragstart', onDragStart, false);
+//  ibox.addEventListener('dragstart', onDragStart, false);
+  document.addEventListener('click', onTabDblClick, true);
 
   // Drag tabs from tab bar
-  gBrowser.tabContainer.addEventListener('dragstart', onDragStart, true);
+//  gBrowser.tabContainer.addEventListener('dragstart', onDragStart, true);
+//  gBrowser.tabContainer.addEventListener('click', onTabDblClick, true);
 });
 
 /**
