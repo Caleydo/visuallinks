@@ -159,6 +159,8 @@ function onPageLoad(event)
         content.scrollTo(scroll[0], scroll[1]);
 
       src_id = data['tab-id'];
+      if( src_id )
+        content.document._hcd_src_id = src_id;
     }
 
     // Automatically connect new windows created by links system.
@@ -581,10 +583,13 @@ function register(match_title = false, src_id = 0)
       socket.onopen = function(event)
       {
         setStatus('active');
+        var cmds = ['open-url'];
+        if( src_id )
+          cmds.push('scroll');
         var msg = {
           task: 'REGISTER',
           name: "Firefox",
-          cmds: ['open-url'],
+          cmds: cmds,
           viewport: getViewport()
         };
         if( match_title )
@@ -729,6 +734,11 @@ function register(match_title = false, src_id = 0)
           }
           else
             alert("Unknown command: " + event.data);
+        }
+        else if( msg.task == 'SCROLL' )
+        {
+          if( msg['tab-id'] == content.document._hcd_src_id )
+            content.scrollTo(-msg.pos[0], -msg.pos[1]);
         }
         else
           alert("Unknown message: " + event.data);

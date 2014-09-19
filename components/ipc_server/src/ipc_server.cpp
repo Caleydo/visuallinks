@@ -473,14 +473,19 @@ namespace LinksRouting
         if( task == "REGISTER" || task == "RESIZE" )
         {
           const WindowRegions& windows = _window_monitor.getWindows();
-          client_info.viewport = msg.getValue<QRect>("viewport");
+
+          if( msg.hasChild("viewport") )
+            client_info.viewport = msg.getValue<QRect>("viewport");
 
           if( task == "REGISTER" )
           {
-            const WId wid = msg.hasChild("pos")
-                          ? windows.windowIdAt(msg.getValue<QPoint>("pos"))
-                          : windows.findId(msg.getValue<QString>("title"));
-            client_info.setWindowId(wid);
+            if( msg.hasChild("pos") || msg.hasChild("title") )
+            {
+              const WId wid = msg.hasChild("pos")
+                            ? windows.windowIdAt(msg.getValue<QPoint>("pos"))
+                            : windows.findId(msg.getValue<QString>("title"));
+              client_info.setWindowId(wid);
+            }
 
             if( msg.hasChild("cmds") )
             {
@@ -495,6 +500,15 @@ namespace LinksRouting
         {
           client_info.setScrollPos( msg.getValue<QPoint>("pos") );
           client_info.update(_window_monitor.getWindows());
+
+          // Forward scroll events to clients which support this (eg. for
+          // synchronized scrolling)
+          for(auto const& socket: _clients)
+          {
+            if(    sender() != socket.first
+                && socket.second->supportsCommand("scroll") )
+              socket.first->sendTextMessage(data);
+          }
           return dirtyLinks();
         }
         else if( task == "CMD" )
