@@ -587,7 +587,7 @@ GLWidget::GLWidget(QWidget* parent):
       size_t len = outline.title.size();
       if( !outline.preview->isVisible() )
         len = std::min<size_t>(19, len);
-      QString title = QString::fromLatin1(outline.title.data(), (int)len);
+      QString title = QString::fromUtf8(outline.title.data(), (int)len);
       if( len < outline.title.size() )
         title += "...";
 

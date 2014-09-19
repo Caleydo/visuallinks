@@ -203,7 +203,7 @@ QString QxtWindowSystem::windowTitle(WId window)
     QString name;
     char* str = 0;
     if (XFetchName(QX11Info::display(), window, &str))
-        name = QString::fromLatin1(str);
+        name = QString::fromUtf8(str);
     if (str)
         XFree(str);
 
