@@ -90,18 +90,27 @@ function updateScale()
 
 /**
  * Get the document region relative to the application window
+ *
+ * @param ref "rel" or "abs"
  */
-function getViewport()
+function getViewport(ref = "rel")
 {
   updateScale();
   var win = content.document.defaultView;
-
-  return [
+  var vp = [
     Math.round((win.mozInnerScreenX - win.screenX) * scale),
     Math.round((win.mozInnerScreenY - win.screenY) * scale),
     Math.round(win.innerWidth * scale),
     Math.round(win.innerHeight * scale)
   ];
+
+  if( ref == "abs" )
+  {
+    vp[0] += win.screenX;
+    vp[1] += win.screenY;
+  }
+
+  return vp;
 }
 
 /**
@@ -256,13 +265,12 @@ function _getCurrentTabData(e)
   var tab = gBrowser.tabContainer._getDragTargetTab(e);
   var browser = tab ? tab.linkedBrowser
                     : gBrowser;
-  var vp = getViewport();
   var scroll = getScrollRegion();
 
   return {
     "url": browser.currentURI.spec,
     "scroll": [-scroll.x, -scroll.y],
-    "view": [vp[2], vp[3]],
+    "view": getViewport("abs"),
     "tab-id": content.document._hcd_tab_id,
     "screenPos": [e.screenX, e.screenY]
   };
@@ -278,6 +286,17 @@ function _websocketDrag(e)
   s.onopen = function(e)
   {
     s.send(JSON.stringify(data));
+
+    // Send preview image
+    var reg = {
+      x: data.scroll[0],
+      y: data.scroll[1],
+      width: data.view[2],
+      height: data.view[3]
+    };
+    var regions = [[reg.y, reg.y + reg.height]];
+    s.send( grab([reg.width, reg.height], reg, 0, [regions, regions]) );
+
     s.close();
   };
   socket.onerror = function(e)
