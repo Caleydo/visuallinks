@@ -27,3 +27,13 @@
 {
   list-style-image: none;
 }
+
+#vislink-sync
+{
+  list-style-image: url("chrome://hidden-content/content/icon-link-break.png");
+}
+
+#vislink-sync.sync
+{
+  list-style-image: url("chrome://hidden-content/content/icon-link.png");
+}

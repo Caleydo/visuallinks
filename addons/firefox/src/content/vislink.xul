@@ -26,7 +26,7 @@
       <menuseparator />
     </menupopup>
   </toolbarbutton>
-  
+
   <toolbarbutton type="button"
                  id="vislink-search-prev"
                  tooltiptext="Find Previous"
@@ -37,6 +37,20 @@
                  tooltiptext="Find Next"
                  oncommand="onStandardSearchButton()"/>
 
+  <toolbarbutton type="button"
+                 id="vislink-sync"
+                 label="Sync Tab"
+                 tooltiptext="Synchronize Shared Tab"
+                 oncommand="onTabSyncButton(event)"
+                 class="toolbarbutton-1 chromeclass-toolbar-additional vislink" />
+  <toolbarbutton type="button"
+                 id="vislink-sync-src"
+                 label="Sync Tab (src)"
+                 tooltiptext="Synchronize Shared Tab (Source)"
+                 class="toolbarbutton-1 chromeclass-toolbar-additional vislink"
+                 insertbefore="vislink-sync">
+    worktom-ubuntu
+  </toolbarbutton>
 </toolbarpalette>
 
 </overlay>

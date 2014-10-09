@@ -1,8 +1,11 @@
 var debug = false;
 
 var stopped = true;
-var socket = null;
+var links_socket = null;
+var ctrl_socket = null;
+var ctrl_queue = null;
 var status = '';
+var status_sync = '';
 
 var last_id = null;
 var last_stamp = null;
@@ -45,6 +48,12 @@ function setStatus(stat)
   status = stat;
 }
 
+function setStatusSync(stat)
+{
+  document.getElementById('vislink-sync').setAttribute('class', stat);
+  status_sync = stat;
+}
+
 /** Send data via the global WebSocket
  *
  */
@@ -52,18 +61,67 @@ function send(data)
 {
   try
   {
-    if( !socket )
+    if( !links_socket )
       throw "No socket available!";
 
-    socket.send(JSON.stringify(data));
+    links_socket.send(JSON.stringify(data));
   }
   catch(e)
   {
 //    alert(e);
-    socket = 0;
+    links_socket = 0;
     stop();
     checkAutoConnect();
 //    throw e;
+  }
+}
+
+/** Send data to control center
+ *
+ */
+function ctrlSend(data)
+{
+  var encoded_data = data instanceof ArrayBuffer
+                   ? data // binary data
+                   : JSON.stringify(data);
+
+  if( ctrl_queue )
+  {
+    ctrl_queue.push(encoded_data);
+    return;
+  }
+
+  if( ctrl_socket )
+  {
+    ctrl_socket.send(encoded_data);
+    return;
+  }
+
+  ctrl_queue = [encoded_data];
+  ctrl_socket = new WebSocket('ws://localhost:24803', 'VLP');
+  ctrl_socket.binaryType = "arraybuffer";
+  ctrl_socket.onopen = function(event)
+  {
+    for(var i = 0; i < ctrl_queue.length; i += 1)
+    {
+      ctrl_socket.send(ctrl_queue[i]);
+      console.log("send", ctrl_queue[i], typeof(ctrl_queue[i]));
+    }
+    ctrl_queue = null;
+  }
+  ctrl_socket.onclose = function(event) {}
+  ctrl_socket.onerror = function(event) { alert(event); }
+  ctrl_socket.onmessage = function(event)
+  {
+    var msg = JSON.parse(event.data);
+    if( msg.task == 'SCROLL' )
+    {
+      if(   status_sync == 'sync'
+         && msg['tab-id'] == content.document._hcd_src_id )
+        content.scrollTo(-msg.pos[0], -msg.pos[1]);
+    }
+    else
+      alert(event.data);
   }
 }
 
@@ -160,6 +218,7 @@ function onPageLoad(event)
     var hcd = location.hash.substr(hcd_pos + hcd_len);
     location.hash = location.hash.substr(0, hcd_pos);
 
+    var pos;
     var data = JSON.parse(hcd);
     if( data )
     {
@@ -167,18 +226,49 @@ function onPageLoad(event)
       if( scroll instanceof Array )
         content.scrollTo(scroll[0], scroll[1]);
 
-      src_id = data['tab-id'];
+      src_id = data['src-id'];
       if( src_id )
+      {
         content.document._hcd_src_id = src_id;
+        setStatusSync("sync");
+      }
+
+      pos = data['pos'];
+/*      if( pos instanceof Array )
+        window.moveTo(pos[0], pos[1]);*/
+
+      var color = data['color'];
+      if( color instanceof String )
+        document.getElementById('vislink-sync').style.backgroundColor = color;
     }
 
     // Automatically connect new windows created by links system.
     if( stopped )
       setTimeout('start(true, "' + src_id + '");', 0);
+
+    var lock_file = Components.classes["@mozilla.org/file/directory_service;1"]
+                              .getService( Components.interfaces.nsIProperties)
+                              .get("ProfD", Components.interfaces.nsIFile);
+    lock_file.append("lock");
+
+    // <profile-path>/lock is a symlink to 127.0.1.1:+<pid>
+    var pid = lock_file.target.split('+')[1];
+    var msg = {
+      task: "REGISTER",
+      pid: pid,
+      title: document.title
+    };
+    if( pos instanceof Array )
+      msg["pos"] = pos;
+    if( src_id )
+      msg["src-id"] = src_id;
+
+    ctrlSend(msg);
   }
 
   content.addEventListener("keydown", onKeyDown, false);
   content.addEventListener("keyup", onKeyUp, false);
+  content.addEventListener('scroll', onScroll, false);
 }
 
 var tab_changed = false;
@@ -233,6 +323,7 @@ function onUnload(e)
 
   content.removeEventListener("keydown", onKeyDown, false);
   content.removeEventListener("keyup", onKeyUp, false);
+  content.removeEventListener('scroll', onScroll, false);
 
   tab_changed = true;
   tab_event = e;
@@ -282,27 +373,19 @@ function _websocketDrag(e)
   e.preventDefault();
 
   var data = _getCurrentTabData(e);
-  var s = new WebSocket('ws://localhost:24803', 'VLP');
-  s.onopen = function(e)
-  {
-    s.send(JSON.stringify(data));
+  data.task = 'drag';
 
-    // Send preview image
-    var reg = {
-      x: data.scroll[0],
-      y: data.scroll[1],
-      width: data.view[2],
-      height: data.view[3]
-    };
-    var regions = [[reg.y, reg.y + reg.height]];
-    s.send( grab([reg.width, reg.height], reg, 0, [regions, regions]) );
+  ctrlSend(data);
 
-    s.close();
+  // Send preview image
+  var reg = {
+    x: data.scroll[0],
+    y: data.scroll[1],
+    width: data.view[2],
+    height: data.view[3]
   };
-  socket.onerror = function(e)
-  {
-    alert(e);
-  };
+  var regions = [[reg.y, reg.y + reg.height]];
+  ctrlSend( grab([reg.width, reg.height], reg, 0, [regions, regions]) );
 }
 
 function onDocumentClick(e)
@@ -393,10 +476,9 @@ function start(match_title = false, src_id = 0)
   if( register(match_title, src_id) )
   {
 //    window.addEventListener('unload', stopVisLinks, false);
-    window.addEventListener('scroll', onScroll, false);
-//      window.addEventListener("DOMAttrModified", attrModified, false);
+//    window.addEventListener("DOMAttrModified", attrModified, false);
     window.addEventListener('resize', resize, false);
-//      window.addEventListener("DOMContentLoaded", windowChanged, false);
+//    window.addEventListener("DOMContentLoaded", windowChanged, false);
   }
 }
 
@@ -412,6 +494,16 @@ function onVisLinkButton(ev)
     selectVisLink();
   else
     start();
+}
+
+//------------------------------------------------------------------------------
+function onTabSyncButton(ev)
+{
+  if( ev.target.id != 'vislink-sync' )
+    // Ignore clicks outside the button (eg for dropdown menu)
+    return;
+
+  setStatusSync(status_sync == 'sync' ? '' : 'sync');
 }
 
 function getSelectionId()
@@ -595,11 +687,14 @@ function windowChanged()
 //------------------------------------------------------------------------------
 function onScrollImpl()
 {
-  send({
+  var msg = {
     'task': 'SCROLL',
     'pos': [-content.scrollX, -content.scrollY],
     'tab-id': content.document._hcd_tab_id
-  });
+  };
+  send(msg);
+  if( ctrl_socket )
+    ctrlSend(msg);
 }
 var onScroll = throttle(onScrollImpl, 100);
 
@@ -617,7 +712,6 @@ function stop()
 	stopped = true;
 //	setStatus('');
 //	window.removeEventListener('unload', stopVisLinks, false);
-	window.removeEventListener('scroll', onScroll, false);
 	window.removeEventListener("DOMAttrModified", attrModified, false);
   window.removeEventListener('resize', resize, false);
 }
@@ -636,9 +730,9 @@ function register(match_title = false, src_id = 0)
     {
       tile_requests = new Queue();
 
-      socket = new WebSocket('ws://localhost:4487', 'VLP');
-      socket.binaryType = "arraybuffer";
-      socket.onopen = function(event)
+      links_socket = new WebSocket('ws://localhost:4487', 'VLP');
+      links_socket.binaryType = "arraybuffer";
+      links_socket.onopen = function(event)
       {
         setStatus('active');
         var cmds = ['open-url'];
@@ -676,19 +770,19 @@ function register(match_title = false, src_id = 0)
             type: props[name]
           });
       };
-      socket.onclose = function(event)
+      links_socket.onclose = function(event)
       {
         setStatus(event.wasClean ? '' : 'error');
         removeAllRouteData();
         stop();
       };
-      socket.onerror = function(event)
+      links_socket.onerror = function(event)
       {
         setStatus('error');
         removeAllRouteData();
         stop();
       };
-      socket.onmessage = function(event)
+      links_socket.onmessage = function(event)
       {
         var msg = JSON.parse(event.data);
         if( msg.task == 'REQUEST' )
@@ -821,7 +915,7 @@ function handleTileRequest()
 
   var req = tile_requests.dequeue();
   var mapping = [req.sections_src, req.sections_dest];
-  socket.send( grab(req.size, req.src, req.req_id, mapping) );
+  links_socket.send( grab(req.size, req.src, req.req_id, mapping) );
 
   // We need to wait a bit before sending the next tile to not congest the
   // receiver queue.
