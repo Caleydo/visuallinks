@@ -52,6 +52,10 @@ function setStatusSync(stat)
 {
   document.getElementById('vislink-sync').setAttribute('class', stat);
   status_sync = stat;
+
+  var hidden = (stat == 'no-src');
+  document.getElementById('vislink-sync').hidden = hidden;
+  document.getElementById('vislink-sync-src').hidden = hidden;
 }
 
 /** Send data via the global WebSocket
@@ -109,8 +113,8 @@ function ctrlSend(data)
     }
     ctrl_queue = null;
   }
-  ctrl_socket.onclose = function(event) {}
-  ctrl_socket.onerror = function(event) { alert(event); }
+  ctrl_socket.onclose = function(event) { ctrl_socket = null; }
+  ctrl_socket.onerror = function(event) { alert(event); ctrl_socket = null; }
   ctrl_socket.onmessage = function(event)
   {
     var msg = JSON.parse(event.data);
@@ -199,6 +203,8 @@ function checkAutoConnect(event)
  */
 function onPageLoad(event)
 {
+  setStatusSync("no-src");
+
   if( !stopped )
     setTimeout("resize();", 300);
   else
@@ -238,8 +244,8 @@ function onPageLoad(event)
         window.moveTo(pos[0], pos[1]);*/
 
       var color = data['color'];
-      if( color instanceof String )
-        document.getElementById('vislink-sync').style.backgroundColor = color;
+      if( typeof(color) === 'string' )
+        document.getElementById('vislink-sync-src').style.color = color;
     }
 
     // Automatically connect new windows created by links system.

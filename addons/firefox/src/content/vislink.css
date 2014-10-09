@@ -37,3 +37,9 @@
 {
   list-style-image: url("chrome://hidden-content/content/icon-link.png");
 }
+
+#vislink-sync-src
+{
+  color: red;
+  -moz-appearance: none;
+}
