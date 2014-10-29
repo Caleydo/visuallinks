@@ -97,8 +97,8 @@ MapRect::QuadList MapRect::getQuads() const
 
     size_t left = min_x - min[0],
            top = min_y - min[1],
-           right = left + (tex_max.x - tex_min.x) * tile.width,
-           bottom = top + (tex_max.y - tex_min.y) * tile.height;
+           right = max_x - min[0],
+           bottom = max_y - min[1];
 
     Quads quads;
     quads._tex_coords.push_back(float2(tex_min.x, tex_min.y));
