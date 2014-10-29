@@ -22,9 +22,67 @@ var tile_requests = null;
 var tile_timeout = false;
 var do_report = true;
 
-var prefs = Components.classes["@mozilla.org/fuel/application;1"]
-                      .getService(Components.interfaces.fuelIApplication)
-                      .prefs;
+//var Cc = Components.classes;
+//var Ci = Components.interfaces;
+
+var prefs = Cc["@mozilla.org/fuel/application;1"]
+              .getService(Ci.fuelIApplication)
+              .prefs;
+
+var session_store = Cc["@mozilla.org/browser/sessionstore;1"]
+                      .getService(Ci.nsISessionStore);
+
+const STATE_START = Ci.nsIWebProgressListener.STATE_START;
+const STATE_STOP = Ci.nsIWebProgressListener.STATE_STOP;
+const LOCATION_CHANGE_ERROR_PAGE = Ci.nsIWebProgressListener.LOCATION_CHANGE_ERROR_PAGE;
+const LOCATION_CHANGE_SAME_DOCUMENT = Ci.nsIWebProgressListener.LOCATION_CHANGE_SAME_DOCUMENT;
+
+var myListener = {
+  QueryInterface: XPCOMUtils.generateQI(["nsIWebProgressListener",
+                                         "nsISupportsWeakReference"]),
+
+  onStateChange: function(aWebProgress, aRequest, aFlag, aStatus) {
+    // If you use myListener for more than one tab/window, use
+    // aWebProgress.DOMWindow to obtain the tab/window which triggers the state change
+    if (aFlag & STATE_START) {
+      // This fires when the load event is initiated
+    }
+    if (aFlag & STATE_STOP) {
+      // This fires when the load finishes
+    }
+  },
+
+  onLocationChange: function(progress, request, uri, flags)
+  {
+    if( !request )
+      return;
+    if( flags & (LOCATION_CHANGE_SAME_DOCUMENT | LOCATION_CHANGE_ERROR_PAGE) )
+      return;
+
+    var tab = gBrowser._getTabForContentWindow(progress.DOMWindow);
+    var last_uri = session_store.getTabValue(tab, "hcd/last-uri");
+
+    if( last_uri == uri.spec )
+      return;
+
+    console.log("change uri: " + content.document._hcd_tab_id);
+    var msg = {
+      'task': 'SYNC',
+      'type': 'URI',
+      'uri': uri.spec,
+      'tab-id': session_store.getTabValue(tab, "hcd/tab-id")
+    };
+    ctrlSend(msg);
+
+    last_uri = uri.spec;
+    session_store.setTabValue(tab, "hcd/last-uri", last_uri);
+  },
+
+  onProgressChange: function(progress, request, curSelf, maxSelf, curTot, maxTot) {},
+  onStatusChange: function(progress, request, status, msg) {},
+  onSecurityChange: function(progress, request, state) {}
+}
+gBrowser.addProgressListener(myListener);
 
 Array.prototype.contains = function(obj)
 {
@@ -82,9 +140,15 @@ function send(data)
 
 /** Send data to control center
  *
+ *  @data
+ *  @force  Connect if there is no connection (otherwise only send if there is
+ *          already a connection active or beeing connected)
  */
-function ctrlSend(data)
+function ctrlSend(data, force = false)
 {
+  if( !ctrl_queue && !ctrl_socket && !force )
+    return;
+
   var encoded_data = data instanceof ArrayBuffer
                    ? data // binary data
                    : JSON.stringify(data);
@@ -113,16 +177,19 @@ function ctrlSend(data)
     }
     ctrl_queue = null;
   }
-  ctrl_socket.onclose = function(event) { ctrl_socket = null; }
+  ctrl_socket.onclose = function(event)
+  {
+    console.log(event);
+    ctrl_socket = null;
+  }
   ctrl_socket.onerror = function(event) { alert(event); ctrl_socket = null; }
   ctrl_socket.onmessage = function(event)
   {
     var msg = JSON.parse(event.data);
-    if( msg.task == 'SCROLL' )
+    if( msg.task == 'SYNC' )
     {
-      if(   status_sync == 'sync'
-         && msg['tab-id'] == content.document._hcd_src_id )
-        content.scrollTo(-msg.pos[0], -msg.pos[1]);
+      if( status_sync == 'sync' )
+         handleSyncMsg(msg);
     }
     else
       alert(event.data);
@@ -189,6 +256,48 @@ function getScrollRegion()
   };
 }
 
+/**
+ * XPath for given DOM Element
+ */
+function getXPathForElement(el, root)
+{
+  var xpath = '';
+  while( el && el !== root )
+  {
+    var sibling = el;
+	  var pos = 0;
+
+    do
+    {
+		  if(    sibling.nodeType === Element.ELEMENT_NODE
+          && sibling.nodeName === el.nodeName )
+			  pos += 1;
+
+		  sibling = sibling.previousSibling;
+	  } while( sibling );
+
+	  xpath = "/" + el.nodeName + "[" + pos + "]" + xpath;
+	  el = el.parentNode;
+  }
+  if( el )
+    xpath = "." + xpath;
+  return xpath;
+}
+
+/**
+ * Get DOM Element for given XPath
+ */
+function getElementForXPath(xpath, root)
+{
+  return root.ownerDocument
+             .evaluate( xpath,
+                        root,
+                        null,
+                        XPathResult.FIRST_ORDERED_NODE_TYPE,
+                        null )
+             .singleNodeValue;
+}
+
 function checkAutoConnect(event)
 {
   var doc = event ? event.originalTarget : content.document;
@@ -210,8 +319,12 @@ function onPageLoad(event)
   else
     checkAutoConnect(event);
 
-  var view = content.document.defaultView;
+  var doc = content.document;
+  var view = doc.defaultView;
   var location = view ? view.location : null;
+
+  var tab = gBrowser.selectedTab;
+  var src_id = doc._hcd_src_id;
 
   var hcd_str = "#hidden-content-data=";
   var hcd_len = hcd_str.length;
@@ -219,8 +332,6 @@ function onPageLoad(event)
 
   if( hcd_pos >= 0 )
   {
-    var src_id = null;
-
     var hcd = location.hash.substr(hcd_pos + hcd_len);
     location.hash = location.hash.substr(0, hcd_pos);
 
@@ -232,13 +343,22 @@ function onPageLoad(event)
       if( scroll instanceof Array )
         content.scrollTo(scroll[0], scroll[1]);
 
-      src_id = data['src-id'];
-      if( src_id )
+      var scrollables = data['elements-scroll'];
+      if( scrollables instanceof Object )
       {
-        content.document._hcd_src_id = src_id;
-        setStatusSync("sync");
+        for(var xpath in scrollables)
+        {
+          var el = getElementForXPath(xpath, doc.body);
+          if( !el )
+            continue;
+
+          var offset = scrollables[xpath];
+          el.scrollLeft = offset[0];
+          el.scrollTop = offset[1];
+        }
       }
 
+      src_id = data['src-id'];
       pos = data['pos'];
 /*      if( pos instanceof Array )
         window.moveTo(pos[0], pos[1]);*/
@@ -269,12 +389,55 @@ function onPageLoad(event)
     if( src_id )
       msg["src-id"] = src_id;
 
-    ctrlSend(msg);
+    ctrlSend(msg, true);
+  }
+
+  if( !src_id )
+    src_id = session_store.getTabValue(tab, "hcd/src-id");
+
+  if( src_id )
+  {
+    doc._hcd_src_id = src_id;
+    session_store.setTabValue(tab, "hcd/src-id", src_id);
+    setStatusSync("sync");
   }
 
   content.addEventListener("keydown", onKeyDown, false);
   content.addEventListener("keyup", onKeyUp, false);
   content.addEventListener('scroll', onScroll, false);
+
+  console.log("tab: id=" + doc._hcd_tab_id
+              + ", src=" + doc._hcd_src_id);
+
+  for(var xpath in doc._hcd_scroll_listener)
+  {
+    if( !doc._hcd_scroll_listener.hasOwnProperty(xpath) )
+      continue;
+
+    var sh = doc._hcd_scroll_listener[ xpath ];
+    sh[0].removeEventListener("scroll", sh[1], false);
+  }
+  doc._hcd_scroll_listener = {};
+
+  var elements = doc.body.getElementsByTagName("*");
+  for(var i = 0; i < elements.length; i += 1)
+  {
+    var el = elements[i];
+    if(    el.scrollWidth <= el.clientWidth
+        && el.scrollHeight <= el.clientHeight )
+      continue;
+
+    if(    el.style.overflow  != "scroll"
+        && el.style.overflowX != "scroll"
+        && el.style.overflowY != "scroll" )
+      continue;
+
+    var xpath = getXPathForElement(el, doc.body);
+    var cb = throttle(onElementScrollImpl, 100);
+    el.addEventListener("scroll", cb, false);
+
+    doc._hcd_scroll_listener[ xpath ] = [el, cb];
+  }
 }
 
 var tab_changed = false;
@@ -292,7 +455,8 @@ function onTabChangeImpl()
     return;
   tab_changed = false;
 
-  if( content.document.readyState != "complete" )
+  if(     content.document.readyState != "complete"
+      || !content.document.body )
     return;
 
   onPageLoad(tab_event);
@@ -300,16 +464,36 @@ function onTabChangeImpl()
 
 function onLoad(e)
 {
+  var doc = e.originalTarget;
+  var view = doc.defaultView;
+
   // Ignore frame load events
-  if( e.originalTarget.defaultView.frameElement )
+  if( view && view.frameElement )
     return;
 
-  // Unique tab identifier (eg. for synchronized scrolling)
-  var tab_id = Sha1.hash(Date.now() + location.href);
-  content.document._hcd_tab_id = tab_id;
+  var tab_id = doc._hcd_tab_id;
+  if( !tab_id )
+  {
+    var tab = gBrowser.selectedTab;
+    tab_id = session_store.getTabValue(tab, "hcd/tab-id");
+
+    if( !tab_id )
+    {
+      // Unique tab identifier (eg. for synchronized scrolling)
+      tab_id = Sha1.hash(Date.now() + location.href);
+      session_store.setTabValue(tab, "hcd/tab-id", tab_id);
+      console.log("new id: " + tab_id);
+    }
+    else
+      console.log("restored id: " + tab_id);
+
+    doc._hcd_tab_id = tab_id;
+  }
+  else
+    console.log("has id: " + tab_id);
 
   // Ignore background tab load events
-  if( e.originalTarget != content.document )
+  if( doc != content.document )
     return;
 
   tab_changed = false;
@@ -363,12 +547,29 @@ function _getCurrentTabData(e)
   var browser = tab ? tab.linkedBrowser
                     : gBrowser;
   var scroll = getScrollRegion();
+  var doc = content.document;
+
+  // positions of all scrollable html elements
+  var scrollables = {};
+  var listener = doc._hcd_scroll_listener;
+  for(var xpath in listener)
+  {
+    if( !listener.hasOwnProperty(xpath) )
+      continue;
+
+    var el = listener[ xpath ][0];
+    if( el.scrollTop == 0 && el.scrollLeft == 0 )
+      continue;
+
+    scrollables[ xpath ] = [el.scrollLeft, el.scrollTop];
+  }
 
   return {
     "url": browser.currentURI.spec,
     "scroll": [-scroll.x, -scroll.y],
+    "elements-scroll": scrollables,
     "view": getViewport("abs"),
-    "tab-id": content.document._hcd_tab_id,
+    "tab-id": doc._hcd_tab_id,
     "screenPos": [e.screenX, e.screenY]
   };
 }
@@ -381,7 +582,7 @@ function _websocketDrag(e)
   var data = _getCurrentTabData(e);
   data.task = 'drag';
 
-  ctrlSend(data);
+  ctrlSend(data, true);
 
   // Send preview image
   var reg = {
@@ -391,7 +592,7 @@ function _websocketDrag(e)
     height: data.view[3]
   };
   var regions = [[reg.y, reg.y + reg.height]];
-  ctrlSend( grab([reg.width, reg.height], reg, 0, [regions, regions]) );
+  ctrlSend(grab([reg.width, reg.height], reg, 0, [regions, regions]), true);
 }
 
 function onDocumentClick(e)
@@ -693,16 +894,71 @@ function windowChanged()
 //------------------------------------------------------------------------------
 function onScrollImpl()
 {
+  var scroll = getScrollRegion();
+  var view = getViewport();
+
   var msg = {
-    'task': 'SCROLL',
-    'pos': [-content.scrollX, -content.scrollY],
+    'task': 'SYNC',
+    'type': 'SCROLL',
+    'pos': [scroll.x, scroll.y],
+    'pos-rel': [0, 0],
+    'tab-id': content.document._hcd_tab_id
+  };
+
+  var scroll_w = scroll.width - view[2];
+  if( scroll_w > 1 )
+    msg['pos-rel'][0] = scroll.x / scroll_w;
+
+  var scroll_h = scroll.height - view[3];
+  if( scroll_h > 1 )
+    msg['pos-rel'][1] = scroll.y / scroll_h;
+
+  send(msg);
+  ctrlSend(msg);
+}
+var onScroll = throttle(onScrollImpl, 100);
+
+//------------------------------------------------------------------------------
+function onElementScrollImpl(e)
+{
+  var msg = {
+    'task': 'SYNC',
+    'type': 'SCROLL',
+    'pos': [e.target.scrollLeft, e.target.scrollTop],
+    'xpath': getXPathForElement(e.target, content.document.body),
     'tab-id': content.document._hcd_tab_id
   };
   send(msg);
-  if( ctrl_socket )
-    ctrlSend(msg);
+  ctrlSend(msg);
 }
-var onScroll = throttle(onScrollImpl, 100);
+var scroll_handlers = {};
+
+//------------------------------------------------------------------------------
+function handleSyncMsg(msg)
+{
+  console.log(JSON.stringify(msg));
+
+  if( msg['tab-id'] != content.document._hcd_src_id )
+    return;
+
+  var type = msg['type'];
+
+  if( type == 'SCROLL' )
+  {
+    if( msg['xpath'] )
+    {
+      var el = getElementForXPath(msg['xpath'], content.document.body);
+      el.scrollLeft = msg.pos[0];
+      el.scrollTop = msg.pos[1];
+    }
+    else
+      content.scrollTo(-msg.pos[0], -msg.pos[1]);
+  }
+  else if( type == 'URI' )
+  {
+    content.document.location.href = msg['uri'];
+  }
+}
 
 //------------------------------------------------------------------------------
 function reroute()
@@ -893,11 +1149,8 @@ function register(match_title = false, src_id = 0)
           else
             alert("Unknown command: " + event.data);
         }
-        else if( msg.task == 'SCROLL' )
-        {
-          if( msg['tab-id'] == content.document._hcd_src_id )
-            content.scrollTo(-msg.pos[0], -msg.pos[1]);
-        }
+        else if( msg.task == 'SYNC' )
+          handleSyncMsg(msg);
         else
           alert("Unknown message: " + event.data);
       }
