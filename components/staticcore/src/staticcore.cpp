@@ -7,7 +7,8 @@ namespace LinksRouting
     Configurable("StaticCore"),
     _runningComponents(0),
     _config(0),
-    _user_config(0)
+    _user_config(0),
+    _default_routing("CPURouting")
   {
 #ifdef _DEBUG
     _requiredComponents = 0;
@@ -17,7 +18,7 @@ namespace LinksRouting
                         | Component::Renderer;
 #endif
 
-    registerArg("default-routing", _default_routing);
+    registerArg("DefaultRouting", _default_routing);
   }
 
   StaticCore::~StaticCore()
@@ -37,6 +38,7 @@ namespace LinksRouting
     return SlotSubscriber(_slots);
   }
 
+  //----------------------------------------------------------------------------
   bool StaticCore::startup(const std::string& startup)
   {
     _startupstr = startup;
