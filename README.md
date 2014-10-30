@@ -1,6 +1,6 @@
 # Visual Links to Hidden Content
 
-Context Preserving Visual Links and Hidden Content Visualization 
+Context Preserving Visual Links and Hidden Content Visualization
 
 
 ## Dependencies
@@ -31,42 +31,44 @@ Change settings (eg. enable building search widget) with ccmake:
 
     $ ccmake ..
 
-## Install firefox addons
+## Install firefox add-on
 
-### VisLink
+**Warning**: Firefox 26 seems to have a bug which causes rendering artifacts for the smart preview. With Firefox 27 this problem does not occur anymore (Older versions of Firefox also do not show this problem).
 
-Create a file named `hidden-content@caleydo.org` inside your Firefox extension directory
-with a single line containing the full path to `<repo>/addons/firefox/src`
+### Install from file
 
-(Alternatively just install <repo>/addons/firefox/hidden-content.xpi as addon. With this
-method the addon will not be automatically updated.)
+1. Get Firefox [add-on file](https://github.com/Caleydo/visuallinks/blob/master/addons/firefox/hidden-content.xpi?raw=true)
+2. Within Firefox navigate to [about:addons](about:addons)
+3. In the Tools menu select "Install Add-on From File"
+4. Select the downloaded file for installation
 
-After installing the add-on you will need to add the icon that hooks firefox up to the visual links application to the toolbar.
+### Manual installation
 
-### findbar_tweak
+Create a file named 'hidden-content@caleydo.org' inside your Firefox extension directory with a single line containing the full path to <your-source-directory>/addons/firefox/src
 
-This addon allows triggering linking requests with the built-in search function.
-
-Create a file named `fbt@quicksaver` inside your Firefox extension directory
-with a single line containing the full path to `<repo>/addons/firefox/findbar_tweak`.
-
-## Run
+## Run the server
 
 Run '''qtfullscreensystem''':
 
     $ cd bin/qtfullscreensystem
     $ ./qtfullscreensystem qtconfig.xml
-  
-Then connect your browser by clicking the visual links icon. 
 
-To trigger a visual link select a word and click the icon again.
+## Use Firefox addon
+
+1. Add "Hidden Content" button to Navigation Toolbar
+  1. Select "Customize" in Navigation Toolbar context menu
+  2. Drag "Hidden Content" button to the Navigation Toolbar
+2. Connect to Hidden Content server (Click on "Hidden Content" button)
+3. Initiate new linking process
+  1. Select a word or phrase
+  2. Press "Hidden Content" button or alternatively press [CTRL]
 
 # Troubleshooting
 
 Maximum size of shared memory segment exceeded (indicated by the following error
 messages):
 
-    QNativeImage: Unable to attach to shared memory segment. 
+    QNativeImage: Unable to attach to shared memory segment.
     QPainter::begin: Paint device returned engine == 0, type: 3
     QPainter::setCompositionMode: Painter not active
 
