@@ -14,6 +14,8 @@
 
 #include <iostream>
 
+typedef std::map<unsigned char*, unsigned int> GLImageCache;
+
 struct Tile:
   public LinksRouting::SlotType::Image
 {
@@ -82,6 +84,22 @@ class HierarchicTileMap
                       const char* data,
                       size_t data_size );
 
+    /**
+     *
+     * @param src_region    (Sub)region of the whole preview to render
+     * @param src_size      Total size of the preview
+     * @param target_region Coordinates of region the preview should be rendered
+     *                      to (The whole src_region will be fitted into the
+     *                      target region).
+     */
+    bool render( const Rect& src_region,
+                 const float2& src_size,
+                 const Rect& target_region,
+                 size_t zoom = -1,
+                 bool auto_center = false,
+                 double alpha = 1.,
+                 GLImageCache* cache = nullptr );
+
     float getLayerScale(size_t level) const;
 
     void setWidth(size_t width);
@@ -93,6 +111,8 @@ class HierarchicTileMap
     size_t getTileWidth() const { return _tile_width; }
     size_t getTileHeight() const { return _tile_height; }
 
+    unsigned int getChangeId() const { return _change_id; }
+
     Partitions partitions_src,
                partitions_dest;
 
@@ -103,7 +123,9 @@ class HierarchicTileMap
     unsigned int _width,
                  _height,
                  _tile_width,
-                 _tile_height;
+                 _tile_height,
+
+                 _change_id; //!< tracking map changes (eg. tile image updates)
     
     std::vector<Layer> _layers;
     

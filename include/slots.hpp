@@ -65,15 +65,26 @@ namespace LinksRouting
     public internal::Slot
   {
     public:
+      typedef std::unique_ptr<DataType> StorageRef;
+      StorageRef _data;
 
-      Slot():
-        _data( new DataType() )
+      template<class T = DataType>
+      static std::shared_ptr<Slot> make_slot()
+      {
+        return std::shared_ptr<Slot>(new Slot(new T));
+      }
+
+      template<class A1, class T = DataType>
+      static std::shared_ptr<Slot> make_slot(A1 const& arg)
+      {
+        return std::shared_ptr<Slot>(new Slot(new T(arg)));
+      }
+
+    private:
+
+      explicit Slot(DataType* d):
+        _data(d)
       {}
-
-    //protected:
-
-      std::unique_ptr<DataType> _data;
-
   };
 
   // workarround for missing template alias in visual studio...
@@ -106,10 +117,22 @@ namespace LinksRouting
       /**
        * Create a new Slot with the given name.
        */
-      template<typename DataType>
-      typename slot_t<DataType>::type create(const std::string& name)
+      template<typename PtrType, typename DataType = PtrType>
+      typename slot_t<PtrType>::type create(const std::string& name)
       {
-        auto slot = std::make_shared<typename slot_t<DataType>::raw_type>();
+        typedef typename slot_t<PtrType>::raw_type slot_type;
+        auto slot = slot_type::template make_slot<DataType>();
+        appendSlot(name, slot);
+
+        return slot;
+      }
+
+      template<typename PtrType, typename DataType, typename A1>
+      typename slot_t<PtrType>::type create( const std::string& name,
+                                             A1 const& arg )
+      {
+        typedef typename slot_t<PtrType>::raw_type slot_type;
+        auto slot = slot_type::template make_slot<A1, DataType>(arg);
         appendSlot(name, slot);
 
         return slot;

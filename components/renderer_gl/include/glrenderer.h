@@ -47,8 +47,6 @@ namespace LinksRouting
                             _color_covered_cur;
       int                   _num_blur;
 
-      Partitions *_partitions_src,
-                 *_partitions_dest;
       unsigned int _margin_left;
 
       /** Subscribe to the routed links */
@@ -78,26 +76,6 @@ namespace LinksRouting
 
       bool renderLinks( const LinkDescription::LinkList& links,
                         int pass = 0 );
-      bool renderNodes( const LinkDescription::nodes_t& nodes,
-                        float line_width = 3,
-                        HyperEdgeQueue* hedges_open = NULL,
-                        HyperEdgeSet* hedges_done = NULL,
-                        bool render_all = false,
-                        int pass = 0,
-                        bool do_transform = true );
-      bool renderRect( const Rect& rect,
-                       size_t margin = 2,
-                       GLuint tex = 0,
-                       const Color& fill = Color(1, 1, 1, 1),
-                       const Color& border = Color(0.3, 0.3, 0.3, 0.8) );
-      bool renderTileMap( const HierarchicTileMapPtr& tile_map,
-                          const Rect& src_region,
-                          const Rect& target_region,
-                          size_t zoom = -1,
-                          bool auto_center = false,
-                          double alpha = 1. );
-
-      float2 glVertex2f(float x, float y);
   };
 }
 

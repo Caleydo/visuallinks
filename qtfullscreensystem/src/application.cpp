@@ -8,6 +8,7 @@
 
 #include "application.hpp"
 #include "qt_helper.hxx"
+#include "PreviewWindow.hpp"
 #include "Window.hpp"
 
 #include <QDesktopWidget>
@@ -18,6 +19,31 @@
 
 namespace qtfullscreensystem
 {
+
+  class QtPreview:
+    public LinksRouting::SlotType::Preview
+  {
+    public:
+      virtual
+      LinksRouting::PreviewWindow*
+      getWindow( LinksRouting::SlotType::TextPopup::Popup *popup,
+                 uint8_t dev_id = 0 )
+      {
+        Application* app = dynamic_cast<Application*>(QApplication::instance());
+        if( !app )
+        {
+          qWarning() << "no app";
+          return nullptr;
+        }
+
+        LR::SlotSubscriber slot_subscriber = app->getSlotSubscriber();
+
+        QtPreviewWindow* w = new QtPreviewWindow(popup);
+        w->subscribeSlots(slot_subscriber);
+
+        return w;
+      }
+  };
 
   //----------------------------------------------------------------------------
   Application::Application(int& argc, char *argv[]):
@@ -142,6 +168,8 @@ namespace qtfullscreensystem
       slot_collector.create<LR::SlotType::MouseEvent>("/mouse");
     _slot_popups =
       slot_collector.create<LR::SlotType::TextPopup>("/popups");
+    _slot_previews =
+      slot_collector.create<LR::SlotType::Preview, QtPreview>("/previews");
   }
 
   //----------------------------------------------------------------------------
@@ -164,6 +192,18 @@ namespace qtfullscreensystem
       w->subscribeSlots(slot_subscriber);
     for(auto& w: _mask_windows)
       w->subscribeSlots(slot_subscriber);
+  }
+
+  //----------------------------------------------------------------------------
+  LR::SlotCollector Application::getSlotCollector()
+  {
+    return _core.getSlotCollector();
+  }
+
+  //----------------------------------------------------------------------------
+  LR::SlotSubscriber Application::getSlotSubscriber()
+  {
+    return _core.getSlotSubscriber();
   }
 
   //----------------------------------------------------------------------------

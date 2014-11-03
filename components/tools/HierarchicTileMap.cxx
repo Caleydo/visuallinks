@@ -6,6 +6,9 @@
  */
 
 #include "HierarchicTileMap.hpp"
+
+#include <GL/gl.h>
+
 #include <algorithm>
 #include <cassert>
 #include <cstdint>
@@ -157,7 +160,8 @@ HierarchicTileMap::HierarchicTileMap( unsigned int width,
   _width( width ),
   _height( height ),
   _tile_width( tile_width ),
-  _tile_height( tile_height )
+  _tile_height( tile_height ),
+  _change_id(0)
 {
 
 }
@@ -208,6 +212,151 @@ void HierarchicTileMap::setTileData( size_t x, size_t y, size_t zoom,
   memcpy(tile.pdata, data, data_size);
 
   tile.type = Tile::ImageRGBA8;
+
+  ++_change_id;
+}
+
+//------------------------------------------------------------------------------
+bool HierarchicTileMap::render( const Rect& src_region,
+                                const float2& src_size,
+                                const Rect& target_region,
+                                size_t zoom,
+                                bool auto_center,
+                                double alpha,
+                                GLImageCache* cache )
+{
+  MapRect rect = requestRect(src_region, zoom);
+  float2 rect_size = rect.getSize();
+  MapRect::QuadList quads = rect.getQuads();
+  for(auto quad = quads.begin(); quad != quads.end(); ++quad)
+  {
+    GLuint tex_id = 0;
+
+    if( quad->first->type == Tile::ImageRGBA8 )
+    {
+      if( cache )
+      {
+        auto cache_it = cache->find(quad->first->pdata);
+        if( cache_it != cache->end() )
+          tex_id = cache_it->second;
+      }
+
+      if( !tex_id )
+      {
+        std::cout << "load tile to GPU (" << quad->first->width
+                                   << "x" << quad->first->height
+                                   << ")" << std::endl;
+        glGenTextures(1, &tex_id);
+        glBindTexture(GL_TEXTURE_2D, tex_id);
+
+        glTexParameterf( GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR );
+        glTexParameterf( GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR );
+        glTexParameterf( GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP );
+        glTexParameterf( GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP );
+        glPixelStorei(GL_UNPACK_ALIGNMENT, 4);
+
+        glTexImage2D(
+          GL_TEXTURE_2D,
+          0,
+          GL_RGBA,
+          quad->first->width,
+          quad->first->height,
+          0,
+          GL_RGBA,
+          GL_UNSIGNED_BYTE,
+          quad->first->pdata
+        );
+
+        if( cache )
+        {
+          (*cache)[ quad->first->pdata ] = tex_id;
+        }
+        else
+        {
+          delete[] quad->first->pdata;
+          quad->first->id = tex_id;
+          quad->first->type = Tile::OpenGLTexture;
+        }
+      }
+    }
+    else if( quad->first->type == Tile::OpenGLTexture )
+    {
+      tex_id = quad->first->id;
+    }
+
+    if( !tex_id )
+      continue;
+
+    glEnable(GL_TEXTURE_2D);
+    glBindTexture(GL_TEXTURE_2D, tex_id);
+    glTexEnvi(GL_TEXTURE_ENV, GL_TEXTURE_ENV_MODE, GL_MODULATE);
+
+    float offset_x = 0;
+    if( !auto_center && target_region.size.x > rect_size.x )
+      offset_x = (target_region.size.x - rect_size.x) / 2;
+
+    glPushMatrix();
+    glTranslatef( target_region.pos.x + offset_x,
+                  target_region.pos.y,
+                  0 );
+
+    glColor4f(alpha,alpha,alpha,alpha);
+    glBegin(GL_QUADS);
+    for(size_t i = 0; i < quad->second._coords.size(); ++i)
+    {
+      glTexCoord2fv(quad->second._tex_coords[i].ptr());
+      glVertex2fv(quad->second._coords[i].ptr());
+
+//      std::cout << "    " << quad->second._coords[i] << ", tex: " << quad->second._tex_coords[i] << "\n";
+    }
+    glEnd();
+
+    glPopMatrix();
+
+    glDisable(GL_TEXTURE_2D);
+    glBindTexture(GL_TEXTURE_2D, 0);
+  }
+
+  // ----------
+  // Scrollbars
+
+  float2 bar_size(   std::max(src_region.size.x / src_size.x, 0.05f)
+                   * target_region.size.x,
+                     std::max(src_region.size.y / src_size.y, 0.05f)
+                   * target_region.size.y ),
+         rel_pos( src_region.pos.x / (src_size.x - src_region.size.x),
+                  src_region.pos.y / (src_size.y - src_region.size.y) );
+
+  glColor4f(1,0.5,0.25,alpha);
+  glLineWidth(3);
+
+  // Horizontal
+  if( src_region.size.x < src_size.x )
+  {
+    float x = target_region.pos.x
+            + rel_pos.x * (target_region.size.x - bar_size.x),
+          y = target_region.pos.y + target_region.size.y - 6;
+
+    glBegin(GL_LINE_STRIP);
+      glVertex2f(x, y);
+      glVertex2f(x + bar_size.x, y);
+    glEnd();
+  }
+
+  // Vertical
+  if( src_region.size.y < src_size.y )
+  {
+    float x = target_region.pos.x + target_region.size.x - 6,
+          y = target_region.pos.y
+            + rel_pos.y * (target_region.size.y - bar_size.y);
+
+    glBegin(GL_LINE_STRIP);
+      glVertex2f(x, y);
+      glVertex2f(x, y + bar_size.y);
+    glEnd();
+  }
+
+  return true;
 }
 
 //------------------------------------------------------------------------------
@@ -226,6 +375,8 @@ void HierarchicTileMap::setWidth(size_t width)
 {
   _layers.clear();
   _width = width;
+
+  ++_change_id;
 }
 
 //------------------------------------------------------------------------------
@@ -233,6 +384,8 @@ void HierarchicTileMap::setHeight(size_t height)
 {
   _layers.clear();
   _height = height;
+
+  ++_change_id;
 }
 
 //------------------------------------------------------------------------------

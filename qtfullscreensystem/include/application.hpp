@@ -49,6 +49,9 @@ namespace qtfullscreensystem
       void publishSlots(LR::SlotCollector& slots);
       void subscribeSlots(LR::SlotSubscriber& slot_subscriber);
 
+      LR::SlotCollector getSlotCollector();
+      LR::SlotSubscriber getSlotSubscriber();
+
     signals:
       void frame();
 
@@ -66,6 +69,7 @@ namespace qtfullscreensystem
       LR::slot_t<Rect>::type                            _slot_desktop_rect;
       LR::slot_t<LR::SlotType::MouseEvent>::type        _slot_mouse;
       LR::slot_t<LR::SlotType::TextPopup>::type         _slot_popups;
+      LR::slot_t<LR::SlotType::Preview>::type           _slot_previews;
 
       // TODO make readonly
       LR::slot_t<LR::SlotType::Image>::type             _subscribe_links,

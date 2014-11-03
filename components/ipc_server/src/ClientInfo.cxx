@@ -403,6 +403,7 @@ namespace LinksRouting
       link_id,
       nodes,
       node,
+      nullptr,
       0,
       TextPopup::HoverRect(popup_pos, popup_size, border_text, !text.empty()),
       TextPopup::HoverRect(hover_pos, hover_size, border_preview, false),
@@ -901,10 +902,10 @@ namespace LinksRouting
         cur_pos = std::max<int>(min_height, cur_pos);
 
         preview_size.setHeight(cur_pos);
-        margin_left = 170;
-        size_t width = preview_size.width() - margin_left;
-        margin_right = std::max<size_t>(width, 680) - 680;
-        preview_size.setWidth(width - margin_right);
+//        margin_left = 170;
+//        size_t width = preview_size.width() - margin_left;
+//        margin_right = std::max<size_t>(width, 680) - 680;
+//        preview_size.setWidth(width - margin_right);
       }
       else
         partitions_dest = partitions_src;

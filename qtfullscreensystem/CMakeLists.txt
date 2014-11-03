@@ -2,6 +2,7 @@
 set( HEADER_FILES
   include/application.hpp
 #  include/qglwidget.hpp
+  include/PreviewWindow.hpp
   include/Shader.hpp
   include/Window.hpp
 )
@@ -11,6 +12,7 @@ set( SOURCE_FILES
   src/main.cpp
 #  src/qglwidget.cpp
 #  src/render_thread.cpp
+  src/PreviewWindow.cpp
   src/Shader.cpp
   src/Window.cpp
 )

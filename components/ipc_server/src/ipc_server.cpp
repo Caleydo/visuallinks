@@ -10,6 +10,7 @@
 #include "log.hpp"
 #include "ClientInfo.hxx"
 #include "JSONParser.h"
+#include "common/PreviewWindow.hpp"
 
 #include <QMutex>
 #include <QWebSocket>
@@ -46,6 +47,42 @@ namespace LinksRouting
     clamp<T>(val += step, min, max);
   }
 
+  class IPCServer::TileHandler:
+    public SlotType::TileHandler
+  {
+    public:
+      TileHandler(IPCServer* ipc_server);
+
+      virtual bool updateRegion( SlotType::TextPopup::Popup& popup,
+                                 float2 center = float2(-9999, -9999),
+                                 float2 rel_pos = float2() );
+      virtual bool updateRegion( SlotType::XRayPopup::HoverRect& popup );
+
+    protected:
+      friend class IPCServer;
+      IPCServer* _ipc_server;
+
+      struct TileRequest
+      {
+        QWebSocket* socket;
+        HierarchicTileMapWeakPtr tile_map;
+        int zoom;
+        size_t x, y;
+        float2 tile_size;
+        clock::time_point time_stamp;
+      };
+
+      typedef std::map<uint8_t, TileRequest> TileRequests;
+      TileRequests  _tile_requests;
+      uint8_t       _tile_request_id;
+      int           _new_request;
+
+      bool updateTileMap( const HierarchicTileMapPtr& tile_map,
+                          QWebSocket* socket,
+                          const Rect& rect,
+                          int zoom );
+  };
+
   //----------------------------------------------------------------------------
   IPCServer::IPCServer( QMutex* mutex,
                         QWaitCondition* cond_data ):
@@ -53,8 +90,7 @@ namespace LinksRouting
     _window_monitor(std::bind(&IPCServer::regionsChanged, this, _1)),
     _mutex_slot_links(mutex),
     _cond_data_ready(cond_data),
-    _dirty_flags(0),
-    _interaction_handler(this)
+    _dirty_flags(0)
   {
     //assert(widget);
     registerArg("DebugRegions", _debug_regions);
@@ -78,6 +114,13 @@ namespace LinksRouting
     _slot_xray = slot_collector.create<SlotType::XRayPopup>("/xray");
     _slot_outlines =
       slot_collector.create<SlotType::CoveredOutline>("/covered-outlines");
+    _slot_tile_handler =
+      slot_collector.create< SlotType::TileHandler,
+                             TileHandler,
+                             IPCServer*
+                           >("/tile-handler", this);
+    _tile_handler = dynamic_cast<TileHandler*>(_slot_tile_handler->_data.get());
+    assert(_tile_handler);
   }
 
   //----------------------------------------------------------------------------
@@ -96,6 +139,8 @@ namespace LinksRouting
       slot_subscriber.getSlot<LinksRouting::SlotType::MouseEvent>("/mouse");
     _subscribe_popups =
       slot_subscriber.getSlot<SlotType::TextPopup>("/popups");
+    _subscribe_previews =
+      slot_subscriber.getSlot<SlotType::Preview>("/previews");
 
     _subscribe_mouse->_data->_click_callbacks.push_back
     (
@@ -168,13 +213,13 @@ namespace LinksRouting
       _debug_full_preview_path.clear();
     }
 
-    if( _interaction_handler._new_request > 0 )
-      --_interaction_handler._new_request;
+    if( _tile_handler->_new_request > 0 )
+      --_tile_handler->_new_request;
     else
     {
-      int allowed_request = 4;
-      for(auto req =  _interaction_handler._tile_requests.rbegin();
-               req != _interaction_handler._tile_requests.rend();
+      int allowed_request = 6;
+      for(auto req =  _tile_handler->_tile_requests.rbegin();
+               req != _tile_handler->_tile_requests.rend();
              ++req )
       {
         if( !req->second.socket )
@@ -183,7 +228,7 @@ namespace LinksRouting
         HierarchicTileMapPtr tile_map = req->second.tile_map.lock();
         if( !tile_map )
         {
-          // TODO req = _interaction_handler._tile_requests.erase(req);
+          // TODO req = _tile_handler->_tile_requests.erase(req);
           continue;
         }
 
@@ -223,17 +268,21 @@ namespace LinksRouting
     double dt = dur_us / 1000000.;
     last_time = now;
 
-    auto updatePopup = [&](SlotType::AnimatedPopup& popup)
+    auto updatePopup = [&](SlotType::AnimatedPopup& popup) -> uint32_t
     {
+      uint32_t flags = 0;
+
       bool visible = popup.isVisible();
       if( popup.update(dt) )
-        _dirty_flags |= RENDER_DIRTY;
+        flags |= RENDER_DIRTY;
 
       double alpha = popup.getAlpha();
 
       if(    visible != popup.isVisible()
           || (alpha > 0 && alpha < 0.5) )
-        _dirty_flags |= MASK_DIRTY;
+        flags |= MASK_DIRTY;
+
+      return flags;
     };
 
     foreachPopup
@@ -247,7 +296,24 @@ namespace LinksRouting
           else if( !popup.text.empty() )
             popup.region.show();
         }
-        updatePopup(popup.hover_region);
+        _dirty_flags |= updatePopup(popup.hover_region);
+
+        if( popup.hover_region.isVisible() )
+        {
+          if( !popup.preview )
+            popup.preview = _subscribe_previews->_data->getWindow(&popup);
+
+          popup.preview->update(dt);
+        }
+        else
+        {
+          if( popup.preview )
+          {
+            popup.preview->release();
+            popup.preview = nullptr;
+          }
+        }
+
         return false;
       }
     );
@@ -259,7 +325,7 @@ namespace LinksRouting
       [&](SlotType::XRayPopup::HoverRect& preview, QWebSocket&, ClientInfo&)
          -> bool
       {
-        updatePopup(preview);
+        _dirty_flags |= updatePopup(preview);
         if( preview.getAlpha() > (preview.isFadeIn() ? 0.9 : 0.3) )
         {
           preview_wid = preview.node->get<WId>("client_wid");
@@ -496,20 +562,25 @@ namespace LinksRouting
           client_info.update(windows);
           return;
         }
-        else if( task == "SCROLL" )
+        else if( task == "SYNC" )
         {
-          client_info.setScrollPos( msg.getValue<QPoint>("pos") );
-          client_info.update(_window_monitor.getWindows());
-
-          // Forward scroll events to clients which support this (eg. for
-          // synchronized scrolling)
-          for(auto const& socket: _clients)
+          if( msg.getValue<QString>("type") == "SCROLL" )
           {
-            if(    sender() != socket.first
-                && socket.second->supportsCommand("scroll") )
-              socket.first->sendTextMessage(data);
+            client_info.setScrollPos( msg.getValue<QPoint>("pos") );
+            client_info.update(_window_monitor.getWindows());
+
+            // Forward scroll events to clients which support this (eg. for
+            // synchronized scrolling)
+            for(auto const& socket: _clients)
+            {
+              if(    sender() != socket.first
+                  && socket.second->supportsCommand("scroll") )
+                socket.first->sendTextMessage(data);
+            }
+            dirtyLinks();
           }
-          return dirtyLinks();
+
+          return;
         }
         else if( task == "CMD" )
         {
@@ -738,8 +809,8 @@ namespace LinksRouting
       return;
     }
 
-    auto request = _interaction_handler._tile_requests.find(seq_id);
-    if( request == _interaction_handler._tile_requests.end() )
+    auto request = _tile_handler->_tile_requests.find(seq_id);
+    if( request == _tile_handler->_tile_requests.end() )
     {
       LOG_WARN("Received unknown tile request.");
       return;
@@ -758,7 +829,7 @@ namespace LinksRouting
     if( !tile_map )
     {
       LOG_WARN("Received tile request for expired map.");
-      _interaction_handler._tile_requests.erase(request);
+      _tile_handler->_tile_requests.erase(request);
       return;
     }
 
@@ -1210,7 +1281,7 @@ namespace LinksRouting
       {
         client_info.activateWindow();
         popup.hover_region.fadeIn();
-        _interaction_handler.updateRegion(&socket, popup);
+        _tile_handler->updateRegion(popup);
         return true;
       }
 
@@ -1360,12 +1431,10 @@ namespace LinksRouting
         if( reg.isVisible() && !reg.isFadeOut() )
           return false;
 
-        if( reg.isFadeOut() )
-          reg.fadeIn();
-        else
+        if( !reg.isFadeOut() )
           reg.delayedFadeIn();
 
-        _interaction_handler.updateRegion(&socket, popup);
+        _tile_handler->updateRegion(popup);
         return true;
       }
       else if( reg.isVisible() )
@@ -1408,7 +1477,7 @@ namespace LinksRouting
         else
           preview.delayedFadeIn();
 
-        _interaction_handler.updateRegion(preview);
+        _tile_handler->updateRegion(preview);
         return true;
       }
       else if( preview.isVisible() )
@@ -1453,14 +1522,14 @@ namespace LinksRouting
       {
         popup.hover_region.src_region.pos.y -=
           delta / fabs(static_cast<float>(delta)) * 20 * step_y;
-        changed |= _interaction_handler.updateRegion(&socket, popup);
+        changed |= _tile_handler->updateRegion(popup);
       }
       else if( mod & SlotType::MouseEvent::ControlModifier )
       {
         float step_x = step_y * preview_aspect;
         popup.hover_region.src_region.pos.x -=
           delta / fabs(static_cast<float>(delta)) * 20 * step_x;
-        changed |= _interaction_handler.updateRegion(&socket, popup);
+        changed |= _tile_handler->updateRegion(popup);
       }
       else
       {
@@ -1477,9 +1546,8 @@ namespace LinksRouting
 
           float2 d = pos - popup.hover_region.region.pos,
                  mouse_pos = scale * d + popup.hover_region.src_region.pos;
-          _interaction_handler.updateRegion
+          _tile_handler->updateRegion
           (
-            &socket,
             popup,
             mouse_pos,
             d / popup.hover_region.region.size
@@ -1521,7 +1589,7 @@ namespace LinksRouting
       float step_x = step_y * preview_aspect;
       popup.hover_region.src_region.pos.x -= delta.x * step_x;
 
-      return _interaction_handler.updateRegion(&socket, popup);
+      return _tile_handler->updateRegion(popup);
     }) )
       dirtyRender();
   }
@@ -1648,8 +1716,8 @@ namespace LinksRouting
   }
 
   //----------------------------------------------------------------------------
-  IPCServer::InteractionHandler::InteractionHandler(IPCServer* server):
-    _server(server),
+  IPCServer::TileHandler::TileHandler(IPCServer* ipc_server):
+    _ipc_server(ipc_server),
     _tile_request_id(0),
     _new_request(0)
   {
@@ -1657,17 +1725,15 @@ namespace LinksRouting
   }
 
   //----------------------------------------------------------------------------
-  bool IPCServer::InteractionHandler::updateRegion(
-    QWebSocket* socket,
-    SlotType::TextPopup::Popup& popup,
-    float2 center,
-    float2 rel_pos )
+  bool IPCServer::TileHandler::updateRegion( SlotType::TextPopup::Popup& popup,
+                                             float2 center,
+                                             float2 rel_pos )
   {
     HierarchicTileMapPtr tile_map = popup.hover_region.tile_map.lock();
     float scale = 1/tile_map->getLayerScale(popup.hover_region.zoom);
 
-    float preview_aspect = _server->_preview_width
-                         / static_cast<float>(_server->_preview_height);
+    float preview_aspect = _ipc_server->_preview_width
+                         / static_cast<float>(_ipc_server->_preview_height);
     const QRect reg = popup.hover_region.scroll_region.toQRect();
     float zoom_scale = pow(2.0f, static_cast<float>(popup.hover_region.zoom));
 
@@ -1683,7 +1749,7 @@ namespace LinksRouting
     if( popup.auto_resize )
     {
       int real_width = reg.width() / scale + 0.5f,
-          popup_width = std::min(_server->_preview_width, real_width);
+          popup_width = std::min(_ipc_server->_preview_width, real_width);
 
       Rect& popup_region = popup.hover_region.region;
       const Rect& icon_region = popup.region.region;
@@ -1717,21 +1783,39 @@ namespace LinksRouting
 //    if( old_pos == src.pos )
 //      return;
 
+    if( !popup.client_socket )
+    {
+      LOG_WARN("Popup without active socket.");
+      return false;
+    }
+
+    QWebSocket* socket = static_cast<QWebSocket*>(popup.client_socket);
+    ClientInfos::iterator client = _ipc_server->_clients.find(socket);
+
+    if( client == _ipc_server->_clients.end() )
+    {
+      LOG_WARN("Popup without valid client_socket");
+      popup.client_socket = 0;
+
+      return true;
+    }
+
     return !updateTileMap(tile_map, socket, src, popup.hover_region.zoom);
   }
 
   //----------------------------------------------------------------------------
-  void IPCServer::InteractionHandler::updateRegion(
-    SlotType::XRayPopup::HoverRect& popup )
+  bool IPCServer::TileHandler::updateRegion(
+    SlotType::XRayPopup::HoverRect& popup
+  )
   {
-    updateTileMap( popup.tile_map.lock(),
-                   static_cast<QWebSocket*>(popup.client_socket),
-                   popup.source_region,
-                   -1 );
+    return updateTileMap( popup.tile_map.lock(),
+                          static_cast<QWebSocket*>(popup.client_socket),
+                          popup.source_region,
+                          -1 );
   }
 
   //----------------------------------------------------------------------------
-  bool IPCServer::InteractionHandler::updateTileMap(
+  bool IPCServer::TileHandler::updateTileMap(
     const HierarchicTileMapPtr& tile_map,
     QWebSocket* socket,
     const Rect& src,

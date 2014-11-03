@@ -20,6 +20,8 @@ class QImage;
 
 namespace LinksRouting
 {
+  class PreviewWindow;
+
 namespace SlotType
 {
   class AnimatedPopup
@@ -100,10 +102,14 @@ namespace SlotType
                   link_id;
       LinkDescription::nodes_t nodes;
       LinkDescription::NodePtr node;
+      PreviewWindow *preview;
+
       void* client_socket;
       HoverRect region;
       HoverRect hover_region;
       bool auto_resize;
+
+      ~Popup();
     };
 
     typedef std::list<Popup> Popups;

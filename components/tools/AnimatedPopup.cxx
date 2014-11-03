@@ -5,10 +5,13 @@
  *      Author: tom
  */
 
+#include "common/PreviewWindow.hpp"
 #include "slotdata/text_popup.hpp"
 
 namespace LinksRouting
 {
+  PreviewWindow::~PreviewWindow() {}
+
 namespace SlotType
 {
 
@@ -146,6 +149,14 @@ namespace SlotType
       _time = (_state & VISIBLE) == (flags & VISIBLE) ? _time : TIMEOUT - _time;
 
     _state = flags;
+  }
+
+  //----------------------------------------------------------------------------
+  TextPopup::Popup::~Popup()
+  {
+    if( preview )
+      preview->release();
+    preview = nullptr;
   }
 
 } // namespace SlotType

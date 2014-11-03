@@ -1,5 +1,5 @@
 #include "glrenderer.h"
-#include "float2.hpp"
+#include "NodeRenderer.hpp"
 #include "log.hpp"
 
 #include <GL/glu.h>
@@ -20,109 +20,9 @@ std::ostream& operator<<(std::ostream& s, const std::vector<float2>& verts)
 
 namespace LinksRouting
 {
-  typedef std::pair<std::vector<float2>, std::vector<float2>> line_borders_t;
-
-  /**
-   * Calculate the two borders of a line which gets extruded to the given width
-   *
-   * @param points
-   * @param width TODO which unit should be used?
-   */
-  template<typename Collection>
-  line_borders_t calcLineBorders( const Collection& points,
-                                  float width,
-                                  bool closed = false,
-                                  float widen_end = 0.f )
-  {
-    auto begin = std::begin(points),
-         end = std::end(points);
-
-    decltype(begin) p0 = begin,
-                     p1 = p0 + 1;
-
-    if( p0 == end || p1 == end )
-      return line_borders_t();
-
-    widen_end = std::min(widen_end, (*(end - 2) - *(end - 1)).length());
-
-    line_borders_t ret;
-    float w_out = 0.5 * width,
-          w_in = 0.5 * width;
-
-    float2 prev_dir = (closed ? (*p0 - *(end - 1)) : (*p1 - *p0)).normalize(),
-           prev_normal = float2( prev_dir.y, -prev_dir.x );
-
-    for( ; p0 != end; ++p0 )
-    {
-      float2 normal, dir;
-
-      if( closed || p1 != end )
-      {
-        dir = (((closed && p1 == end) ? *begin : *p1) - *p0).normalize();
-        float2 mean_dir = 0.5f * (prev_dir + dir);
-        normal = float2( mean_dir.y, -mean_dir.x );
-
-        prev_dir = dir;
-      }
-      else // !closed && p1 == end
-      {
-        normal = float2( prev_dir.y, -prev_dir.x );
-      }
-
-      // project on normal
-      float2 offset_out = normal / normal.dot(prev_normal / (w_out)),
-             offset_in = normal / normal.dot(prev_normal / (w_in));
-
-      if( offset_out.length() > 2 * w_out )
-        offset_out *= 2 * w_out / offset_out.length();
-
-      if( offset_in.length() > 2 * w_in )
-        offset_in *= 2 * w_in / offset_in.length();
-
-      ret.first.push_back(  *p0 + offset_out );
-      ret.second.push_back( *p0 - offset_in );
-
-      prev_normal = prev_dir.normal();
-
-      if(p1 != end)
-        ++p1;
-    }
-
-    if( closed )
-    {
-      ret.first.push_back( ret.first.front() );
-      ret.second.push_back( ret.second.front() );
-    }
-    else if( widen_end > 1.f )
-    {
-      float f = widen_end / 35.f;
-
-      ret.first.back() -= f * 35 * prev_dir;
-      ret.second.back() -= f * 35 * prev_dir;
-
-      const float offsets[][2] = {
-        {16, 1.5},
-        {11, 2},
-        { 8, 2.5}
-      };
-
-      for(size_t i = 0; i < sizeof(offsets)/sizeof(offsets[0]); ++i)
-      {
-        ret.first.push_back( ret.first.back() + f * offsets[i][0] * prev_dir
-                                              + offsets[i][1] * prev_normal );
-        ret.second.push_back( ret.second.back() + f * offsets[i][0] * prev_dir
-                                                - offsets[i][1] * prev_normal );
-      }
-    }
-
-    return ret;
-  }
-
   //----------------------------------------------------------------------------
   GlRenderer::GlRenderer():
     Configurable("GLRenderer"),
-    _partitions_src(nullptr),
-    _partitions_dest(nullptr),
     _margin_left(0),
     _blur_x_shader(nullptr),
     _blur_y_shader(nullptr)
@@ -238,6 +138,7 @@ namespace LinksRouting
     if( !_subscribe_outlines->_data->popups.empty() )
     {
       rendered_anything = true;
+      NodeRenderer renderer;
 
       for( auto const& outline: _subscribe_outlines->_data->popups )
       {
@@ -254,7 +155,7 @@ namespace LinksRouting
                   ? 1
                   : 0.5;
 
-        renderRect(reg_title, 0, 0, fac * _colors.front());
+        renderer.renderRect(reg_title, 0, 0, fac * _colors.front());
       }
     }
 
@@ -266,126 +167,15 @@ namespace LinksRouting
     if( !_subscribe_popups->_data->popups.empty() )
     {
       rendered_anything = true;
+      NodeRenderer renderer;
 
       for( auto const& popup: _subscribe_popups->_data->popups )
       {
         if( !popup.region.isVisible() )
           continue;
 
-        renderRect(popup.region.region, popup.region.border);
+        renderer.renderRect(popup.region.region, popup.region.border);
         rendered_anything = true;
-
-        if( !popup.hover_region.isVisible() )
-          continue;
-
-        double alpha = popup.hover_region.getAlpha();
-
-        renderRect( popup.hover_region.region,
-                    popup.hover_region.border,
-                    0,
-                    Color(0.3,0.3,0.3, alpha),
-                    Color(0.3, 0.3, 0.3, 0.8 * alpha) );
-
-
-        const Rect& hover = popup.hover_region.region,
-                  & src = popup.hover_region.src_region,
-                  & scroll = popup.hover_region.scroll_region;
-
-        HierarchicTileMapPtr tile_map = popup.hover_region.tile_map.lock();
-        renderTileMap( tile_map,
-                       src,
-                       hover,
-                       popup.hover_region.zoom,
-                       popup.auto_resize,
-                       alpha );
-
-        // ---------
-        // Scrollbar
-
-        if( src.size.y < scroll.size.y )
-        {
-          float bar_height = std::max(src.size.y / scroll.size.y, 0.05f)
-                           * hover.size.y;
-          float rel_pos_y = src.pos.y / (scroll.size.y - src.size.y);
-
-          float2 scroll_pos = hover.pos
-                            + float2( hover.size.x + 4,
-                                      rel_pos_y * (hover.size.y - bar_height) );
-
-          glColor4f(1,0.5,0.25,alpha);
-          glLineWidth(4);
-          glBegin(GL_LINE_STRIP);
-            glVertex2f(scroll_pos.x, scroll_pos.y);
-            glVertex2f(scroll_pos.x, scroll_pos.y + bar_height);
-          glEnd();
-        }
-
-        GLdouble proj[16];
-        glGetDoublev(GL_PROJECTION_MATRIX, proj);
-
-        float offset_x = (proj[12] + 1) / proj[0];
-        float offset_y = (proj[13] + 1) / proj[5];
-
-        float upscale = _links_fbo.width / _xray_fbo.width;
-
-        glPushAttrib(GL_VIEWPORT_BIT);
-        glViewport( upscale * (hover.pos.x + offset_x),
-                    upscale * (hover.pos.y + offset_y),
-                    upscale * hover.size.x,
-                    upscale * hover.size.y );
-
-        glMatrixMode(GL_PROJECTION);
-        glPushMatrix();
-        glLoadIdentity();
-        glOrtho(0, hover.size.x, 0, hover.size.y, -1, 1);
-
-        glMatrixMode(GL_MODELVIEW);
-        glPushMatrix();
-        glLoadIdentity();
-
-        float scale = hover.size.y / src.size.y;
-        glScalef(scale, scale, 0);
-
-        float2 offset = src.pos;
-        if( !popup.auto_resize && src.size.x > scroll.size.x )
-          offset.x -= (src.size.x - scroll.size.x) / 2;
-
-        glTranslatef(-offset.x, -offset.y, 0);
-
-        const float w = 4.f;
-        const float2 vp_pos = popup.hover_region.offset + 0.5f * float2(w, w);
-        const float2 vp_dim = popup.hover_region.dim - 4.f * float2(w, w);
-
-        if( tile_map )
-        {
-          _partitions_src = &tile_map->partitions_src;
-          _partitions_dest = &tile_map->partitions_dest;
-          _margin_left = tile_map->margin_left;
-        }
-
-        Color color_cur = _color_cur;
-        _color_cur = alpha * color_cur;
-        renderNodes(popup.nodes, 3.f / scale, 0, 0, true, 1, false);
-
-        glLineWidth(w);
-        glBegin(GL_LINE_LOOP);
-          glVertex2f(vp_pos.x, vp_pos.y);
-          glVertex2f(vp_pos.x + vp_dim.x, vp_pos.y);
-          glVertex2f(vp_pos.x + vp_dim.x, vp_pos.y + vp_dim.y);
-          glVertex2f(vp_pos.x, vp_pos.y + vp_dim.y);
-        glEnd();
-
-        _color_cur = color_cur;
-
-        _partitions_src = 0;
-        _partitions_dest = 0;
-        _margin_left = 0;
-
-        glPopMatrix();
-        glMatrixMode(GL_PROJECTION);
-        glPopMatrix();
-
-        glPopAttrib();
       }
     }
 
@@ -425,12 +215,12 @@ namespace LinksRouting
       flags |= MASK_DIRTY;
 
 //      renderRect( preview.preview_region );
-      renderTileMap( preview.tile_map.lock(),
-                     preview.source_region,
-                     preview.preview_region,
-                     -1,
-                     false,
-                     preview.getAlpha() );
+      tile_map->render( preview.source_region,
+                        preview.source_region.size,
+                        preview.preview_region,
+                        -1,
+                        false,
+                        preview.getAlpha() );
     }
 
     _xray_fbo.unbind();
@@ -509,11 +299,17 @@ namespace LinksRouting
     bool rendered_anything = false;
     _color_cur = Color(1.0, 0.2, 0.2);
 
+    NodeRenderer renderer;
+    renderer.setUseStencil(true);
+    renderer.setLineWidth(3);
+
     for(auto link = links.begin(); link != links.end(); ++link)
     {
       if( !_colors.empty() )
         _color_cur = _colors[ link->_color_id % _colors.size() ];
       _color_covered_cur = 0.4f * _color_cur;
+
+      renderer.setColor(_color_cur, _color_covered_cur);
 
       HyperEdgeQueue hedges_open;
       HyperEdgeSet   hedges_done;
@@ -536,12 +332,11 @@ namespace LinksRouting
         if( !fork )
         {
           rendered_anything |=
-           renderNodes( hedge->getNodes(),
-                        3.f,
-                        &hedges_open,
-                        &hedges_done,
-                        false,
-                        pass );
+           renderer.renderNodes( hedge->getNodes(),
+                                 &hedges_open,
+                                 &hedges_done,
+                                 false,
+                                 pass );
         }
         else
         {
@@ -597,8 +392,11 @@ namespace LinksRouting
                           segment.nodes.end() );
           }
 
-          rendered_anything |=
-            renderNodes(nodes, 3.f, &hedges_open, &hedges_done, false, pass);
+          rendered_anything |= renderer.renderNodes( nodes,
+                                                     &hedges_open,
+                                                     &hedges_done,
+                                                     false,
+                                                     pass );
         }
 
         hedges_done.insert(hedge);
@@ -606,291 +404,6 @@ namespace LinksRouting
     }
 
     return rendered_anything;
-  }
-
-  //----------------------------------------------------------------------------
-  bool GlRenderer::renderNodes( const LinkDescription::nodes_t& nodes,
-                                float line_width,
-                                HyperEdgeQueue* hedges_open,
-                                HyperEdgeSet* hedges_done,
-                                const bool render_all,
-                                const int pass,
-                                const bool do_transform )
-  {
-    // Mask every region covered be a highlight to prevent drawing links on top
-    glStencilFunc(GL_ALWAYS, 1, 1);
-    glStencilOp(GL_KEEP, GL_KEEP, GL_REPLACE);
-
-    bool rendered_anything = false;
-
-    if( pass > 0 && do_transform )
-    {
-      // First pass is used by xray previews which are given in absolute
-      // coordinates.
-      float2 offset = float2();
-      if( !nodes.empty() && nodes.front()->getParent() )
-        offset = nodes.front()->getParent()->get<float2>("screen-offset");
-
-      glPushMatrix();
-      glTranslatef(offset.x, offset.y, 0);
-    }
-
-    for( auto node = nodes.begin(); node != nodes.end(); ++node )
-    {
-      bool hover = (*node)->get<bool>("hover");
-      float alpha = (*node)->get<float>("alpha", hover ? 1 : 0);
-      if( alpha > 0.01 )
-        hover = true;
-
-      if( !hover && (*node)->get<bool>("hidden") && !render_all )
-        continue;
-
-      if( hedges_open )
-      {
-        for(auto child = (*node)->getChildren().begin();
-                 child != (*node)->getChildren().end();
-               ++child )
-          hedges_open->push( child->get() );
-      }
-
-      if(    (*node)->getVertices().empty()
-          || (render_all && !(*node)->get<bool>("show-in-preview", true)) )
-        continue;
-
-      if( pass == 0 )
-      {
-        if( !render_all && hover )
-        {
-          Color c = alpha * _color_cur;
-          const Rect rp = (*node)->get<Rect>("covered-preview-region");
-          renderRect(rp, 2.f, 0, 0.05 * c, 2 * c);
-          const Rect r = (*node)->get<Rect>("covered-region");
-          renderRect(r, 3.f, 0, 0.15 * c, 2 * c);
-          rendered_anything = true;
-        }
-        continue;
-      }
-
-      Color color_cur = !render_all && ( (   (*node)->get<bool>("covered")
-                                         && !(*node)->get<bool>("hover")
-                                         )
-                                       || (*node)->get<bool>("outside")
-                                       )
-                      ? _color_covered_cur
-                      : _color_cur;
-
-      if( (*node)->get<bool>("outline-title") )
-        color_cur *= 0.5;
-
-      bool filled = (*node)->get<bool>("filled", false);
-      if( !filled && !render_all && !(*node)->get<bool>("outline-only") )
-      {
-        Color light(0,0,0,0);// = 0.5 * color_cur;
-        light.a *= 0.6;
-        glColor4fv(light);
-        glBegin(GL_POLYGON);
-        for( auto vert = std::begin((*node)->getVertices());
-                  vert != std::end((*node)->getVertices());
-                ++vert )
-          glVertex2f(vert->x, vert->y);
-        glEnd();
-      }
-      glColor4fv(color_cur);
-      line_borders_t region = calcLineBorders( (*node)->getVertices(),
-                                               line_width,
-                                               true );
-      glBegin(filled ? GL_POLYGON : GL_TRIANGLE_STRIP);
-      for( auto first = std::begin(region.first),
-                second = std::begin(region.second);
-           first != std::end(region.first);
-           ++first,
-           ++second )
-      {
-        if( !filled )
-          glVertex2f(first->x, first->y);
-        glVertex2f(second->x, second->y);
-      }
-      glEnd();
-      rendered_anything = true;
-    }
-
-    if( pass > 0 && do_transform )
-    {
-      glPopMatrix();
-    }
-
-    return rendered_anything;
-  }
-
-  //----------------------------------------------------------------------------
-  bool GlRenderer::renderRect( const Rect& rect,
-                               size_t b,
-                               GLuint tex,
-                               const Color& fill,
-                               const Color& border )
-  {
-    if( b )
-    {
-      glColor4fv(border);
-      glBegin(fill.a < 0.5 ? GL_LINE_LOOP : GL_QUADS);
-        glVertex2f(rect.pos.x - b,               rect.pos.y - b);
-        glVertex2f(rect.pos.x + rect.size.x + b, rect.pos.y - b);
-        glVertex2f(rect.pos.x + rect.size.x + b, rect.pos.y + rect.size.y + b);
-        glVertex2f(rect.pos.x - b,               rect.pos.y + rect.size.y + b);
-      glEnd();
-    }
-
-    if( fill.a < 0.05 )
-      return b > 0;
-
-    if( tex )
-    {
-      glEnable(GL_TEXTURE_2D);
-      glBindTexture(GL_TEXTURE_2D, tex);
-    }
-
-    glColor4fv(fill);
-    glBegin(GL_QUADS);
-      glTexCoord2f(0, 0);
-      glVertex2f(rect.pos.x,               rect.pos.y);
-      glTexCoord2f(1, 0);
-      glVertex2f(rect.pos.x + rect.size.x, rect.pos.y);
-      glTexCoord2f(1, 1);
-      glVertex2f(rect.pos.x + rect.size.x, rect.pos.y + rect.size.y);
-      glTexCoord2f(0, 1);
-      glVertex2f(rect.pos.x,               rect.pos.y + rect.size.y);
-    glEnd();
-
-    if( tex )
-    {
-      glDisable(GL_TEXTURE_2D);
-      glBindTexture(GL_TEXTURE_2D, 0);
-    }
-
-    return true;
-  }
-
-  //----------------------------------------------------------------------------
-  bool GlRenderer::renderTileMap( const HierarchicTileMapPtr& tile_map,
-                                  const Rect& src_region,
-                                  const Rect& target_region,
-                                  size_t zoom,
-                                  bool auto_center,
-                                  double alpha )
-  {
-    if( !tile_map )
-      return false;
-
-    MapRect rect = tile_map->requestRect(src_region, zoom);
-    float2 rect_size = rect.getSize();
-    MapRect::QuadList quads = rect.getQuads();
-    for(auto quad = quads.begin(); quad != quads.end(); ++quad)
-    {
-      if( quad->first->type == Tile::ImageRGBA8 )
-      {
-        std::cout << "load tile to GPU (" << quad->first->width
-                                   << "x" << quad->first->height
-                                   << ")" << std::endl;
-        GLuint tex_id;
-        glGenTextures(1, &tex_id);
-        glBindTexture(GL_TEXTURE_2D, tex_id);
-
-        glTexParameterf( GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR );
-        glTexParameterf( GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR );
-        glTexParameterf( GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP );
-        glTexParameterf( GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP );
-        glPixelStorei(GL_UNPACK_ALIGNMENT, 4);
-
-        glTexImage2D(
-          GL_TEXTURE_2D,
-          0,
-          GL_RGBA,
-          quad->first->width,
-          quad->first->height,
-          0,
-          GL_RGBA,
-          GL_UNSIGNED_BYTE,
-          quad->first->pdata
-        );
-
-        delete[] quad->first->pdata;
-        quad->first->id = tex_id;
-        quad->first->type = Tile::OpenGLTexture;
-      }
-
-      if( quad->first->type != Tile::OpenGLTexture )
-        continue;
-
-      glEnable(GL_TEXTURE_2D);
-      glBindTexture(GL_TEXTURE_2D, quad->first->id);
-      glTexEnvi(GL_TEXTURE_ENV, GL_TEXTURE_ENV_MODE, GL_MODULATE);
-
-      float offset_x = 0;
-      if( !auto_center && target_region.size.x > rect_size.x )
-        offset_x = (target_region.size.x - rect_size.x) / 2;
-
-      glPushMatrix();
-      glTranslatef( target_region.pos.x + offset_x,
-                    target_region.pos.y,
-                    0 );
-
-      glColor4f(alpha,alpha,alpha,alpha);
-      glBegin(GL_QUADS);
-      for(size_t i = 0; i < quad->second._coords.size(); ++i)
-      {
-        glTexCoord2fv(quad->second._tex_coords[i].ptr());
-        glVertex2fv(quad->second._coords[i].ptr());
-      }
-      glEnd();
-
-      glPopMatrix();
-
-      glDisable(GL_TEXTURE_2D);
-      glBindTexture(GL_TEXTURE_2D, 0);
-    }
-
-    return true;
-  }
-
-  //----------------------------------------------------------------------------
-  float2 GlRenderer::glVertex2f(float x, float y)
-  {
-#if 1
-    if( _partitions_dest && _partitions_src )
-    {
-      float last_src = 0,
-            last_dest = 0,
-            ref_y = y;
-      for( auto src = _partitions_src->begin(),
-                dest = _partitions_dest->begin();
-                src != _partitions_src->end() &&
-                dest != _partitions_dest->end();
-              ++src,
-              ++dest )
-      {
-        if( ref_y <= src->x )
-        {
-          float t = (ref_y - last_src) / (src->x - last_src);
-          y = (1 - t) * last_dest + t * dest->x;
-        }
-        else if( ref_y <= src->y )
-        {
-          y -= src->x - dest->x;
-        }
-        else
-        {
-          last_src = src->y;
-          last_dest = dest->y;
-          continue;
-        }
-        break;
-      }
-
-      x -= _margin_left;
-    }
-#endif
-    ::glVertex2f(x, y);
-    return float2(x, y);
   }
 
 }

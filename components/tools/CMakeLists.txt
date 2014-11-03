@@ -22,6 +22,7 @@ set(SOURCE_FILES
   fbo.cxx
   HierarchicTileMap.cxx
   linkdescription.cpp
+  NodeRenderer.cxx
   PartitionHelper.cxx
   Rect.cxx
   routing.cxx

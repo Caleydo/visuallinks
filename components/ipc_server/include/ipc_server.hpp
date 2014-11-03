@@ -21,7 +21,9 @@
 #include "slotdata/image.hpp"
 #include "slotdata/mouse_event.hpp"
 #include "slotdata/polygon.hpp"
+#include "slotdata/Preview.hpp"
 #include "slotdata/text_popup.hpp"
+#include "slotdata/TileHandler.hpp"
 #include "window_monitor.hpp"
 
 #include "datatypes.h"
@@ -156,6 +158,8 @@ namespace LinksRouting
       slot_t<SlotType::XRayPopup>::type _slot_xray;
       slot_t<SlotType::CoveredOutline>::type _slot_outlines;
 
+      slot_t<SlotType::TileHandler>::type _slot_tile_handler;
+
       /* List of available routing components */
       slot_t<SlotType::ComponentSelection>::type _subscribe_routing;
 
@@ -166,8 +170,9 @@ namespace LinksRouting
       slot_t<Rect>::type _subscribe_desktop_rect;
 
       /* Slot for registering mouse callback */
-      slot_t<SlotType::MouseEvent>::type _subscribe_mouse;
-      slot_t<SlotType::TextPopup>::type _subscribe_popups;
+      slot_t<SlotType::MouseEvent>::type  _subscribe_mouse;
+      slot_t<SlotType::TextPopup>::type   _subscribe_popups;
+      slot_t<SlotType::Preview>::type     _subscribe_previews;
 
       void updateScrollRegion( const JSONParser& json,
                                ClientInfo& client_info );
@@ -193,38 +198,8 @@ namespace LinksRouting
       bool          _preview_auto_width,
                     _outside_see_through;
 
-      struct InteractionHandler
-      {
-        IPCServer* _server;
-
-        struct TileRequest
-        {
-          QWebSocket* socket;
-          HierarchicTileMapWeakPtr tile_map;
-          int zoom;
-          size_t x, y;
-          float2 tile_size;
-          clock::time_point time_stamp;
-        };
-
-        typedef std::map<uint8_t, TileRequest> TileRequests;
-        TileRequests  _tile_requests;
-        uint8_t       _tile_request_id;
-        int           _new_request;
-
-        InteractionHandler(IPCServer* server);
-        bool updateRegion( QWebSocket* socket,
-                           SlotType::TextPopup::Popup& popup,
-                           float2 center = float2(-9999, -9999),
-                           float2 rel_pos = float2() );
-        void updateRegion( SlotType::XRayPopup::HoverRect& popup );
-
-        protected:
-          bool updateTileMap( const HierarchicTileMapPtr& tile_map,
-                              QWebSocket* socket,
-                              const Rect& rect,
-                              int zoom );
-      } _interaction_handler;
+      class TileHandler;
+      TileHandler  *_tile_handler;
   };
 
 } // namespace LinksRouting
