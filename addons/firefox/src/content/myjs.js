@@ -108,11 +108,18 @@ function setStatus(stat)
 
 function setStatusSync(stat)
 {
-  document.getElementById('vislink-sync').setAttribute('class', stat);
+  var sync_icon = document.getElementById('vislink-sync');
+  if( !sync_icon )
+  {
+    console.warn("Sync icon not available.");
+    return;
+  }
+
+  sync_icon.setAttribute('class', stat);
   status_sync = stat;
 
   var hidden = (stat == 'no-src');
-  document.getElementById('vislink-sync').hidden = hidden;
+  sync_icon.hidden = hidden;
   document.getElementById('vislink-sync-src').hidden = hidden;
 }
 
@@ -990,7 +997,7 @@ function register(match_title = false, src_id = 0)
 
     try
     {
-      tile_requests = new Queue();
+      tile_requests = new Stack(); //Queue();
 
       links_socket = new WebSocket('ws://localhost:4487', 'VLP');
       links_socket.binaryType = "arraybuffer";
@@ -1114,7 +1121,7 @@ function register(match_title = false, src_id = 0)
             tile_requests.enqueue(msg);
             if( !tile_timeout )
             {
-              setTimeout('handleTileRequest()', 50);
+              setTimeout('handleTileRequest()', 20);
               tile_timeout = true;
             }
           }
@@ -1172,13 +1179,18 @@ function handleTileRequest()
     return;
   }
 
+  var t_start = performance.now();
+
   var req = tile_requests.dequeue();
   var mapping = [req.sections_src, req.sections_dest];
   links_socket.send( grab(req.size, req.src, req.req_id, mapping) );
 
+  var t_end = performance.now();
+  console.log("Handling tile request took " + (t_end - t_start) + " milliseconds.");
+
   // We need to wait a bit before sending the next tile to not congest the
   // receiver queue.
-  setTimeout('handleTileRequest()', 200);
+  setTimeout('handleTileRequest()', 10);
   tile_timeout = true;
 }
 

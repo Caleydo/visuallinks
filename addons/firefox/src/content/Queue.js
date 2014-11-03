@@ -82,3 +82,66 @@ function Queue(){
   }
 
 }
+
+/* Creates a new stack. A queue is a last-in-first-out (LIFO) data structure -
+ * items are added to the end of the queue and removed from the end.
+ *
+ * Provides the same interface as the Queue.
+ */
+function Stack(){
+
+  var stack  = [];
+
+  /* Returns the length of the queue.
+   */
+  this.getLength = function(){
+
+    // return the length of the queue
+    return (stack.length);
+
+  }
+
+  /* Returns true if the queue is empty, and false otherwise.
+   */
+  this.isEmpty = function(){
+
+    // return whether the queue is empty
+    return (stack.length == 0);
+
+  }
+
+  /* Enqueues the specified item. The parameter is:
+   *
+   * item - the item to enqueue
+   */
+  this.enqueue = function(item){
+
+    // enqueue the item
+    stack.push(item);
+
+  }
+
+  /* Dequeues an item and returns it. If the queue is empty then undefined is
+   * returned.
+   */
+  this.dequeue = function(){
+
+    // if the queue is empty, return undefined
+    if (stack.length == 0) return undefined;
+
+    // return the dequeued item
+    return stack.pop();
+
+  }
+
+  /* Returns the item at the front of the queue (without dequeuing it). If the
+   * queue is empty then undefined is returned.
+   */
+  this.peek = function(){
+
+    // return the item at the front of the queue
+    return (stack.length > 0 ? stack[stack.length - 1] : undefined);
+
+  }
+
+}
