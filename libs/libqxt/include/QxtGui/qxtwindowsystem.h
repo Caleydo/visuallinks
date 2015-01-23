@@ -51,6 +51,12 @@ public:
     static QString windowTitle(WId window);
     static QStringList windowTitles();
     static QRect windowGeometry(WId window);
+    static uint32_t applicationPID(WId window);
+
+    static void setWindowProperty( WId window,
+                                   QString const& key,
+                                   QString const& val );
+    static QString getWindowProperty(WId window, QString const& key);
 
     static uint idleTime();
 };

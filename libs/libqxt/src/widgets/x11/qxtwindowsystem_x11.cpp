@@ -31,6 +31,7 @@
 
 #include <QLibrary>
 #include <QX11Info>
+#include <X11/Xatom.h>
 #include <X11/Xutil.h>
 
 #include <iostream>
@@ -252,6 +253,99 @@ QRect QxtWindowSystem::windowGeometry(WId window)
             XFree(data);
     }
     return rect;
+}
+
+uint32_t QxtWindowSystem::applicationPID(WId window)
+{
+  init();
+
+  static Atom wm_pid = XInternAtom(QX11Info::display(), "_NET_WM_PID", False);
+
+  Atom type = 0;
+  int format = 0;
+  ulong after, prop_count;
+  uchar* prop_data = 0;
+
+  if( XGetWindowProperty( QX11Info::display(),
+                          window,
+                          wm_pid,
+                          0, (~0L),
+                          False,
+                          AnyPropertyType,
+                          &type,
+                          &format,
+                          &prop_count,
+                          &after,
+                          &prop_data ) != Success )
+  {
+    return 0;
+  }
+
+  if( !prop_data )
+    return 0;
+
+  uint32_t win_pid = reinterpret_cast<uint32_t*>(prop_data)[0];
+  XFree(prop_data);
+
+  return win_pid;
+}
+
+void QxtWindowSystem::setWindowProperty( WId window,
+                                         QString const& key,
+                                         QString const& val )
+{
+  init();
+
+  QByteArray const local_val = val.toLocal8Bit();
+
+  XChangeProperty(
+    QX11Info::display(),
+    window,
+    XInternAtom(QX11Info::display(), key.toLocal8Bit().data(), False),
+    XA_STRING,
+    8,
+    PropModeReplace,
+    (unsigned char*)local_val.data(),
+    local_val.size()
+  );
+}
+
+QString QxtWindowSystem::getWindowProperty(WId window, QString const& key)
+{
+  init();
+
+  Atom prop_atom =
+    XInternAtom(QX11Info::display(), key.toLocal8Bit().data(), False);
+
+  Atom type = 0;
+  int format = 0;
+  ulong after, prop_count;
+  uchar* prop_data = 0;
+
+  if( XGetWindowProperty( QX11Info::display(),
+                          window,
+                          prop_atom,
+                          0, (~0L),
+                          False,
+                          XA_STRING,
+                          &type,
+                          &format,
+                          &prop_count,
+                          &after,
+                          &prop_data ) != Success )
+  {
+    return "";
+  }
+
+  if( !prop_data )
+    return "";
+
+  QString val = QString::fromLocal8Bit( reinterpret_cast<char*>(prop_data),
+                                         prop_count );
+
+  XFree(prop_data);
+
+  return val;
 }
 
 typedef struct {

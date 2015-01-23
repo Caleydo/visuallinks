@@ -14,15 +14,52 @@
 #include <QDebug>
 #include <QLineEdit>
 
+#include <QJsonArray>
+#include <QJsonDocument>
+#include <QJsonObject>
+
+#include <QxtGui/qxtwindowsystem.h>
+
+QJsonValue to_json(const QPoint& p)
+{
+  QJsonArray a;
+  a.append(p.x());
+  a.append(p.y());
+  return a;
+}
+
+QJsonValue to_json(const QSize& size)
+{
+  return to_json(QPoint(size.width(), size.height()));
+}
+
+QJsonValue to_json(const QRect& r)
+{
+  QJsonArray a;
+  a.append(r.x());
+  a.append(r.y());
+  a.append(r.width());
+  a.append(r.height());
+  return a;
+}
+
 //------------------------------------------------------------------------------
 TextWidget::TextWidget(QWidget *parent):
   QWidget( parent ),
   _edit( new QComboBox(this) ),
   _button( new QPushButton(this) ),
   _menu( new QMenu(this) ),
-  _socket( new QWsSocket(this) )
+  _socket( new QWebSocket(QString(), QWebSocketProtocol::VersionLatest, this) )
 {
-  setWindowTitle("VisLinks - Search");
+  setWindowTitle("Concept: Empty");
+  setWindowIconText("VisLink - Icon text");
+
+  QxtWindowSystem::setWindowProperty(
+    winId(),
+    "LINKS_SYSTEM_TYPE",
+    "CONCEPT_NODE"
+  );
+
   QHBoxLayout* layout = new QHBoxLayout(this);
   layout->setContentsMargins(0,0,0,0);
   setSizePolicy(QSizePolicy::MinimumExpanding, QSizePolicy::Minimum);
@@ -42,14 +79,12 @@ TextWidget::TextWidget(QWidget *parent):
 
   setFixedHeight( layout->minimumSize().height() );
 
-  connect(_edit->lineEdit(), SIGNAL(returnPressed()),
-             this, SLOT(triggerSearch()));
-  connect(_button, SIGNAL(pressed()),
-             this, SLOT(triggerSearch()));
-  connect(_socket, SIGNAL(stateChanged(QAbstractSocket::SocketState)),
-             this, SLOT(stateChanged(QAbstractSocket::SocketState)) );
-  connect(_socket, SIGNAL(frameReceived(QString)),
-             this, SLOT(onTextReceived(QString)));
+  connect(_edit->lineEdit(), &QLineEdit::returnPressed,
+             this, &TextWidget::triggerSearch );
+  connect(_button, &QPushButton::pressed, this, &TextWidget::triggerSearch);
+  connect(_socket, &QWebSocket::stateChanged, this, &TextWidget::stateChanged);
+  connect(_socket, &QWebSocket::textMessageReceived,
+             this, &TextWidget::onTextReceived );
 }
 
 //------------------------------------------------------------------------------
@@ -69,13 +104,25 @@ void TextWidget::triggerSearch()
 {
   switch( _socket->state() )
   {
-    case QWsSocket::ConnectedState:
+    case QAbstractSocket::ConnectedState:
     {
-      _socket->write("{"
-        "\"task\": \"INITIATE\","
-        "\"id\": \"" + _edit->currentText().replace('"', "\\\"") + "\","
-        "\"stamp\": 0"
-      "}");
+      // Remove active link TODO check if owner (started link)
+      while( !_actions.empty() )
+        (*_actions.begin())->trigger();
+
+      QString id = _edit->currentText().simplified();
+      if( id.isEmpty() )
+        return;
+
+      QJsonObject msg;
+      msg["task"] = "INITIATE";
+      msg["id"] = id;
+      msg["stamp"] = 0;
+      //msg["regions"] = jsonBoundingBox();
+
+      sendMessage(msg);
+      setWindowTitle("Concept: " + id);
+
       QAction* action = new QAction(_edit->currentText(), this);
       action->setIcon( QApplication::style()->standardIcon(QStyle::SP_DialogCancelButton) );
       connect(action, SIGNAL(triggered()), this, SLOT(abortRoute()));
@@ -84,7 +131,7 @@ void TextWidget::triggerSearch()
       break;
     }
     default:
-      _socket->connectToHost(QHostAddress::LocalHost, 4487);
+      _socket->open(QUrl("ws://localhost:4487"));
       break;
   }
 }
@@ -95,22 +142,45 @@ void TextWidget::stateChanged(QAbstractSocket::SocketState state)
   qDebug() << "State = " << state;
   switch( _socket->state() )
   {
-    case QWsSocket::ConnectedState:
-      _button->setIcon(QIcon("icon-active-16.png"));
-      _socket->write(QString("{"
-        "\"task\": \"GET\","
-        "\"id\": \"/search-history\""
-      "}"));
+    case QAbstractSocket::ConnectingState:
       break;
-//    case QWsSocket::UnconnectedState:
+    case QAbstractSocket::ConnectedState:
+    {
+      _button->setIcon(QIcon("icon-active-16.png"));
+
+      // register
+      {
+        QJsonObject msg;
+        msg["task"] = "REGISTER";
+        msg["pos"] = to_json(pos() + QPoint(10, 10));
+
+        QRect const geom = QxtWindowSystem::windowGeometry(winId());
+        msg["viewport"] = to_json(QRect(0, 0, geom.width(), geom.height()));
+        sendMessage(msg);
+      }
+
+      // get search history (for autocompletion)
+//      {
+//        QJsonObject msg;
+//        msg["task"] = "GET";
+//        msg["id"] = "/search-history";
+//        sendMessage(msg);
+//      }
+
+      triggerSearch();
+      break;
+    }
+//    case QAbstractSocket::UnconnectedState:
 //      _button->setIcon(QIcon("icon-error-16.png"));
 //      break;
     default:
+    {
       _button->setIcon(QIcon("icon-error-16.png"));
       for(auto it = _actions.begin(); it != _actions.end(); ++it)
         _menu->removeAction(*it);
       _actions.clear();
       break;
+    }
   }
 }
 
@@ -129,11 +199,29 @@ void TextWidget::onTextReceived(QString data)
       QString id = msg.getValue<QString>("id"),
               val = msg.getValue<QString>("val");
 
-      QStringList values = val.split(',', QString::SkipEmptyParts);
+      // TODO (search history)
+//      QStringList values = val.split(',', QString::SkipEmptyParts);
+//
+//      while( _edit->count() )
+//        _edit->removeItem(0);
+//      _edit->addItems(values);
+    }
+    else if( task == "REQUEST" )
+    {
+      QString id = msg.getValue<QString>("id");
+      if( _edit->currentText().simplified()
+                              .compare(id, Qt::CaseInsensitive) != 0 )
+        return;
 
-      while( _edit->count() )
-        _edit->removeItem(0);
-      _edit->addItems(values);
+      QJsonObject msg_ret;
+      msg_ret["task"] = "FOUND";
+      msg_ret["id"] = id;
+      msg_ret["stamp"] = qint64(msg.getValue<uint32_t>("stamp"));
+      msg_ret["regions"] = jsonBoundingBox();
+
+      qDebug() << "respond" << msg_ret;
+
+      sendMessage(msg_ret);
     }
   }
   catch(std::runtime_error& ex)
@@ -151,9 +239,37 @@ void TextWidget::abortRoute()
 
   qDebug() << "Abort for " << action->text() << " requested...";
 
-  _socket->write("{"
-    "\"task\": \"ABORT\","
-    "\"id\": \"" + action->text().replace('"', "\\\"") + "\","
-    "\"stamp\": 0"
-  "}");
+  QJsonObject msg;
+  msg["task"] = "ABORT";
+  msg["id"] = action->text();
+  msg["stamp"] = 0;
+  sendMessage(msg);
+}
+
+//------------------------------------------------------------------------------
+void TextWidget::sendMessage(QJsonObject const& msg)
+{
+  _socket->sendTextMessage( QJsonDocument(msg).toJson(QJsonDocument::Compact) );
+}
+
+//------------------------------------------------------------------------------
+QJsonArray TextWidget::jsonBoundingBox() const
+{
+  QRect const geom = QxtWindowSystem::windowGeometry(winId());
+
+  QJsonArray bb;
+  bb.append( to_json(QPoint(1,                1)) );
+  bb.append( to_json(QPoint(geom.width() - 1, 1)) );
+  bb.append( to_json(QPoint(geom.width() - 1, geom.height() - 1)) );
+  bb.append( to_json(QPoint(1,                geom.height() - 1)) );
+
+  QJsonObject props;
+  props["rel"] = true;
+  props["type"] = "window-outline";
+  bb.append(props);
+
+  QJsonArray regs;
+  regs.append(bb);
+
+  return regs;
 }

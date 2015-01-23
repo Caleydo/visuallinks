@@ -37,11 +37,7 @@ set( HEADER_FILES
 )
 
 add_executable(qtsearch ${HEADER_FILES} ${SOURCE_FILES})
-target_link_libraries( qtsearch
-  ${QT_QTCORE_LIBRARY}
-  ${QT_QTGUI_LIBRARY}
-  QtWebSocket
-)
+qt5_use_modules(qtsearch Gui Network WebSockets)
 
 use_components(qtsearch)
 runtime_files(qtsearch RUNTIME_FILES) # TODO just copy needed files

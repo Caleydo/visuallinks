@@ -23,6 +23,7 @@ namespace LinksRouting
   struct WindowInfo
   {
     WId         id;
+    uint32_t    pid;
     bool        minimized,
                 covered;
     QRect       region,
@@ -30,10 +31,12 @@ namespace LinksRouting
     QString     title;
 
     explicit WindowInfo( WId id,
+                         uint32_t pid = 0,
                          bool minimized = false,
                          const QRect& region = QRect(),
                          const QString& title = "" ):
       id(id),
+      pid(pid),
       minimized(minimized),
       covered(false),
       region(region),
@@ -68,8 +71,10 @@ namespace LinksRouting
       WindowRegions(const WindowInfos& windows);
 
       WindowInfos::const_iterator find(WId wid) const;
+      WindowInfos::const_iterator find(uint32_t pid, const QString& title) const;
       WindowInfos::const_iterator find(const QString& title) const;
       WId findId(const QString& title) const;
+      WId findId(uint32_t pid, const QString& title = "") const;
 
       WindowInfos::const_iterator begin() const;
       WindowInfos::const_iterator end() const;

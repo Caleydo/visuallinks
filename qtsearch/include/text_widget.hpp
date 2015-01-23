@@ -13,7 +13,8 @@
 #include <QMenu>
 #include <QPushButton>
 #include <QWidget>
-#include <QWsSocket.h>
+
+#include <QWebSocket>
 
 #include <set>
 
@@ -41,9 +42,12 @@ class TextWidget: public QWidget
     QComboBox      *_edit;
     QPushButton    *_button;
     QMenu          *_menu;
-    QWsSocket      *_socket;
+    QWebSocket     *_socket;
 
     std::set<QAction*> _actions;
+
+    void sendMessage(QJsonObject const& msg);
+    QJsonArray jsonBoundingBox() const;
 };
 
 #endif /* _TEXT_WIDGET_HPP_ */

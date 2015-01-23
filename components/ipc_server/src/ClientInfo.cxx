@@ -277,7 +277,10 @@ namespace LinksRouting
     for( auto node = _nodes.begin(); node != _nodes.end(); )
     {
       if( (*node)->getParent().get() == hedge )
+      {
+        hedge->removeNode(*node);
         node = _nodes.erase(node);
+      }
       else
         ++node;
     }
@@ -511,7 +514,8 @@ namespace LinksRouting
         for( auto region = hedge->getNodes().begin();
                   region != hedge->getNodes().end(); )
         {
-          if(    *region == _minimized_icon
+          if(    (*region)->get<std::string>("type") == "window-outline"
+              || *region == _minimized_icon
               || *region == _covered_outline )
           {
             ++region;

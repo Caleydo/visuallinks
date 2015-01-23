@@ -47,6 +47,22 @@ namespace LinksRouting
   }
 
   //----------------------------------------------------------------------------
+  WindowInfos::const_iterator WindowRegions::find( uint32_t pid,
+                                                   const QString& title) const
+  {
+    return std::find_if
+    (
+      _windows.begin(),
+      _windows.end(),
+      [pid, &title](const WindowInfo& winfo)
+      {
+        return winfo.pid == pid
+            && ( title.isEmpty() || winfo.title.startsWith(title) );
+      }
+    );
+  }
+
+  //----------------------------------------------------------------------------
   WindowInfos::const_iterator WindowRegions::find(const QString& title) const
   {
     return std::find_if
@@ -64,6 +80,15 @@ namespace LinksRouting
   WId WindowRegions::findId(const QString& title) const
   {
     auto win = find(title);
+    if( win != _windows.end() )
+      return win->id;
+    return 0;
+  }
+
+  //----------------------------------------------------------------------------
+  WId WindowRegions::findId(uint32_t pid, const QString& title) const
+  {
+    auto win = find(pid, title);
     if( win != _windows.end() )
       return win->id;
     return 0;
@@ -172,14 +197,21 @@ namespace LinksRouting
         continue;
       }
 
+      QString win_type =
+        QxtWindowSystem::getWindowProperty(id, "LINKS_SYSTEM_TYPE");
+
       // Ignore small regions (tooltips, etc.)
-      if(   region.width() <= 64
-         || region.height() <= 64
-         || region.width() * region.height() <= 8192 )
+      if(  win_type.isEmpty()
+         && ( region.width() <= 64
+           || region.height() <= 64
+           || region.width() * region.height() <= 8192
+            )
+        )
         continue;
 
       regions.push_back(WindowInfo(
         id,
+        QxtWindowSystem::applicationPID(id),
         QxtWindowSystem::isVisible(id) && region.right() > 0,
         region,
         title

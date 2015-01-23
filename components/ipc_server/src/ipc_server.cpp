@@ -545,11 +545,21 @@ namespace LinksRouting
 
           if( task == "REGISTER" )
           {
-            if( msg.hasChild("pos") || msg.hasChild("title") )
+            const QString title = msg.getValue<QString>("title", "");
+
+            if(    msg.hasChild("pos")
+                || msg.hasChild("pid")
+                || !title.isEmpty() )
             {
-              const WId wid = msg.hasChild("pos")
-                            ? windows.windowIdAt(msg.getValue<QPoint>("pos"))
-                            : windows.findId(msg.getValue<QString>("title"));
+              WId wid = 0;
+
+              if( msg.hasChild("pos") )
+                wid = windows.windowIdAt(msg.getValue<QPoint>("pos"));
+              else if( msg.hasChild("pid") )
+                wid = windows.findId(msg.getValue<uint32_t>("pid"), title);
+              else
+                wid = windows.findId(title);
+
               client_info.setWindowId(wid);
             }
 
@@ -564,19 +574,21 @@ namespace LinksRouting
         }
         else if( task == "SYNC" )
         {
-          if( msg.getValue<QString>("type") == "SCROLL" )
+          if(    msg.getValue<QString>("type") == "SCROLL"
+              && msg.getValue<QString>("item", "CONTENT") == "CONTENT" )
+            // TODO handle ELEMENT scroll?
           {
             client_info.setScrollPos( msg.getValue<QPoint>("pos") );
             client_info.update(_window_monitor.getWindows());
 
             // Forward scroll events to clients which support this (eg. for
             // synchronized scrolling)
-            for(auto const& socket: _clients)
-            {
-              if(    sender() != socket.first
-                  && socket.second->supportsCommand("scroll") )
-                socket.first->sendTextMessage(data);
-            }
+//            for(auto const& socket: _clients)
+//            {
+//              if(    sender() != socket.first
+//                  && socket.second->supportsCommand("scroll") )
+//                socket.first->sendTextMessage(data);
+//            }
             dirtyLinks();
           }
 
@@ -759,10 +771,12 @@ namespace LinksRouting
       }
       else if( task == "ABORT" )
       {
+        WId abort_wid = client_info.getWindowInfo().id;
+
         if( id.isEmpty() && stamp == (uint32_t)-1 )
           abortAll();
         else if( link != _slot_links->_data->end() )
-          abortLinking(link);
+          abortLinking(link, abort_wid);
         else
           LOG_WARN("Received ABORT for none existing REQUEST");
 
@@ -1699,11 +1713,22 @@ namespace LinksRouting
 
   //----------------------------------------------------------------------------
   LinkDescription::LinkList::iterator
-  IPCServer::abortLinking(const LinkDescription::LinkList::iterator& link)
+  IPCServer::abortLinking( const LinkDescription::LinkList::iterator& link,
+                           WId wid )
   {
+    int remove_count = 0;
     for(auto& client: _clients)
-      client.second->removeLink(link->_link.get());
-    return _slot_links->_data->erase(link);
+    {
+      if( !wid || client.second->getWindowInfo().id == wid )
+      {
+        qDebug() << "remove link for " << client.second->getWindowInfo().title;
+        client.second->removeLink(link->_link.get());
+        remove_count += 1;
+      }
+    }
+
+    return remove_count == _clients.size() ? _slot_links->_data->erase(link)
+                                           : link;
   }
 
   //----------------------------------------------------------------------------

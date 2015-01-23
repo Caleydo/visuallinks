@@ -907,6 +907,7 @@ function onScrollImpl()
   var msg = {
     'task': 'SYNC',
     'type': 'SCROLL',
+    'item': 'CONTENT',
     'pos': [scroll.x, scroll.y],
     'pos-rel': [0, 0],
     'tab-id': content.document._hcd_tab_id
@@ -931,6 +932,7 @@ function onElementScrollImpl(e)
   var msg = {
     'task': 'SYNC',
     'type': 'SCROLL',
+    'item': 'ELEMENT',
     'pos': [e.target.scrollLeft, e.target.scrollTop],
     'xpath': getXPathForElement(e.target, content.document.body),
     'tab-id': content.document._hcd_tab_id

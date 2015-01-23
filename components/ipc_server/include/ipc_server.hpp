@@ -178,11 +178,15 @@ namespace LinksRouting
                                ClientInfo& client_info );
 
       /**
-       * Clear all data for the given link
+       * Clear all data for the given link.
+       *
+       * If @a wid is given, aborts only the links to the regions belonging to
+       * the according window.
        */
       LinkDescription::LinkList::iterator abortLinking(
         const LinkDescription::LinkList::iterator& link =
-              LinkDescription::LinkList::iterator()
+              LinkDescription::LinkList::iterator(),
+        WId wid = 0
       );
 
       /**
