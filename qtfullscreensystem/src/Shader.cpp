@@ -21,7 +21,17 @@ namespace qtfullscreensystem
       return QByteArray();
     }
 
-    return defs + "\n" + file.readAll();
+    QByteArray src = file.readAll();
+    if( defs.isEmpty() )
+      return src;
+
+    // #version needs to come before any other instruction...
+    int version_start = src.indexOf("#version");
+    if( version_start < 0 )
+      return defs + "\n" + src;
+
+    int version_end = src.indexOf('\n', version_start + 8);
+    return src.left(version_end + 1) + defs + '\n' + src.mid(version_end + 1);
   }
 
   //----------------------------------------------------------------------------
