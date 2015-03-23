@@ -196,63 +196,99 @@ WId QxtWindowSystem::windowAt(const QPoint& pos)
 QString QxtWindowSystem::windowTitle(WId window)
 {
     init();
+
+    QString title = getWindowProperty(window, "_NET_WM_NAME");
+
+    // Some windows only have _NET_WM_NAME set...
+    {
+//      static Atom wm_name =
+//        XInternAtom(QX11Info::display(), "_NET_WM_NAME", False);
+//
+//      Atom type = 0;
+//      int format = 0;
+//      unsigned char* data = nullptr;
+//      unsigned long count, after;
+//
+//      if( XGetWindowProperty( QX11Info::display(), window, wm_name,
+//                              0, (~0L), False, AnyPropertyType,
+//                              &type, &format, &count, &after,
+//                              &data ) == Success )
+//      {
+//        title = QString::fromLocal8Bit((char*)data, count);
+//      }
+//
+//      if( data )
+//        XFree(data);
+
+      if( !title.isEmpty() )
+        return title;
+    }
+
     XTextProperty prop;
     if( XGetWMName(QX11Info::display(), window, &prop) )
-      return QString::fromLocal8Bit( reinterpret_cast<char*>(prop.value),
-                                     prop.nitems );
+      title = QString::fromLocal8Bit( reinterpret_cast<char*>(prop.value),
+                                      prop.nitems );
 
-    QString name;
-    char* str = 0;
-    if (XFetchName(QX11Info::display(), window, &str))
-        name = QString::fromUtf8(str);
-    if (str)
-        XFree(str);
+    if( title.isEmpty() )
+    {
+      char* str = 0;
+      if (XFetchName(QX11Info::display(), window, &str))
+          title = QString::fromUtf8(str);
+      if (str)
+          XFree(str);
+    }
 
-    return name;
+    return title;
 }
 
 QRect QxtWindowSystem::windowGeometry(WId window)
 {
-    init();
-    int x, y;
-    uint width, height, border, depth;
-    Window root, child;
-    Display* display = QX11Info::display();
-    if( !XGetGeometry(display, window, &root, &x, &y, &width, &height, &border, &depth) )
-    {
-      std::cout << "fail 1" << std::endl;
-      return QRect();
-    }
+  init();
+  int x, y;
+  uint width, height, border, depth;
+  Window root, child;
+  Display* display = QX11Info::display();
 
-    QRect rect(x, y, width, height);
-    if( !XTranslateCoordinates(display, window, root, x, y, &x, &y, &child) )
-    {
-      std::cout << "fail 2" << std::endl;
-      return rect;
-    }
-    rect.moveTo(x, y);
+  if( !XGetGeometry( display, window,
+                     &root,
+                     &x, &y,
+                     &width, &height,
+                     &border,
+                     &depth ) )
+    return QRect();
 
-    static Atom net_frame = 0;
-    if (!net_frame)
-        net_frame = XInternAtom(QX11Info::display(), "_NET_FRAME_EXTENTS", True);
-
-    Atom type = 0;
-    int format = 0;
-    uchar* data = 0;
-    ulong count, after;
-    if (XGetWindowProperty(display, window, net_frame, 0, 4, False, AnyPropertyType,
-                           &type, &format, &count, &after, &data) == Success)
-    {
-        // _NET_FRAME_EXTENTS, left, right, top, bottom, CARDINAL[4]/32
-        if (count == 4)
-        {
-            long* extents = reinterpret_cast<long*>(data);
-            rect.adjust(-extents[0], -extents[2], extents[1], extents[3]);
-        }
-        if (data)
-            XFree(data);
-    }
+  QRect rect(x, y, width, height);
+  if( !XTranslateCoordinates(display, window, root, x, y, &x, &y, &child) )
     return rect;
+
+  rect.moveTo(x, y);
+
+  static Atom net_frame = 0;
+  if( !net_frame )
+    net_frame = XInternAtom(QX11Info::display(), "_NET_FRAME_EXTENTS", True);
+
+  Atom type = 0;
+  int format = 0;
+  uchar* data = 0;
+  ulong count, after;
+  if( XGetWindowProperty( display, window,
+                          net_frame,
+                          0, 4,
+                          False, AnyPropertyType,
+                          &type, &format, &count,
+                          &after, &data ) == Success )
+  {
+    // _NET_FRAME_EXTENTS, left, right, top, bottom, CARDINAL[4]/32
+    if( count == 4 )
+    {
+      long* extents = reinterpret_cast<long*>(data);
+      rect.adjust(-extents[0], -extents[2], extents[1], extents[3]);
+    }
+    if( data )
+      XFree(data);
+  }
+
+  return rect;
 }
 
 uint32_t QxtWindowSystem::applicationPID(WId window)
