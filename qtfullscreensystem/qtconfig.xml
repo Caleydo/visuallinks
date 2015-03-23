@@ -14,7 +14,7 @@
     <PreviewWidth type="Integer" val="750" />
     <PreviewHeight type="Integer" val="400" />
     <PreviewAutoWidth type="Bool" val="true" />
-    <OutsideSeeThrough type="Bool" val="true" />
+    <OutsideSeeThrough type="Bool" val="false" />
   </QtWebsocketServer>
 
   <ComponentCostanalysis>

@@ -21,6 +21,8 @@ namespace SlotType
       virtual ~Preview() {}
       virtual PreviewWindow* getWindow( TextPopup::Popup*,
                                         uint8_t dev_id = 0 ) = 0;
+      virtual PreviewWindow* getWindow( XRayPopup::HoverRect*,
+                                        uint8_t dev_id = 0 ) = 0;
   };
 
 } // namespace SlotType

@@ -132,14 +132,14 @@ namespace SlotType
       /** Source region within document/scrollable region */
            source_region;
 
+      PreviewWindow *preview;
+
       LinkDescription::NodePtr node;
       HierarchicTileMapWeakPtr tile_map;
       void* client_socket;
 
-      HoverRect():
-        AnimatedPopup(false),
-        client_socket(0)
-      {}
+      HoverRect();
+      ~HoverRect();
     };
 
     typedef std::list<HoverRect> Popups;

@@ -159,5 +159,22 @@ namespace SlotType
     preview = nullptr;
   }
 
+  //----------------------------------------------------------------------------
+  XRayPopup::HoverRect::HoverRect():
+    AnimatedPopup(false),
+    preview(nullptr),
+    client_socket(nullptr)
+  {
+
+  }
+
+  //----------------------------------------------------------------------------
+  XRayPopup::HoverRect::~HoverRect()
+  {
+    if( preview )
+      preview->release();
+    preview = nullptr;
+  }
+
 } // namespace SlotType
 } // namespace LinksRouting

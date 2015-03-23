@@ -332,6 +332,23 @@ namespace LinksRouting
           preview_region = preview.preview_region;
         }
         preview.node->set("alpha", preview.getAlpha());
+
+        if( preview.isVisible() )
+        {
+          if( !preview.preview )
+            preview.preview = _subscribe_previews->_data->getWindow(&preview);
+
+          preview.preview->update(dt);
+        }
+        else
+        {
+          if( preview.preview )
+          {
+            preview.preview->release();
+            preview.preview = nullptr;
+          }
+        }
+
         return false;
       }
     );
@@ -1496,7 +1513,7 @@ namespace LinksRouting
       }
       else if( preview.isVisible() )
       {
-        if( !preview.isFadeOut() && !popup_visible )
+        if( !preview.isFadeOut() && !preview_visible )
           preview.delayedFadeOut();
       }
       else if( preview.isFadeIn() )

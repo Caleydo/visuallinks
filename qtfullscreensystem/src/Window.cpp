@@ -214,7 +214,8 @@ namespace qtfullscreensystem
         QString::fromStdString(popup->text)
       );
 
-      if( !mask_img.isNull() )
+      if(    !mask_img.isNull()
+          && !text_rect.isNull() )
       {
         maskFillRect(mask_img, text_rect);
         mask_empty = false;
@@ -240,13 +241,16 @@ namespace qtfullscreensystem
       if( len < outline.title.size() )
         title += "...";
 
+      painter.drawRect(text_rect);
       painter.drawText(
         text_rect,
         Qt::AlignLeft | Qt::AlignVCenter,
         title
       );
 
-      if( !mask_img.isNull() && text_rect.intersects(local_reg) )
+      if(    !mask_img.isNull()
+          && !text_rect.isEmpty()
+          &&  text_rect.intersects(local_reg) )
       {
         maskFillRect(mask_img, text_rect);
         mask_empty = false;
@@ -264,7 +268,8 @@ namespace qtfullscreensystem
                         - _geometry.topLeft(),
                           popup.hover_region.region.size.toQSize() );
 
-        if( !popup_rect.intersects(local_reg) )
+        if(     popup_rect.isEmpty()
+            || !popup_rect.intersects(local_reg) )
           continue;
 
         maskFillRect(mask_img, popup_rect);
@@ -278,7 +283,8 @@ namespace qtfullscreensystem
 
         QRect reg = preview.preview_region.toQRect()
                                           .translated(-_geometry.topLeft());
-        if( !reg.intersects(local_reg) )
+        if(     reg.isNull()
+            || !reg.intersects(local_reg) )
           continue;
 
         maskFillRect(mask_img, reg);

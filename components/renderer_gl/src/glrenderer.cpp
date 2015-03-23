@@ -192,6 +192,9 @@ namespace LinksRouting
     blur(_links_fbo);
     _slot_links->setValid(true);
 
+#if 1
+    return 0;
+#else
     // Now the xray previews
     _slot_xray->setValid(false);
     _xray_fbo.bind();
@@ -227,6 +230,7 @@ namespace LinksRouting
     _slot_xray->setValid(true);
 
     return flags;
+#endif
   }
 
   //----------------------------------------------------------------------------

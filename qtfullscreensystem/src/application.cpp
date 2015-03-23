@@ -43,6 +43,26 @@ namespace qtfullscreensystem
 
         return w;
       }
+
+      virtual
+      LinksRouting::PreviewWindow*
+      getWindow( LinksRouting::SlotType::XRayPopup::HoverRect *see_through,
+                 uint8_t dev_id = 0 )
+      {
+        Application* app = dynamic_cast<Application*>(QApplication::instance());
+        if( !app )
+        {
+          qWarning() << "no app";
+          return nullptr;
+        }
+
+        LR::SlotSubscriber slot_subscriber = app->getSlotSubscriber();
+
+        QtPreviewWindow* w = new QtPreviewWindow(see_through);
+        w->subscribeSlots(slot_subscriber);
+
+        return w;
+      }
   };
 
   //----------------------------------------------------------------------------

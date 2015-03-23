@@ -167,6 +167,12 @@ HierarchicTileMap::HierarchicTileMap( unsigned int width,
 }
 
 //------------------------------------------------------------------------------
+void HierarchicTileMap::addTileChangeCallback(TileChangeCallback cb)
+{
+  _change_callbacks.push_back(cb);
+}
+
+//------------------------------------------------------------------------------
 MapRect HierarchicTileMap::requestRect(const Rect& rect, size_t zoom)
 {
 
@@ -214,6 +220,9 @@ void HierarchicTileMap::setTileData( size_t x, size_t y, size_t zoom,
   tile.type = Tile::ImageRGBA8;
 
   ++_change_id;
+
+  for(auto cb: _change_callbacks)
+    cb(*this, x, y, zoom);
 }
 
 //------------------------------------------------------------------------------

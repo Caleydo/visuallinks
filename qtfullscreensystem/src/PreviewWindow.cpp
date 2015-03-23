@@ -31,31 +31,16 @@ namespace qtfullscreensystem
 
   //----------------------------------------------------------------------------
   QtPreviewWindow::QtPreviewWindow(Popup *popup):
-    PreviewWindow(popup),
-    _margin(2),
-    _do_drag(false),
-    _last_mouse_pos(0,0),
-    _tile_map_change_id(0),
-    _update_pending(false),
-    _context(nullptr),
-    _device(nullptr)
+    PreviewWindow(popup)
   {
-    setSurfaceType(QWindow::OpenGLSurface);
-    setPreviewGeometry(popup->hover_region.region.toQRect());
+    init();
+  }
 
-    //    setFixedSize(size());
-
-    // transparent, always on top window without any decoration
-    setFlags( Qt::WindowStaysOnTopHint
-            | Qt::FramelessWindowHint
-            | Qt::X11BypassWindowManagerHint
-            //| Qt::WindowTransparentForInput
-            );
-    //setMouseTracking(true);
-    setOpacity(0.5);
-    show();
-
-    qDebug() << "new preview" << this->geometry();
+  //----------------------------------------------------------------------------
+  QtPreviewWindow::QtPreviewWindow(SeeThrough *see_through):
+    PreviewWindow(see_through)
+  {
+    init();
   }
 
   //----------------------------------------------------------------------------
@@ -85,92 +70,14 @@ namespace qtfullscreensystem
   //----------------------------------------------------------------------------
   void QtPreviewWindow::render(QPainter*)
   {
-    if( !_popup )
-      return;
-
-    LR::SlotType::TextPopup::HoverRect const& preview = _popup->hover_region;
-
-    if( !preview.isVisible() )
-      return;
-
-    std::cout << "render preview:" << std::endl;
-    auto tile_map = preview.tile_map.lock();
-    if( tile_map )
-      tile_map->render( preview.src_region,
-                        preview.scroll_region.size,
-                        Rect(float2(0, 0), size()),
-                        _popup->hover_region.zoom,
-                        _popup->auto_resize,
-                        _popup->hover_region.getAlpha(),
-                        &_image_cache );
-
-//    glMatrixMode(GL_PROJECTION);
-//    glPushMatrix();
-//    glLoadIdentity();
-//    glOrtho(0, hover.size.x, 0, hover.size.y, -1, 1);
-
-    glMatrixMode(GL_MODELVIEW);
-    glPushMatrix();
-    glLoadIdentity();
-
-    const Rect& hover = preview.region,
-              & src = preview.src_region,
-              & scroll = preview.scroll_region;
-
-    float scale = hover.size.y / src.size.y;
-    glScalef(scale, scale, 0);
-
-    float2 offset = src.pos;
-    if( !_popup->auto_resize && src.size.x > scroll.size.x )
-      offset.x -= (src.size.x - scroll.size.x) / 2;
-
-    glTranslatef(-offset.x, -offset.y, 0);
-
-    const float w = 4.f;
-    const float2 vp_pos = preview.offset + 0.5f * float2(w, w);
-    const float2 vp_dim = preview.dim - 4.f * float2(w, w);
-
-    Partitions *partitions_src = nullptr,
-               *partitions_dest = nullptr;
-    unsigned int margin_left = 0;
-
-    if( tile_map )
-    {
-      partitions_src = &tile_map->partitions_src;
-      partitions_dest = &tile_map->partitions_dest;
-      margin_left = tile_map->margin_left;
-    }
-
-    LinksRouting::NodeRenderer renderer( partitions_src,
-                                         partitions_dest,
-                                         margin_left );
-    renderer.setLineWidth(3.f / scale);
-
-//    Color color_cur = _color_cur;
-//    _color_cur = alpha * color_cur;
-    renderer.renderNodes(_popup->nodes, nullptr, nullptr, true, 1, false);
-
-    glLineWidth(w);
-    glBegin(GL_LINE_LOOP);
-      glVertex2f(vp_pos.x, vp_pos.y);
-      glVertex2f(vp_pos.x + vp_dim.x, vp_pos.y);
-      glVertex2f(vp_pos.x + vp_dim.x, vp_pos.y + vp_dim.y);
-      glVertex2f(vp_pos.x, vp_pos.y + vp_dim.y);
-    glEnd();
-
-//    _color_cur = color_cur;
-
-    glPopMatrix();
-    glMatrixMode(GL_PROJECTION);
-
-//    glPopAttrib();
+    if( _popup )            renderPopup();
+    else if( _see_through ) renderSeeThrough();
   }
 
   //----------------------------------------------------------------------------
   void QtPreviewWindow::render()
   {
-    if( _popup->hover_region.region.toQRect() != _geometry )
-      setPreviewGeometry(_popup->hover_region.region.toQRect());
+    updateGeometry();
 
     if( !_device )
       _device = new QOpenGLPaintDevice;
@@ -272,11 +179,14 @@ namespace qtfullscreensystem
         renderNow();
         return true;
       case QEvent::Leave:
+        std::cout << "leave " << _do_drag << std::endl;
         if( _do_drag )
           return true;
 
         if( _popup )
           _popup->hover_region.delayedFadeOut();
+        if( _see_through )
+          _see_through->delayedFadeOut();
 
         return true;
       default:
@@ -320,24 +230,29 @@ namespace qtfullscreensystem
         _do_drag = true;
       else
       {
-        float preview_aspect = _preview_width
-                             / static_cast<float>(_preview_height);
+        if( _popup )
+        {
+          float preview_aspect = _preview_width
+                               / static_cast<float>(_preview_height);
 
-        float2 delta = pos - _last_mouse_pos;
-        const float2& scroll_size = _popup->hover_region.scroll_region.size;
-        float step_y = scroll_size.y
-                     / pow(2.0f, static_cast<float>(_popup->hover_region.zoom))
-                     / _preview_height;
+          float2 delta = pos - _last_mouse_pos;
+          const float2& scroll_size = _popup->hover_region.scroll_region.size;
+          float step_y = scroll_size.y
+                       / pow(2.0f, static_cast<float>(_popup->hover_region.zoom))
+                       / _preview_height;
 
-        _popup->hover_region.src_region.pos.y -= delta.y * step_y;
-        float step_x = step_y * preview_aspect;
-        _popup->hover_region.src_region.pos.x -= delta.x * step_x;
+          _popup->hover_region.src_region.pos.y -= delta.y * step_y;
+          float step_x = step_y * preview_aspect;
+          _popup->hover_region.src_region.pos.x -= delta.x * step_x;
 
-        _subscribe_tile_handler->_data->updateRegion(*_popup);
-        renderLater();
+          _subscribe_tile_handler->_data->updateRegion(*_popup);
+          renderLater();
+        }
       }
       _last_mouse_pos = pos;
     }
+
+    renderLater();
   }
 
   //----------------------------------------------------------------------------
@@ -349,6 +264,173 @@ namespace qtfullscreensystem
       event->modifiers()
     );
 
+    renderLater();
+  }
+
+  //----------------------------------------------------------------------------
+  void QtPreviewWindow::renderPopup()
+  {
+    LR::SlotType::TextPopup::HoverRect const& preview = _popup->hover_region;
+
+    if( !preview.isVisible() )
+      return;
+
+    std::cout << "render preview:" << std::endl;
+    auto tile_map = preview.tile_map.lock();
+    if( tile_map )
+      tile_map->render( preview.src_region,
+                        preview.scroll_region.size,
+                        Rect(float2(0, 0), size()),
+                        _popup->hover_region.zoom,
+                        _popup->auto_resize,
+                        _popup->hover_region.getAlpha(),
+                        &_image_cache );
+
+//    glMatrixMode(GL_PROJECTION);
+//    glPushMatrix();
+//    glLoadIdentity();
+//    glOrtho(0, hover.size.x, 0, hover.size.y, -1, 1);
+
+    glMatrixMode(GL_MODELVIEW);
+    glPushMatrix();
+    glLoadIdentity();
+
+    const Rect& hover = preview.region,
+              & src = preview.src_region,
+              & scroll = preview.scroll_region;
+
+    float scale = hover.size.y / src.size.y;
+    glScalef(scale, scale, 0);
+
+    float2 offset = src.pos;
+    if( !_popup->auto_resize && src.size.x > scroll.size.x )
+      offset.x -= (src.size.x - scroll.size.x) / 2;
+
+    glTranslatef(-offset.x, -offset.y, 0);
+
+    const float w = 4.f;
+    const float2 vp_pos = preview.offset + 0.5f * float2(w, w);
+    const float2 vp_dim = preview.dim - 4.f * float2(w, w);
+
+    Partitions *partitions_src = nullptr,
+               *partitions_dest = nullptr;
+    unsigned int margin_left = 0;
+
+    if( tile_map )
+    {
+      partitions_src = &tile_map->partitions_src;
+      partitions_dest = &tile_map->partitions_dest;
+      margin_left = tile_map->margin_left;
+    }
+
+    LinksRouting::NodeRenderer renderer( partitions_src,
+                                         partitions_dest,
+                                         margin_left );
+    renderer.setLineWidth(3.f / scale);
+
+//    Color color_cur = _color_cur;
+//    _color_cur = alpha * color_cur;
+    renderer.renderNodes(_popup->nodes, nullptr, nullptr, true, 1, false);
+
+    glLineWidth(w);
+    glBegin(GL_LINE_LOOP);
+      glVertex2f(vp_pos.x, vp_pos.y);
+      glVertex2f(vp_pos.x + vp_dim.x, vp_pos.y);
+      glVertex2f(vp_pos.x + vp_dim.x, vp_pos.y + vp_dim.y);
+      glVertex2f(vp_pos.x, vp_pos.y + vp_dim.y);
+    glEnd();
+
+//    _color_cur = color_cur;
+
+    glPopMatrix();
+    glMatrixMode(GL_PROJECTION);
+
+//    glPopAttrib();
+  }
+
+  //----------------------------------------------------------------------------
+  void QtPreviewWindow::renderSeeThrough()
+  {
+    HierarchicTileMapPtr tile_map = _see_through->tile_map.lock();
+    if( !tile_map )
+    {
+      std::cout << "SeeThrough tile_map expired!" << std::endl;
+      return;
+    }
+
+    std::cout << "render tilemap: " << _see_through->source_region << std::endl;
+
+    //      renderRect( preview.preview_region );
+    tile_map->render( _see_through->source_region,
+                      _see_through->source_region.size,
+                      Rect(float2(0, 0), _see_through->preview_region.size),
+                      -1,
+                      false,
+                      1,
+                      &_image_cache );
+  }
+
+  //----------------------------------------------------------------------------
+  void QtPreviewWindow::init()
+  {
+    _margin = 2;
+    _do_drag = false;
+    _last_mouse_pos = float2(0,0);
+    _tile_map_change_id = 0;
+    _update_pending = false;
+    _context = nullptr;
+    _device = nullptr;
+
+    setSurfaceType(QWindow::OpenGLSurface);
+    updateGeometry();
+
+    // transparent, always on top window without any decoration
+    setFlags( Qt::WindowStaysOnTopHint
+            | Qt::FramelessWindowHint
+            | Qt::X11BypassWindowManagerHint
+            //| Qt::WindowTransparentForInput
+            );
+    //setMouseTracking(true);
+    setOpacity(0.5);
+    show();
+
+    qDebug() << "new preview" << this->geometry();
+
+    HierarchicTileMapPtr tile_map;
+
+    if( _popup )
+      tile_map = _popup->hover_region.tile_map.lock();
+    else if( _see_through )
+      tile_map = _see_through->tile_map.lock();
+
+    if( tile_map )
+      tile_map->addTileChangeCallback(
+        std::bind<>(&QtPreviewWindow::onTileMapChange, this)
+      );
+    else
+      std::cout << "missing tilemap" << std::endl;
+  }
+
+  //----------------------------------------------------------------------------
+  void QtPreviewWindow::updateGeometry()
+  {
+    Rect geom;
+    if( _popup )
+      geom = _popup->hover_region.region;
+    else if( _see_through )
+      geom = _see_through->preview_region;
+
+    if( geom.toQRect() == _geometry )
+      return;
+
+    setPreviewGeometry(geom.toQRect());
+    //    setFixedSize(size());
+  }
+
+  //----------------------------------------------------------------------------
+  void QtPreviewWindow::onTileMapChange()
+  {
+    std::cout << "tilemap changed" << std::endl;
     renderLater();
   }
 

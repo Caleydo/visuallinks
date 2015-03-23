@@ -71,12 +71,19 @@ struct MapRect
 class HierarchicTileMap
 {
   public:
-  
+
+    typedef std::function<void ( HierarchicTileMap&,
+                                 size_t x,
+                                 size_t y,
+                                 size_t zoom )> TileChangeCallback;
+
     HierarchicTileMap( unsigned int width,
                        unsigned int height,
                        unsigned int tile_width,
                        unsigned int tile_height );
     
+    void addTileChangeCallback(TileChangeCallback cb);
+
     MapRect requestRect( const Rect& rect,
                          size_t zoom = -1 );
 
@@ -128,6 +135,7 @@ class HierarchicTileMap
                  _change_id; //!< tracking map changes (eg. tile image updates)
     
     std::vector<Layer> _layers;
+    std::vector<TileChangeCallback> _change_callbacks;
     
     Layer& getLayer(size_t level);
 };

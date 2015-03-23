@@ -29,6 +29,7 @@ namespace qtfullscreensystem
   {
     public:
       QtPreviewWindow(Popup *popup);
+      QtPreviewWindow(SeeThrough *see_through);
 
       void subscribeSlots(LR::SlotSubscriber& slot_subscriber);
 
@@ -68,11 +69,19 @@ namespace qtfullscreensystem
       virtual void mouseMoveEvent(QMouseEvent*);
       virtual void wheelEvent(QWheelEvent*);
 
+      void renderPopup();
+      void renderSeeThrough();
+
     private:
       bool _update_pending;
 
       QOpenGLContext     *_context;
       QOpenGLPaintDevice *_device;
+
+      void init();
+      void updateGeometry();
+
+      void onTileMapChange();
   };
 
 } // namespace qtfullscreensystem
